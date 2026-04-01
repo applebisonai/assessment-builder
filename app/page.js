@@ -57,9 +57,11 @@ export default function AssessmentBuilder() {
       let content = '';
       let imageBase64 = null;
       let contentType = '';
+      let fileType = '';
 
       if (inputMode === 'file' && file) {
         contentType = file.type.includes('pdf') ? 'PDF document' : 'scanned image';
+        fileType = file.type;
         setLoadingStep('Reading document...');
         imageBase64 = await fileToBase64(file);
       } else if (inputMode === 'url' && url) {
@@ -81,7 +83,7 @@ export default function AssessmentBuilder() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-        body: JSON.stringify({ content, contentType, gradeLevel, subject, standard, includeVersionB, includeAnswerKey, imageBase64 })
+        body: JSON.stringify({ content, contentType, gradeLevel, subject, standard, includeVersionB, includeAnswerKey, imageBase64, fileType })
       });
 
       const data = await res.json();
@@ -100,7 +102,7 @@ export default function AssessmentBuilder() {
   const parseOutput = (text) => {
     if (!text) return { versionA: '', versionB: '', answerKey: '' };
     const versionBIdx = text.indexOf('VERSION B --');
-    const answerKeyIdx = text.indexOf('TEACHER ANSWER KEY');
+    const answerKeyIdx = text.indexOf('TEACHER` ANSWER KEY');
 
     const versionA = versionBIdx > 0 ? text.slice(0, versionBIdx).trim() :
                      answerKeyIdx > 0 ? text.slice(0, answerKeyIdx).trim() : text;
