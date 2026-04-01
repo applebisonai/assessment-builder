@@ -99,7 +99,7 @@ export default function AssessmentBuilder() {
   // Parse output into sections
   const parseOutput = (text) => {
     if (!text) return { versionA: '', versionB: '', answerKey: '' };
-    const versionBIdx = text.indexOf('â¶ VERSION B');
+    const versionBIdx = text.indexOf('VERSION B --');
     const answerKeyIdx = text.indexOf('TEACHER ANSWER KEY');
 
     const versionA = versionBIdx > 0 ? text.slice(0, versionBIdx).trim() :
@@ -166,7 +166,7 @@ export default function AssessmentBuilder() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-              <span className="text-white text-xl">ð</span>
+              <span className="text-white text-xl font-bold">A+</span>
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Assessment Builder</h1>
@@ -174,7 +174,7 @@ export default function AssessmentBuilder() {
             </div>
           </div>
           <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-50 transition">
-            <span>âï¸</span> Settings
+            Settings
           </button>
         </div>
       </header>
@@ -187,9 +187,9 @@ export default function AssessmentBuilder() {
           {/* Input mode tabs */}
           <div className="flex gap-2 mb-6">
             {[
-              { id: 'file', label: 'ð Upload File', desc: 'PDF or image' },
-              { id: 'url', label: 'ð Website URL', desc: 'Any web page' },
-              { id: 'text', label: 'âï¸ Type/Paste', desc: 'Direct input' }
+              { id: 'file', label: 'Upload File', desc: 'PDF or image' },
+              { id: 'url', label: 'Website URL', desc: 'Any web page' },
+              { id: 'text', label: 'Type / Paste', desc: 'Direct input' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -216,15 +216,15 @@ export default function AssessmentBuilder() {
               <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => handleFileChange(e.target.files?.[0])} className="hidden" />
               {file ? (
                 <div>
-                  <div className="text-3xl mb-2">â</div>
+                  <div className="text-3xl mb-2 text-green-500 font-bold">OK</div>
                   <p className="font-semibold text-gray-800">{file.name}</p>
-                  <p className="text-sm text-gray-500 mt-1">{(file.size / 1024).toFixed(0)} KB â click to replace</p>
+                  <p className="text-sm text-gray-500 mt-1">{(file.size / 1024).toFixed(0)} KB -- click to replace</p>
                 </div>
               ) : (
                 <div>
-                  <div className="text-4xl mb-3">ð</div>
+                  <div className="text-4xl mb-3 text-gray-400 font-bold">[ ]</div>
                   <p className="font-semibold text-gray-700">Drag & drop your file here</p>
-                  <p className="text-sm text-gray-500 mt-1">Supports PDF, PNG, JPG â scanned documents work too</p>
+                  <p className="text-sm text-gray-500 mt-1">Supports PDF, PNG, JPG -- scanned documents work too</p>
                 </div>
               )}
             </div>
@@ -249,7 +249,7 @@ export default function AssessmentBuilder() {
             <textarea
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
-              placeholder="Paste or type your questions here...&#10;&#10;1. What is 3/4 + 1/2?&#10;2. Solve: 5 1/3 â 2 3/4"
+              placeholder="Paste or type your questions here...&#10;&#10;1. What is 3/4 + 1/2?&#10;2. Solve: 5 1/3 - 2 3/4"
               rows={8}
               className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
             />
@@ -322,7 +322,7 @@ export default function AssessmentBuilder() {
               </svg>
               {loadingStep || 'Generating...'}
             </span>
-          ) : 'ð Generate Assessment'}
+          ) : 'Generate Assessment'}
         </button>
 
         {/* Error */}
@@ -339,9 +339,9 @@ export default function AssessmentBuilder() {
             <div className="flex items-center border-b border-gray-100 bg-gray-50">
               <div className="flex gap-1 p-2 flex-1">
                 {[
-                  { id: 'versionA', label: 'ð Version A', show: true },
-                  { id: 'versionB', label: 'ð Version B', show: includeVersionB },
-                  { id: 'answerKey', label: 'ð Answer Key', show: includeAnswerKey },
+                  { id: 'versionA', label: 'Version A', show: true },
+                  { id: 'versionB', label: 'Version B', show: includeVersionB },
+                  { id: 'answerKey', label: 'Answer Key', show: includeAnswerKey },
                 ].filter(t => t.show).map(tab => (
                   <button key={tab.id} onClick={() => setOutputTab(tab.id)}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${outputTab === tab.id ? 'bg-white shadow text-indigo-700 border border-gray-200' : 'text-gray-600 hover:text-gray-800'}`}
@@ -351,15 +351,15 @@ export default function AssessmentBuilder() {
               <div className="flex gap-2 p-2">
                 <button onClick={() => copyToClipboard(currentTabContent)}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition font-medium">
-                  ð Copy
+                  Copy
                 </button>
                 <button onClick={() => downloadText(currentTabContent, tabFilename)}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition font-medium">
-                  â¬ï¸ Download
+                  Download
                 </button>
                 <button onClick={() => downloadText(output, 'full-assessment.txt')}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition font-medium">
-                  â¬ï¸ Download All
+                  Download All
                 </button>
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function AssessmentBuilder() {
 
       {/* Footer */}
       <footer className="text-center py-8 text-xs text-gray-400">
-        Assessment Builder â¢ Powered by Claude AI â¢ Your API key is stored locally and never shared
+        Assessment Builder * Powered by Claude AI * Your API key is stored locally and never shared
       </footer>
     </div>
   );
