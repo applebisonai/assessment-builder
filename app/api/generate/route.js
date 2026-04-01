@@ -1,34 +1,39 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(request) {
-  const apiKey = request.headers.get('x-api-key');
-  if (!apiKey) return Response.json({ error: 'Missing API key. Add your Anthropic API key in Settings.' }, { status: 401 });
+  try {
+    const apiKey = request.headers.get('x-api-key');
+    if (!apiKey) return Response.json({ error: 'Missing API key. Add your Anthropic API key in Settings.' }, { status: 401 });
 
-  const { content, contentType, gradeLevel, subject, standard, includeVersionB, includeAnswerKey, imageBase64 } = await request.json();
+    const { content, contentType, gradeLevel, subject, standard, includeVersionB, includeAnswerKey, imageBase64, fileType } = await request.json();
 
-  const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
 
-  let extractedText = content;
+    let extractedText = content;
 
-  // If image data provided, first use Claude vision to extract text
-  if (imageBase64) {
-    const visionResp = await client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 4000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64 } },
-          { type: 'text', text: 'Please extract ALL text from this document exactly as it appears. Include every question, answer choice, instruction, and label. Format it clearly with question numbers preserved.' }
-        ]
-      }]
-    });
-    extractedText = visionResp.content[0].text;
-  }
+    // If file data provided, use Claude to extract text
+    if (imageBase64) {
+      const isPDF = fileType === 'application/pdf';
+      const mediaType = isPDF ? 'application/pdf' : (fileType && fileType.startsWith('image/') ? fileType : 'image/png');
+      const blockType = isPDF ? 'document' : 'image';
 
-  const standardNote = standard ? `Standard: ${standard}` : `Identify the appropriate CCSS standard(s) for grade ${gradeLevel} ${subject}`;
+      const visionResp = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: blockType, source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+            { type: 'text', text: 'Please extract ALL text from this document exactly as it appears. Include every question, answer choice, instruction, and label. Format it clearly with question numbers preserved.' }
+          ]
+        }]
+      });
+      extractedText = visionResp.content[0].text;
+    }
 
-  const prompt = `You are an expert ${subject} curriculum designer for grade ${gradeLevel}.
+    const standardNote = standard ? `Standard: ${standard}` : `Identify the appropriate CCSS standard(s) for grade ${gradeLevel} ${subject}`;
+
+    const prompt = `You are an expert ${subject} curriculum designer for grade ${gradeLevel}.
 
 Here is the source content from a ${contentType}:
 ---
@@ -121,7 +126,7 @@ VISUAL MODELS: [instructions for inserting images]
 DIFFERENTIATION: [below grade / above grade suggestions]
 COMMON ERRORS: [top 3-4 errors to watch for]
 RETEACH RESOURCES: [specific Khan Academy, IXL links for the standard]
-` : ''}
+a : ''}
 
 IMPORTANT RULES:
 1. Every question must have a [CCSS Standard] tag and a [Question Type] tag
@@ -132,11 +137,17 @@ IMPORTANT RULES:
 6. Do NOT include answer choices for open-ended questions -- those are fill-in or show-work
 7. Multiple choice questions must have 4 answer choices labeled O A  O B  O C  O D`;
 
-  const response = await client.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 8000,
-    messages: [{ role: 'user', content: prompt }]
-  });
+    const response = await client.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: prompt }]
+    });
 
-  return Response.json({ assessment: response.content[0].text, extractedText });
+    return Response.json({ assessment: response.content[0].text, extractedText });
+
+  } catch (e) {
+    console.error('Generate error:', e);
+    const msg = e?.error?.error?.message || e?.message || 'An unexpected error occurred.';
+    return Response.json({ error: msg }, { status: 500 });
+  }
 }
