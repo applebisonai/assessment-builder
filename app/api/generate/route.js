@@ -77,9 +77,9 @@ For ADDITION / SUBTRACTION / PART-WHOLE:
 For COUNTING / NUMBER LINES:
   [NUM_LINE: min=0 max=20 step=2 | label=Count by 2s]
 
-For FRACTIONS:
-  [FRACTION: 3/4]                       ← fraction bar model (simple fraction)
-  [FRACTION: 1 2/3]                     ← mixed number bar model (whole + fraction)
+For FRACTIONS — ALWAYS include numerator/denominator with a slash. NEVER write just a whole number like [FRACTION: 7]:
+  [FRACTION: 3/4]                       ← simple fraction (numerator/denominator, slash required)
+  [FRACTION: 1 2/3]                     ← mixed number (whole SPACE numerator/denominator, slash required)
 
 For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate lines before the question:
   [FRACTION: 1 2/4]

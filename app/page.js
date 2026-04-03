@@ -502,63 +502,147 @@ function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
 
 // ─── Visual Model Inline Editor ─────────────────────────────────────────────
 
-function ModelEditWrapper({ marker, onSave, children }) {
-  const fm = marker.match(/\[FRACTION:\s*(.+?)\]/);
-  const spec = fm ? fm[1].trim() : null;
-  const mx0 = spec ? spec.match(/^(\d+)\s+(\d+)\/(\d+)$/) : null;
-  const sm0 = spec ? spec.match(/^(\d+)\/(\d+)$/) : null;
+function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
+  // Parse model type and spec from marker
+  const inner = marker.replace(/^\[|\]$/g, '').trim();
+  const colonIdx = inner.indexOf(':');
+  const modelType = colonIdx >= 0 ? inner.slice(0, colonIdx).trim() : '';
+  const rawSpecInit = colonIdx >= 0 ? inner.slice(colonIdx + 1).trim() : inner;
+
+  // FRACTION state
+  const fmSpec = modelType === 'FRACTION' ? rawSpecInit : '';
+  const mx0 = fmSpec ? fmSpec.match(/^(\d+)\s+(\d+)\/(\d+)$/) : null;
+  const sm0 = fmSpec ? fmSpec.match(/^(\d+)\/(\d+)$/) : null;
   const [editing, setEditing] = useState(false);
   const [isMixed, setIsMixed] = useState(!!mx0);
   const [whole, setWhole] = useState(mx0 ? parseInt(mx0[1]) : 0);
   const [numer, setNumer] = useState(mx0 ? parseInt(mx0[2]) : (sm0 ? parseInt(sm0[1]) : 1));
   const [denom, setDenom] = useState(mx0 ? parseInt(mx0[3]) : (sm0 ? parseInt(sm0[2]) : 4));
+  // BASE10 state
+  const [hundreds, setHundreds] = useState(parseInt(rawSpecInit.match(/hundreds=(\d+)/)?.[1] || '0'));
+  const [tens, setTens]         = useState(parseInt(rawSpecInit.match(/tens=(\d+)/)?.[1]     || '0'));
+  const [ones, setOnes]         = useState(parseInt(rawSpecInit.match(/ones=(\d+)/)?.[1]     || '0'));
+  // NUM_LINE state
+  const [nlMin,   setNlMin]   = useState(parseInt(rawSpecInit.match(/min=(-?\d+)/)?.[1]  || '0'));
+  const [nlMax,   setNlMax]   = useState(parseInt(rawSpecInit.match(/max=(\d+)/)?.[1]    || '10'));
+  const [nlStep,  setNlStep]  = useState(parseInt(rawSpecInit.match(/step=(\d+)/)?.[1]   || '1'));
+  const [nlLabel, setNlLabel] = useState(rawSpecInit.match(/label=([^|\]]+)/)?.[1]?.trim() || '');
+  // PV_CHART state
+  const [pvNum, setPvNum] = useState(parseInt(rawSpecInit.match(/(\d+)/)?.[1] || '0'));
+  // BAR_MODEL / TAPE raw edit
+  const [rawSpec, setRawSpec] = useState(rawSpecInit);
 
-  if (!fm) return <>{children}</>;
+  if (!modelType) return <>{children}</>;
+
+  const inputCls = 'border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400';
+  const labelCls = 'text-xs text-gray-500 flex items-center gap-1';
 
   const handleSave = () => {
-    const newMarker = (isMixed && whole > 0)
-      ? `[FRACTION: ${whole} ${numer}/${denom}]`
-      : `[FRACTION: ${numer}/${denom}]`;
+    let newMarker = marker;
+    switch (modelType) {
+      case 'FRACTION':
+        newMarker = (isMixed && whole > 0)
+          ? `[FRACTION: ${whole} ${numer}/${denom}]`
+          : `[FRACTION: ${numer}/${denom}]`;
+        break;
+      case 'BASE10':
+        newMarker = `[BASE10: hundreds=${hundreds} tens=${tens} ones=${ones}]`;
+        break;
+      case 'NUM_LINE': {
+        const lp = nlLabel ? ` | label=${nlLabel}` : '';
+        newMarker = `[NUM_LINE: min=${nlMin} max=${nlMax} step=${nlStep}${lp}]`;
+        break;
+      }
+      case 'PV_CHART':
+        newMarker = `[PV_CHART: ${pvNum}]`;
+        break;
+      case 'BAR_MODEL':
+        newMarker = `[BAR_MODEL: ${rawSpec}]`;
+        break;
+      case 'TAPE':
+        newMarker = `[TAPE: ${rawSpec}]`;
+        break;
+      default:
+        newMarker = `[${modelType}: ${rawSpec}]`;
+    }
     onSave(marker, newMarker);
     setEditing(false);
   };
+
+  const TYPE_LABELS = {
+    FRACTION: 'Fraction', BASE10: 'Base-10 Blocks', NUM_LINE: 'Number Line',
+    PV_CHART: 'Place Value Chart', BAR_MODEL: 'Bar Model', TAPE: 'Tape Diagram',
+  };
+
+  const renderEditor = () => {
+    switch (modelType) {
+      case 'FRACTION': return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className={`${labelCls} cursor-pointer select-none`}>
+            <input type="checkbox" checked={isMixed} onChange={e => setIsMixed(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/>
+            Mixed number
+          </label>
+          {isMixed && <><input type="number" min="0" value={whole} onChange={e => setWhole(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-14`} placeholder="whole"/><span className="text-gray-400 text-xs font-bold">+</span></>}
+          <input type="number" min="1" value={numer} onChange={e => setNumer(Math.max(1,parseInt(e.target.value)||1))} className={`${inputCls} w-14`} placeholder="num"/>
+          <span className="text-gray-500 text-sm font-bold">⁄</span>
+          <input type="number" min="1" value={denom} onChange={e => setDenom(Math.max(1,parseInt(e.target.value)||1))} className={`${inputCls} w-14`} placeholder="den"/>
+        </div>
+      );
+      case 'BASE10': return (
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className={labelCls}>Hundreds <input type="number" min="0" value={hundreds} onChange={e => setHundreds(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-14`}/></label>
+          <label className={labelCls}>Tens <input type="number" min="0" value={tens} onChange={e => setTens(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-14`}/></label>
+          <label className={labelCls}>Ones <input type="number" min="0" value={ones} onChange={e => setOnes(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-14`}/></label>
+        </div>
+      );
+      case 'NUM_LINE': return (
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className={labelCls}>Min <input type="number" value={nlMin} onChange={e => setNlMin(parseInt(e.target.value)||0)} className={`${inputCls} w-16`}/></label>
+          <label className={labelCls}>Max <input type="number" value={nlMax} onChange={e => setNlMax(parseInt(e.target.value)||10)} className={`${inputCls} w-16`}/></label>
+          <label className={labelCls}>Step <input type="number" min="1" value={nlStep} onChange={e => setNlStep(Math.max(1,parseInt(e.target.value)||1))} className={`${inputCls} w-14`}/></label>
+          <label className={labelCls}>Label <input type="text" value={nlLabel} onChange={e => setNlLabel(e.target.value)} className={`${inputCls} w-28 text-left`}/></label>
+        </div>
+      );
+      case 'PV_CHART': return (
+        <div className="flex items-center gap-2">
+          <label className={labelCls}>Number <input type="number" min="0" value={pvNum} onChange={e => setPvNum(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-24`}/></label>
+        </div>
+      );
+      default: return (
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Edit model spec (values separated by commas, options after |):</p>
+          <input type="text" value={rawSpec} onChange={e => setRawSpec(e.target.value)}
+            className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400"/>
+        </div>
+      );
+    }
+  };
+
+  // Invalid model: show remove-only UI
+  if (invalid) return (
+    <div className="flex items-center gap-2 py-1 no-print">
+      <span className="text-xs text-red-400 italic">{marker}</span>
+      <button onClick={onRemove} className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-1.5 py-0.5 bg-white">✕ Remove</button>
+    </div>
+  );
 
   return (
     <div className="relative group/model">
       {children}
       {!editing && (
-        <button
-          onClick={() => setEditing(true)}
-          className="absolute top-1 right-1 opacity-0 group-hover/model:opacity-100 bg-white border border-indigo-200 text-indigo-500 hover:bg-indigo-50 rounded px-1.5 py-0.5 text-xs transition-opacity shadow-sm no-print"
-        >
+        <button onClick={() => setEditing(true)}
+          className="absolute top-1 right-1 opacity-0 group-hover/model:opacity-100 bg-white border border-indigo-200 text-indigo-500 hover:bg-indigo-50 rounded px-1.5 py-0.5 text-xs transition-opacity shadow-sm no-print">
           ✏ Edit
         </button>
       )}
       {editing && (
         <div className="mt-2 p-3 bg-white border border-indigo-200 rounded-lg shadow-sm no-print">
-          <p className="text-xs font-semibold text-gray-500 mb-2">Edit Fraction</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-              <input type="checkbox" checked={isMixed} onChange={e => setIsMixed(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/>
-              Mixed number
-            </label>
-            {isMixed && (
-              <>
-                <input type="number" min="0" value={whole} onChange={e => setWhole(Math.max(0, parseInt(e.target.value)||0))}
-                  className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
-                  placeholder="whole"/>
-                <span className="text-gray-400 text-xs font-bold">+</span>
-              </>
-            )}
-            <input type="number" min="1" value={numer} onChange={e => setNumer(Math.max(1, parseInt(e.target.value)||1))}
-              className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
-              placeholder="num"/>
-            <span className="text-gray-500 text-sm font-bold">⁄</span>
-            <input type="number" min="1" value={denom} onChange={e => setDenom(Math.max(1, parseInt(e.target.value)||1))}
-              className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
-              placeholder="den"/>
+          <p className="text-xs font-semibold text-indigo-600 mb-2">Edit {TYPE_LABELS[modelType] || modelType}</p>
+          {renderEditor()}
+          <div className="flex gap-2 mt-3">
             <button onClick={handleSave} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-indigo-700 transition">Save</button>
             <button onClick={() => setEditing(false)} className="text-gray-500 text-xs px-2 py-1 rounded-lg hover:bg-gray-100 transition">Cancel</button>
+            {onRemove && <button onClick={onRemove} className="ml-auto text-red-400 text-xs px-2 py-1 rounded-lg hover:bg-red-50 transition">Remove model</button>}
           </div>
         </div>
       )}
@@ -666,14 +750,19 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, customTitle
                   <div className="ml-11 mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                     {q.models.map((m, mi) => {
                       const rendered = parseVisualModel(m);
-                      const content = rendered
-                        ? <div>{rendered}</div>
-                        : <div className="text-xs text-gray-400 italic">{m}</div>;
-                      return onModelEdit ? (
-                        <ModelEditWrapper key={mi} marker={m} onSave={(oldM, newM) => onModelEdit(oldM, newM)}>
-                          {content}
-                        </ModelEditWrapper>
-                      ) : <div key={mi}>{content}</div>;
+                      const isInvalid = !rendered;
+                      if (onModelEdit) {
+                        return (
+                          <ModelEditWrapper key={mi} marker={m}
+                            invalid={isInvalid}
+                            onSave={(oldM, newM) => onModelEdit(oldM, newM)}
+                            onRemove={() => onModelEdit(m, '')}>
+                            {rendered ? <div>{rendered}</div> : null}
+                          </ModelEditWrapper>
+                        );
+                      }
+                      // In print/read-only mode: skip invalid models entirely
+                      return rendered ? <div key={mi}>{rendered}</div> : null;
                     })}
                   </div>
                 )}
@@ -862,7 +951,11 @@ export default function AssessmentBuilder() {
     'answer-key.txt';
 
   const handleModelEdit = (oldMarker, newMarker) => {
-    const updated = currentTabContent.replace(oldMarker, newMarker);
+    // newMarker === '' means remove the model entirely
+    const escaped = oldMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const updated = newMarker === ''
+      ? currentTabContent.replace(new RegExp(`\\n?${escaped}`, 'g'), '')
+      : currentTabContent.replace(oldMarker, newMarker);
     setEditedSections(prev => ({ ...prev, [outputTab]: updated }));
   };
 
