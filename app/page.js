@@ -411,8 +411,9 @@ function renderFractionTableHTML(whole, numerator, denominator) {
   return html;
 }
 
-function generateGoogleDocsHTML(text, subject, gradeLevel) {
+function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
   const { title, subtitle, questions } = parseAssessment(text);
+  const displayTitle = customTitle || title || `${subject} Assessment`;
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
   const borderColors = ['#6366f1','#3b82f6','#10b981','#f59e0b','#f43f5e','#a855f7','#06b6d4','#f97316'];
 
@@ -475,7 +476,7 @@ function generateGoogleDocsHTML(text, subject, gradeLevel) {
 
   return `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a1a1a;">
     <div style="border-top:4px solid #6366f1;padding:18px 0 12px;text-align:center;">
-      <h1 style="font-size:20px;font-weight:bold;margin:0 0 6px;">${escapeHtml(title || `${subject} Assessment`)}</h1>
+      <h1 style="font-size:20px;font-weight:bold;margin:0 0 6px;">${escapeHtml(displayTitle)}</h1>
       ${subtitle ? `<p style="color:#666;font-size:13px;margin:0 0 10px;">${escapeHtml(subtitle)}</p>` : ''}
       <div style="display:inline-flex;gap:8px;margin-bottom:4px;">
         <span style="background:#eef2ff;color:#4338ca;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">${gradeDisplay}</span>
@@ -566,8 +567,9 @@ function ModelEditWrapper({ marker, onSave, children }) {
   );
 }
 
-function AssessmentPreview({ text, subject, gradeLevel, onModelEdit }) {
+function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, customTitle }) {
   const { title, subtitle, questions } = parseAssessment(text);
+  const displayTitle = customTitle || title || `${subject} Assessment`;
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
 
   const accentColors = [
@@ -599,7 +601,7 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit }) {
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <h1 className="text-xl font-bold text-gray-800 leading-tight mb-1">
-                  {title || `${subject} Assessment`}
+                  {displayTitle}
                 </h1>
                 {subtitle && <p className="text-sm text-gray-500 mb-3">{subtitle}</p>}
                 <div className="flex gap-2 flex-wrap">
@@ -726,7 +728,7 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit }) {
 
         {/* Footer */}
         <div className="text-center py-3 text-xs text-gray-400">
-          {title || 'Assessment'} · {gradeDisplay} {subject} · {questions.length} Questions
+          {displayTitle} · {gradeDisplay} {subject} · {questions.length} Questions
         </div>
       </div>
     </div>
@@ -776,6 +778,7 @@ export default function AssessmentBuilder() {
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [outputTab, setOutputTab] = useState('versionA');
+  const [customTitle, setCustomTitle] = useState('');
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'edit' | 'raw'
   const [copied, setCopied] = useState(false);
   const [editedSections, setEditedSections] = useState({});
@@ -808,6 +811,7 @@ export default function AssessmentBuilder() {
         fd.append('includeVersionB', String(includeVersionB));
         fd.append('includeAnswerKey', String(includeAnswerKey));
         fd.append('questionCount', questionCount);
+        fd.append('customTitle', customTitle);
         fd.append('apiKey', apiKey);
         setLoadingStep('Generating assessment...');
         const res = await fetch('/api/generate', { method: 'POST', body: fd });
@@ -819,7 +823,7 @@ export default function AssessmentBuilder() {
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, url: inputMode === 'url' ? url : '', pastedText: inputMode === 'paste' ? pastedText : '', apiKey }),
+          body: JSON.stringify({ gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url: inputMode === 'url' ? url : '', pastedText: inputMode === 'paste' ? pastedText : '', apiKey }),
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -867,7 +871,7 @@ export default function AssessmentBuilder() {
     try {
       // Copy rich HTML for Google Docs / Word, plus plain text fallback
       const htmlContent = outputTab !== 'answerKey'
-        ? generateGoogleDocsHTML(t, subject, gradeLevel)
+        ? generateGoogleDocsHTML(t, subject, gradeLevel, customTitle)
         : null;
       if (htmlContent && navigator.clipboard.write) {
         await navigator.clipboard.write([
@@ -1058,6 +1062,16 @@ export default function AssessmentBuilder() {
             {/* Options Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
               <h2 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Assessment Options</h2>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Assessment Title <span className="font-normal text-gray-400">(optional — AI will generate one if blank)</span></label>
+                <input
+                  type="text"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="e.g. Unit 4 Fractions Quiz, Chapter 3 Check-In..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">Grade Level</label>
@@ -1182,6 +1196,7 @@ export default function AssessmentBuilder() {
                       subject={subject}
                       gradeLevel={gradeLevel}
                       onModelEdit={handleModelEdit}
+                      customTitle={customTitle}
                     />
                   )}
                   </div>

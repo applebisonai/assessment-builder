@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(request) {
   try {
-    let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, url, pastedText, apiKey;
+    let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url, pastedText, apiKey;
     let fileContent = null;
     let fileMediaType = null;
 
@@ -16,6 +16,7 @@ export async function POST(request) {
       includeVersionB = formData.get('includeVersionB') === 'true';
       includeAnswerKey = formData.get('includeAnswerKey') === 'true';
       questionCount = formData.get('questionCount') || '8';
+      customTitle = formData.get('customTitle') || '';
       apiKey = formData.get('apiKey') || '';
       url = '';
       pastedText = '';
@@ -41,6 +42,7 @@ export async function POST(request) {
       includeVersionB = body.includeVersionB || false;
       includeAnswerKey = body.includeAnswerKey || false;
       questionCount = body.questionCount || '8';
+      customTitle = body.customTitle || '';
       url = body.url || '';
       pastedText = body.pastedText || '';
       apiKey = body.apiKey || '';
@@ -100,7 +102,7 @@ ${isUpperGrades ? `- Use visuals selectively for grades 6+ (geometry, ratios, gr
     const systemPrompt = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
 
 FORMAT RULES (CRITICAL — follow exactly):
-1. Start with the assessment title on line 1 (e.g. "3.NBT.1 Place Value Check-In")
+1. Start with the assessment title on line 1${customTitle ? ` — use exactly this title: "${customTitle}"` : ' (e.g. "3.NBT.1 Place Value Check-In")'}
 2. Optionally add a brief subtitle on line 2 (e.g. "Understanding hundreds, tens, and ones")
 3. Number each question: "1. Question text here"
 4. For MULTIPLE CHOICE questions, list 4 options with capital letters:
