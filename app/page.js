@@ -546,7 +546,9 @@ export default function AssessmentBuilder() {
   const [dragOver, setDragOver] = useState(false);
   const [outputTab, setOutputTab] = useState('versionA');
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'raw'
+  const [copied, setCopied] = useState(false);
   const fileInputRef = useRef(null);
+  const previewRef = useRef(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('anthropic_api_key');
@@ -622,13 +624,54 @@ export default function AssessmentBuilder() {
     outputTab === 'versionB' ? 'assessment-version-b.txt' :
     'answer-key.txt';
 
-  const copyToClipboard = (t) => { navigator.clipboard.writeText(t); };
-  const downloadText = (t, filename) => {
-    const blob = new Blob([t], { type: 'text/plain' });
-    const u = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = u; a.download = filename; a.click();
-    URL.revokeObjectURL(u);
+  const copyToClipboard = async (t) => {
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      // Fallback for browsers that block clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = t;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadAsPDF = () => {
+    const previewEl = previewRef.current;
+    if (!previewEl) return;
+    const tabLabel =
+      outputTab === 'versionA' ? 'Version A' :
+      outputTab === 'versionB' ? 'Version B' :
+      'Answer Key';
+    const html = previewEl.innerHTML;
+    const pw = window.open('', '_blank');
+    pw.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Assessment – ${tabLabel}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      @page { margin: 0.65in; size: letter; }
+      .no-print { display: none !important; }
+    }
+    body { background: white; font-family: ui-sans-serif, system-ui, sans-serif; }
+  </style>
+</head>
+<body class="p-6">
+  ${html}
+  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 600); };<\/script>
+</body>
+</html>`);
+    pw.document.close();
   };
 
   const INPUT_TABS = [
@@ -863,11 +906,11 @@ export default function AssessmentBuilder() {
                       </button>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => copyToClipboard(currentTabContent)} className="text-xs bg-white border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition">
-                        Copy
+                      <button onClick={() => copyToClipboard(currentTabContent)} className="text-xs bg-white border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition min-w-[60px]">
+                        {copied ? '✓ Copied!' : 'Copy'}
                       </button>
-                      <button onClick={() => downloadText(currentTabContent, tabFilename)} className="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-lg hover:bg-indigo-700 transition">
-                        Download
+                      <button onClick={downloadAsPDF} className="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-lg hover:bg-indigo-700 transition">
+                        Download PDF
                       </button>
                     </div>
                   </div>
@@ -875,7 +918,8 @@ export default function AssessmentBuilder() {
 
                 {/* Preview / Raw content */}
                 {viewMode === 'preview' ? (
-                  outputTab === 'answerKey' ? (
+                  <div ref={previewRef}>
+                  {outputTab === 'answerKey' ? (
                     <AnswerKeyPreview text={sections.answerKey}/>
                   ) : (
                     <AssessmentPreview
@@ -883,7 +927,8 @@ export default function AssessmentBuilder() {
                       subject={subject}
                       gradeLevel={gradeLevel}
                     />
-                  )
+                  )}
+                  </div>
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                     <pre className="whitespace-pre-wrap text-xs text-gray-700 font-mono leading-relaxed max-h-96 overflow-y-auto">{currentTabContent}</pre>
@@ -892,7 +937,7 @@ export default function AssessmentBuilder() {
 
                 {/* Pro tip */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                  <strong>Pro tip:</strong> Click &quot;Copy&quot; then open a new Google Doc and paste (Ctrl+V) to get a fully formatted document ready for printing.
+                  <strong>Pro tip:</strong> Click &quot;Download PDF&quot; to open a print-ready version — then choose &quot;Save as PDF&quot; in the print dialog. Use &quot;Copy&quot; to paste into Google Docs or Word.
                 </div>
               </>
             ) : (
