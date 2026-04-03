@@ -2,97 +2,179 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(request) {
   try {
-    const apiKey = request.headers.get('x-api-key');
-    if (!apiKey) return Response.json({ error: 'Missing API key. Add your Anthropic API key in Settings.' }, { status: 401 });
+    let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, url, pastedText, apiKey;
+    let fileContent = null;
+    let fileMediaType = null;
 
-    const { content, contentType, gradeLevel, subject, standard, includeVersionB, includeAnswerKey, imageBase64, fileType } = await request.json();
+    const contentType = request.headers.get('content-type') || '';
 
-    const client = new Anthropic({ apiKey });
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      gradeLevel = formData.get('gradeLevel') || '3';
+      subject = formData.get('subject') || 'Math';
+      standard = formData.get('standard') || '';
+      includeVersionB = formData.get('includeVersionB') === 'true';
+      includeAnswerKey = formData.get('includeAnswerKey') === 'true';
+      questionCount = formData.get('questionCount') || '8';
+      apiKey = formData.get('apiKey') || '';
+      url = '';
+      pastedText = '';
 
-    let extractedText = content;
-
-    if (imageBase64) {
-      const isPDF = fileType === 'application/pdf';
-      const mediaType = isPDF ? 'application/pdf' : (fileType && fileType.startsWith('image/') ? fileType : 'image/png');
-      const blockType = isPDF ? 'document' : 'image';
-
-      const visionResp = await client.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: blockType, source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-            { type: 'text', text: 'Please extract ALL text from this document exactly as it appears. Include every question, answer choice, instruction, and label. Format it clearly with question numbers preserved.' }
-          ]
-        }]
-      });
-      extractedText = visionResp.content[0].text;
+      const file = formData.get('file');
+      if (file) {
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        fileContent = buffer.toString('base64');
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.pdf')) fileMediaType = 'application/pdf';
+        else if (name.endsWith('.png')) fileMediaType = 'image/png';
+        else if (name.endsWith('.jpg') || name.endsWith('.jpeg')) fileMediaType = 'image/jpeg';
+        else if (name.endsWith('.gif')) fileMediaType = 'image/gif';
+        else if (name.endsWith('.webp')) fileMediaType = 'image/webp';
+        else fileMediaType = 'application/pdf';
+      }
+    } else {
+      const body = await request.json();
+      gradeLevel = body.gradeLevel || '3';
+      subject = body.subject || 'Math';
+      standard = body.standard || '';
+      includeVersionB = body.includeVersionB || false;
+      includeAnswerKey = body.includeAnswerKey || false;
+      questionCount = body.questionCount || '8';
+      url = body.url || '';
+      pastedText = body.pastedText || '';
+      apiKey = body.apiKey || '';
     }
 
-    const standardNote = standard
-      ? ('Standard: ' + standard)
-      : ('Identify the appropriate CCSS standard(s) for grade ' + gradeLevel + ' ' + subject);
+    if (!apiKey) {
+      return Response.json({ error: 'API key is required. Click the Settings button to add your Anthropic API key.' }, { status: 400 });
+    }
 
-    const gradeName = gradeLevel === 'K' ? 'Kindergarten' : ('Grade ' + gradeLevel);
+    const client = new Anthropic({ apiKey });
+    const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
 
-    const versionBBlock = includeVersionB
-      ? '\n=============================================\nVERSION B -- ALTERNATE ASSESSMENT\n(Same Standards | Different Context & Numbers | Questions Reordered)\n=============================================\n\nName: _________________________________ Date: _____________ Class: _______________\n\nDirections: Solve each problem. Show your work in the space provided.\n\n[reordered questions with DIFFERENT names, contexts, and numbers but same question types and skill difficulty -- every Version A question must have a parallel Version B question]\n\n--------------------------------------------\nSECTION 2: COMPUTATION\n--------------------------------------------\n\n[computation questions]'
-      : '';
+    // Determine grade band for age-appropriate instructions
+    const gradeNum = gradeLevel === 'K' ? 0 : parseInt(gradeLevel) || 3;
+    const isEarlyGrades = gradeNum <= 2;
+    const isMidGrades = gradeNum >= 3 && gradeNum <= 5;
+    const isUpperGrades = gradeNum >= 6;
 
-    const versionBAnswers = includeVersionB
-      ? '\n--------------------------------------------\nVERSION B -- ANSWERS\n--------------------------------------------\n\n[answers for Version B, each noting which Version A question it parallels]'
-      : '';
+    // Grade-appropriate visual model guidance
+    const visualModelGuide = subject === 'Math' ? `
 
-    const answerKeyBlock = includeAnswerKey
-      ? '\n=============================================\n* TEACHER ANSWER KEY -- DO NOT DISTRIBUTE *\n=============================================\n\nStandards: [list all CCSS standards covered]\nScoring: 1 pt per question | [N] pts total\n  [N-2]-[N] pts = Mastery\n  [N-4]-[N-3] pts = Approaching\n  Below = Needs Intervention\n\n--------------------------------------------\nVERSION A -- ANSWERS\n--------------------------------------------\n\n[For each question: show full worked solution with step-by-step math, CCSS tag, and question type]' + versionBAnswers + '\n\n--------------------------------------------\nTEACHER NOTES\n--------------------------------------------\n\nVISUAL MODELS: [instructions for inserting images]\nDIFFERENTIATION: [below grade / above grade suggestions]\nCOMMON ERRORS: [top 3-4 errors to watch for]\nRETEACH RESOURCES: [specific Khan Academy, IXL links for the standard]'
-      : '';
+VISUAL MODELS — Include these markers INLINE in questions where a visual would help:
 
-    const prompt =
-      'You are an expert ' + subject + ' curriculum designer for grade ' + gradeLevel + '.\n\n' +
-      'Here is the source content from a ' + contentType + ':\n---\n' + extractedText + '\n---\n\n' +
-      'Your task: Convert this into a polished, teacher-ready assessment with the following:\n\n' +
-      'REQUIREMENTS:\n' +
-      '- Grade Level: ' + gradeName + '\n' +
-      '- Subject: ' + subject + '\n' +
-      '- ' + standardNote + '\n' +
-      '- Tag every question with its specific CCSS standard (e.g., [5.NF.1])\n' +
-      '- Label every question with its type: [Word Problem], [Multiple Choice], [Computation], [Visual Model -- Bar Diagram], [Visual Model -- Number Line], [Visual Model -- Fraction Strips], [Visual Model -- Area Model], etc.\n' +
-      '- For visual model questions, include a * TEACHER: marker explaining what image to insert\n' +
-      '- Include a Name/Date/Class header\n' +
-      '- Include work space lines after each question\n' +
-      '- Keep answer blanks at the end of each question\n' +
-      '- Separate into sections: "SECTION 1: WORD PROBLEMS & VISUAL MODELS" and "SECTION 2: COMPUTATION"\n\n' +
-      'OUTPUT FORMAT -- produce exactly this structure:\n\n' +
-      '=============================================\nVERSION A -- ORIGINAL\n=============================================\n\n' +
-      'Name: _________________________________ Date: _____________ Class: _______________\n\n' +
-      'Directions: Solve each problem. Show your work in the space provided.\n\n' +
-      '--------------------------------------------\nSECTION 1: WORD PROBLEMS & VISUAL MODELS\n--------------------------------------------\n\n' +
-      '[questions here with labels, work space, answer blanks]\n\n' +
-      '--------------------------------------------\nSECTION 2: COMPUTATION\n--------------------------------------------\n\n' +
-      '[computation questions here]\n' +
-      versionBBlock +
-      answerKeyBlock +
-      '\n\nIMPORTANT RULES:\n' +
-      '1. Every question must have a [CCSS Standard] tag and a [Question Type] tag\n' +
-      '2. For Version B, ALL names, contexts, and numbers must be different from Version A\n' +
-      '3. Questions in Version B must be REORDERED (not just different numbers in same order)\n' +
-      '4. Each answer in the key must show full step-by-step work (e.g., "5/6 - 2/5 = 25/30 - 12/30 = 13/30")\n' +
-      '5. Visual model questions must have a * TEACHER: note explaining what to insert\n' +
-      '6. Do NOT include answer choices for open-ended questions -- those are fill-in or show-work\n' +
-      '7. Multiple choice questions must have 4 answer choices labeled O A  O B  O C  O D';
+For NUMBER SENSE / PLACE VALUE questions:
+  [BASE10: hundreds=1 tens=2 ones=3]   ← shows base-10 blocks
+  [PV_CHART: 342]                      ← shows a place value chart
+
+For ADDITION / SUBTRACTION / PART-WHOLE:
+  [BAR_MODEL: 4,6 | label=How many in all?]     ← colored bar segments
+  [TAPE: 4:Group A,6:Group B | brace=yes | total=10]  ← tape diagram with brace
+
+For COUNTING / NUMBER LINES:
+  [NUM_LINE: min=0 max=20 step=2 | label=Count by 2s]
+
+For FRACTIONS:
+  [FRACTION: 3/4]                      ← fraction bar model
+
+WHEN TO USE VISUAL MODELS:
+${isEarlyGrades ? `- Use visuals on MOST questions for K-2 (counting, adding, comparing, place value)
+- Show base-10 blocks for 2-digit numbers
+- Use number lines for counting on/back
+- Use bar models for simple addition/subtraction stories` : ''}
+${isMidGrades ? `- Use visuals on 30-50% of questions for grades 3-5
+- Place value charts for multi-digit numbers
+- Tape/bar diagrams for multiplication, fractions, ratios
+- Number lines for fractions and decimals` : ''}
+${isUpperGrades ? `- Use visuals selectively for grades 6+ (geometry, ratios, graphs)
+- Focus visuals on problems where a diagram is essential to understand` : ''}
+` : '';
+
+    const systemPrompt = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
+
+FORMAT RULES (CRITICAL — follow exactly):
+1. Start with the assessment title on line 1 (e.g. "3.NBT.1 Place Value Check-In")
+2. Optionally add a brief subtitle on line 2 (e.g. "Understanding hundreds, tens, and ones")
+3. Number each question: "1. Question text here"
+4. For MULTIPLE CHOICE questions, list 4 options with capital letters:
+   A) option text
+   B) option text
+   C) option text
+   D) option text
+5. For OPEN RESPONSE questions, just write the question — no choices.
+6. Add the standard tag on its own line after the question: [3.NBT.A.1]
+7. Do NOT use asterisks, markdown, bold, or special formatting.
+8. Keep language ${isEarlyGrades ? 'very simple and concrete — short sentences, familiar vocabulary' : isMidGrades ? 'clear and grade-appropriate' : 'precise and academic'}.
+${visualModelGuide}
+
+QUESTION QUALITY GUIDELINES:
+- Write exactly ${questionCount} questions for Version A
+- Mix question types: ${isEarlyGrades ? 'mostly open response with visuals, some MC' : 'mix of MC and open response'}
+- Questions should progress from basic recall → application → reasoning
+- ${isEarlyGrades ? 'Use simple story contexts (e.g. "Sam has 5 apples...") and avoid abstract notation' : 'Use real-world contexts when possible'}
+- ${standard ? 'Focus specifically on standard: ' + standard : 'Cover the key concepts from the uploaded content'}
+- Each question tests ONE clear skill
+
+${includeVersionB ? `After all Version A questions, write "VERSION B" on its own line, then write ${questionCount} alternate questions testing the same skills with different numbers/contexts.` : ''}
+
+${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own line, then list:
+- For MC: "1. C — explanation of why"
+- For open response: "2. [Sample answer] — scoring note"
+- Include brief notes on common misconceptions to watch for` : ''}`;
+
+    let userContent;
+
+    if (fileContent) {
+      userContent = [
+        {
+          type: 'text',
+          text: `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the content in this file. Use the content to determine what concepts to assess.`
+        },
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: fileMediaType,
+            data: fileContent
+          }
+        }
+      ];
+    } else if (url) {
+      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the lesson content at this URL: ${url}
+
+Analyze the key concepts covered and create questions that assess student understanding of those concepts.`;
+    } else if (pastedText) {
+      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on this content:
+
+${pastedText}
+
+Analyze the key concepts and create questions that assess student understanding.`;
+    } else {
+      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''}.
+
+Generate ${questionCount} questions that assess the most important skills for this grade level and subject. Include a variety of question types and difficulty levels.`;
+    }
 
     const response = await client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: prompt }]
+      model: 'claude-opus-4-5',
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }]
     });
 
-    return Response.json({ assessment: response.content[0].text, extractedText });
+    const result = response.content[0].text;
+    return Response.json({ result });
 
-  } catch (e) {
-    console.error('Generate error:', e);
-    const msg = e?.error?.error?.message || e?.message || 'An unexpected error occurred.';
-    return Response.json({ error: msg }, { status: 500 });
+  } catch (error) {
+    console.error('Assessment generation error:', error);
+    const message = error.message || 'Unknown error occurred';
+    if (message.includes('credit') || message.includes('balance')) {
+      return Response.json({ error: 'Your Anthropic API credit balance is too low. Please go to console.anthropic.com → Billing to add credits.' }, { status: 402 });
+    }
+    if (message.includes('API key') || message.includes('auth') || message.includes('401')) {
+      return Response.json({ error: 'Invalid API key. Please check your key in Settings.' }, { status: 401 });
+    }
+    return Response.json({ error: message }, { status: 500 });
   }
 }
