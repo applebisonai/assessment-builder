@@ -386,6 +386,31 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function renderFractionTableHTML(whole, numerator, denominator) {
+  const cellW = Math.max(20, Math.floor(180 / denominator));
+  const strips = [];
+  for (let w = 0; w < whole; w++) strips.push(denominator);
+  if (numerator > 0 || whole === 0) strips.push(numerator);
+  const label = whole > 0 ? `${whole} ${numerator}/${denominator}` : `${numerator}/${denominator}`;
+  let html = `<div style="margin:4px 0 8px;">`;
+  html += `<div style="font-size:11px;color:#555;margin-bottom:4px;font-weight:600;">${label}</div>`;
+  for (let si = 0; si < strips.length; si++) {
+    const filled = strips[si];
+    html += `<table style="display:inline-table;border-collapse:collapse;margin-right:6px;vertical-align:middle;">`;
+    html += `<tr>`;
+    for (let i = 0; i < denominator; i++) {
+      const isFilled = i < filled;
+      html += `<td style="width:${cellW}px;height:30px;background:${isFilled ? '#6366f1' : '#e0e7ff'};border:1.5px solid #4f46e5;"></td>`;
+    }
+    html += `</tr>`;
+    const stripLabel = si < whole ? `${denominator}/${denominator}` : `${numerator}/${denominator}`;
+    html += `<tr><td colspan="${denominator}" style="text-align:center;font-size:10px;color:#374151;padding:1px 0;">${stripLabel}</td></tr>`;
+    html += `</table>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
 function generateGoogleDocsHTML(text, subject, gradeLevel) {
   const { title, subtitle, questions } = parseAssessment(text);
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
@@ -406,8 +431,20 @@ function generateGoogleDocsHTML(text, subject, gradeLevel) {
         </div>`;
 
     if (q.models.length > 0) {
-      block += `<div style="margin:6px 0 6px 36px;padding:8px 12px;background:#f8faff;border:1px solid #e0e7ff;border-radius:6px;font-size:12px;color:#666;font-style:italic;">`;
-      for (const m of q.models) block += `<div>${escapeHtml(m)}</div>`;
+      block += `<div style="margin:6px 0 6px 36px;padding:8px 12px;background:#f8faff;border:1px solid #e0e7ff;border-radius:6px;">`;
+      for (const m of q.models) {
+        const fm = m.match(/\[FRACTION:\s*(.+?)\]/);
+        if (fm) {
+          const spec = fm[1].trim();
+          const mx = spec.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+          const sm = spec.match(/^(\d+)\/(\d+)$/);
+          if (mx) block += renderFractionTableHTML(parseInt(mx[1]), parseInt(mx[2]), parseInt(mx[3]));
+          else if (sm) block += renderFractionTableHTML(0, parseInt(sm[1]), parseInt(sm[2]));
+          else block += `<div style="font-size:12px;color:#666;font-style:italic;">${escapeHtml(m)}</div>`;
+        } else {
+          block += `<div style="font-size:12px;color:#666;font-style:italic;">${escapeHtml(m)}</div>`;
+        }
+      }
       block += `</div>`;
     }
 
@@ -462,7 +499,74 @@ function generateGoogleDocsHTML(text, subject, gradeLevel) {
 
 // ─── Assessment Preview ─────────────────────────────────────────────────────
 
-function AssessmentPreview({ text, subject, gradeLevel }) {
+// ─── Visual Model Inline Editor ─────────────────────────────────────────────
+
+function ModelEditWrapper({ marker, onSave, children }) {
+  const { useState: us } = React;
+  const [editing, setEditing] = us(false);
+  const fm = marker.match(/\[FRACTION:\s*(.+?)\]/);
+  const spec = fm ? fm[1].trim() : null;
+  const mx0 = spec ? spec.match(/^(\d+)\s+(\d+)\/(\d+)$/) : null;
+  const sm0 = spec ? spec.match(/^(\d+)\/(\d+)$/) : null;
+  const [isMixed, setIsMixed] = us(!!mx0);
+  const [whole, setWhole] = us(mx0 ? parseInt(mx0[1]) : 0);
+  const [numer, setNumer] = us(mx0 ? parseInt(mx0[2]) : (sm0 ? parseInt(sm0[1]) : 1));
+  const [denom, setDenom] = us(mx0 ? parseInt(mx0[3]) : (sm0 ? parseInt(sm0[2]) : 4));
+
+  if (!fm) return <>{children}</>;
+
+  const handleSave = () => {
+    const newMarker = (isMixed && whole > 0)
+      ? `[FRACTION: ${whole} ${numer}/${denom}]`
+      : `[FRACTION: ${numer}/${denom}]`;
+    onSave(marker, newMarker);
+    setEditing(false);
+  };
+
+  return (
+    <div className="relative group/model">
+      {children}
+      {!editing && (
+        <button
+          onClick={() => setEditing(true)}
+          className="absolute top-1 right-1 opacity-0 group-hover/model:opacity-100 bg-white border border-indigo-200 text-indigo-500 hover:bg-indigo-50 rounded px-1.5 py-0.5 text-xs transition-opacity shadow-sm no-print"
+        >
+          ✏ Edit
+        </button>
+      )}
+      {editing && (
+        <div className="mt-2 p-3 bg-white border border-indigo-200 rounded-lg shadow-sm no-print">
+          <p className="text-xs font-semibold text-gray-500 mb-2">Edit Fraction</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
+              <input type="checkbox" checked={isMixed} onChange={e => setIsMixed(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/>
+              Mixed number
+            </label>
+            {isMixed && (
+              <>
+                <input type="number" min="0" value={whole} onChange={e => setWhole(Math.max(0, parseInt(e.target.value)||0))}
+                  className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
+                  placeholder="whole"/>
+                <span className="text-gray-400 text-xs font-bold">+</span>
+              </>
+            )}
+            <input type="number" min="1" value={numer} onChange={e => setNumer(Math.max(1, parseInt(e.target.value)||1))}
+              className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
+              placeholder="num"/>
+            <span className="text-gray-500 text-sm font-bold">⁄</span>
+            <input type="number" min="1" value={denom} onChange={e => setDenom(Math.max(1, parseInt(e.target.value)||1))}
+              className="w-14 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400"
+              placeholder="den"/>
+            <button onClick={handleSave} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-indigo-700 transition">Save</button>
+            <button onClick={() => setEditing(false)} className="text-gray-500 text-xs px-2 py-1 rounded-lg hover:bg-gray-100 transition">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssessmentPreview({ text, subject, gradeLevel, onModelEdit }) {
   const { title, subtitle, questions } = parseAssessment(text);
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
 
@@ -561,9 +665,14 @@ function AssessmentPreview({ text, subject, gradeLevel }) {
                   <div className="ml-11 mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                     {q.models.map((m, mi) => {
                       const rendered = parseVisualModel(m);
-                      return rendered ? <div key={mi}>{rendered}</div> : (
-                        <div key={mi} className="text-xs text-gray-400 italic">{m}</div>
-                      );
+                      const content = rendered
+                        ? <div>{rendered}</div>
+                        : <div className="text-xs text-gray-400 italic">{m}</div>;
+                      return onModelEdit ? (
+                        <ModelEditWrapper key={mi} marker={m} onSave={(oldM, newM) => onModelEdit(oldM, newM)}>
+                          {content}
+                        </ModelEditWrapper>
+                      ) : <div key={mi}>{content}</div>;
                     })}
                   </div>
                 )}
@@ -748,6 +857,11 @@ export default function AssessmentBuilder() {
     outputTab === 'versionA' ? 'assessment-version-a.txt' :
     outputTab === 'versionB' ? 'assessment-version-b.txt' :
     'answer-key.txt';
+
+  const handleModelEdit = (oldMarker, newMarker) => {
+    const updated = currentTabContent.replace(oldMarker, newMarker);
+    setEditedSections(prev => ({ ...prev, [outputTab]: updated }));
+  };
 
   const copyToClipboard = async (t) => {
     try {
@@ -1067,6 +1181,7 @@ export default function AssessmentBuilder() {
                       text={currentTabContent}
                       subject={subject}
                       gradeLevel={gradeLevel}
+                      onModelEdit={handleModelEdit}
                     />
                   )}
                   </div>
