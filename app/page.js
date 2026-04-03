@@ -376,6 +376,90 @@ const TYPE_CONFIGS = {
   },
 };
 
+// ─── HTML Export Helper ─────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function generateGoogleDocsHTML(text, subject, gradeLevel) {
+  const { title, subtitle, questions } = parseAssessment(text);
+  const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
+  const borderColors = ['#6366f1','#3b82f6','#10b981','#f59e0b','#f43f5e','#a855f7','#06b6d4','#f97316'];
+
+  const questionBlocks = questions.map((q, idx) => {
+    const config = TYPE_CONFIGS[q.type] || TYPE_CONFIGS.open;
+    const color = borderColors[idx % borderColors.length];
+    let block = `
+      <div style="margin-bottom:18px;padding:14px 16px;border:1px solid #e5e7eb;border-left:4px solid ${color};border-radius:8px;page-break-inside:avoid;">
+        <div style="font-size:11px;font-weight:700;color:${color};margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">${escapeHtml(config.label)} &nbsp;·&nbsp; ★ 1 pt</div>
+        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:6px;">
+          <div style="flex-shrink:0;min-width:26px;height:26px;background:#6366f1;color:#fff;border-radius:50%;font-weight:bold;font-size:13px;text-align:center;line-height:26px;">${q.num}</div>
+          <div>
+            <p style="font-size:15px;font-weight:600;margin:0 0 4px;line-height:1.5;">${escapeHtml(q.text)}</p>
+            ${q.extra.length > 0 ? `<p style="font-size:13px;color:#555;margin:0;">${escapeHtml(q.extra.join(' '))}</p>` : ''}
+          </div>
+        </div>`;
+
+    if (q.models.length > 0) {
+      block += `<div style="margin:6px 0 6px 36px;padding:8px 12px;background:#f8faff;border:1px solid #e0e7ff;border-radius:6px;font-size:12px;color:#666;font-style:italic;">`;
+      for (const m of q.models) block += `<div>${escapeHtml(m)}</div>`;
+      block += `</div>`;
+    }
+
+    if (q.type === 'mc' && q.choices.length > 0) {
+      block += `<table style="width:calc(100% - 36px);margin-left:36px;border-collapse:separate;border-spacing:4px;margin-top:6px;">`;
+      for (let i = 0; i < q.choices.length; i += 2) {
+        block += `<tr>`;
+        block += `<td style="padding:6px 10px;width:50%;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">○ <strong>${q.choices[i].letter}.</strong> ${escapeHtml(q.choices[i].text)}</td>`;
+        if (q.choices[i+1]) {
+          block += `<td style="padding:6px 10px;width:50%;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">○ <strong>${q.choices[i+1].letter}.</strong> ${escapeHtml(q.choices[i+1].text)}</td>`;
+        } else {
+          block += `<td></td>`;
+        }
+        block += `</tr>`;
+      }
+      block += `</table>`;
+    }
+
+    if (q.type === 'open') {
+      block += `<div style="margin-left:36px;margin-top:10px;">`;
+      for (let i = 0; i < 4; i++) block += `<div style="border-bottom:1px solid #bbb;margin-bottom:18px;height:18px;"></div>`;
+      block += `<div style="border:1px dashed #ccc;border-radius:6px;height:60px;margin-top:4px;"></div></div>`;
+    }
+
+    block += `</div>`;
+    return block;
+  }).join('');
+
+  return `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a1a1a;">
+    <div style="border-top:4px solid #6366f1;padding:18px 0 12px;text-align:center;">
+      <h1 style="font-size:20px;font-weight:bold;margin:0 0 6px;">${escapeHtml(title || `${subject} Assessment`)}</h1>
+      ${subtitle ? `<p style="color:#666;font-size:13px;margin:0 0 10px;">${escapeHtml(subtitle)}</p>` : ''}
+      <div style="display:inline-flex;gap:8px;margin-bottom:4px;">
+        <span style="background:#eef2ff;color:#4338ca;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">${gradeDisplay}</span>
+        <span style="background:#f3e8ff;color:#7c3aed;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">${subject}</span>
+        <span style="background:#f3f4f6;color:#555;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;">${questions.length} Questions</span>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin:14px 0 20px;">
+      <tr>
+        <td style="padding:4px 0;width:50%;font-size:12px;"><strong>Name:</strong> <span style="display:inline-block;width:200px;border-bottom:1px solid #999;">&nbsp;</span></td>
+        <td style="padding:4px 0;width:50%;font-size:12px;"><strong>Date:</strong> <span style="display:inline-block;width:200px;border-bottom:1px solid #999;">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;font-size:12px;"><strong>Class / Period:</strong> <span style="display:inline-block;width:165px;border-bottom:1px solid #999;">&nbsp;</span></td>
+        <td style="padding:4px 0;font-size:12px;"><strong>Teacher:</strong> <span style="display:inline-block;width:185px;border-bottom:1px solid #999;">&nbsp;</span></td>
+      </tr>
+    </table>
+    ${questionBlocks}
+  </div>`;
+}
+
 // ─── Assessment Preview ─────────────────────────────────────────────────────
 
 function AssessmentPreview({ text, subject, gradeLevel }) {
@@ -583,8 +667,9 @@ export default function AssessmentBuilder() {
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [outputTab, setOutputTab] = useState('versionA');
-  const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'raw'
+  const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'edit' | 'raw'
   const [copied, setCopied] = useState(false);
+  const [editedSections, setEditedSections] = useState({});
   const fileInputRef = useRef(null);
   const previewRef = useRef(null);
 
@@ -633,6 +718,7 @@ export default function AssessmentBuilder() {
       }
       setOutputTab('versionA');
       setViewMode('preview');
+      setEditedSections({});
     } catch (e) {
       setError(e.message);
     } finally {
@@ -652,10 +738,11 @@ export default function AssessmentBuilder() {
   };
 
   const sections = parseOutput(output);
-  const currentTabContent =
+  const rawTabContent =
     outputTab === 'versionA' ? sections.versionA :
     outputTab === 'versionB' ? sections.versionB :
     sections.answerKey;
+  const currentTabContent = editedSections[outputTab] ?? rawTabContent;
 
   const tabFilename =
     outputTab === 'versionA' ? 'assessment-version-a.txt' :
@@ -664,7 +751,20 @@ export default function AssessmentBuilder() {
 
   const copyToClipboard = async (t) => {
     try {
-      await navigator.clipboard.writeText(t);
+      // Copy rich HTML for Google Docs / Word, plus plain text fallback
+      const htmlContent = outputTab !== 'answerKey'
+        ? generateGoogleDocsHTML(t, subject, gradeLevel)
+        : null;
+      if (htmlContent && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([htmlContent], { type: 'text/html' }),
+            'text/plain': new Blob([t], { type: 'text/plain' }),
+          })
+        ]);
+      } else {
+        await navigator.clipboard.writeText(t);
+      }
     } catch {
       // Fallback for browsers that block clipboard API
       const ta = document.createElement('textarea');
@@ -939,8 +1039,11 @@ export default function AssessmentBuilder() {
                       <button onClick={() => setViewMode('preview')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'preview' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>
                         👁 Preview
                       </button>
+                      <button onClick={() => setViewMode('edit')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'edit' ? 'bg-white shadow text-emerald-700' : 'text-gray-500')}>
+                        ✏️ Edit
+                      </button>
                       <button onClick={() => setViewMode('raw')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'raw' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>
-                        📄 Raw Text
+                        📄 Raw
                       </button>
                     </div>
                     <div className="flex gap-2">
@@ -954,18 +1057,39 @@ export default function AssessmentBuilder() {
                   </div>
                 </div>
 
-                {/* Preview / Raw content */}
+                {/* Preview / Edit / Raw content */}
                 {viewMode === 'preview' ? (
                   <div ref={previewRef}>
                   {outputTab === 'answerKey' ? (
-                    <AnswerKeyPreview text={sections.answerKey}/>
+                    <AnswerKeyPreview text={currentTabContent}/>
                   ) : (
                     <AssessmentPreview
-                      text={outputTab === 'versionA' ? sections.versionA : sections.versionB}
+                      text={currentTabContent}
                       subject={subject}
                       gradeLevel={gradeLevel}
                     />
                   )}
+                  </div>
+                ) : viewMode === 'edit' ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs text-emerald-700 font-semibold">✏️ Edit the text below — the preview updates live when you switch back.</p>
+                      {editedSections[outputTab] && (
+                        <button
+                          onClick={() => setEditedSections(prev => { const n = {...prev}; delete n[outputTab]; return n; })}
+                          className="text-xs text-red-500 hover:text-red-700 underline"
+                        >
+                          Reset to original
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      className="w-full text-xs text-gray-700 font-mono leading-relaxed border border-emerald-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
+                      style={{ minHeight: '420px' }}
+                      value={currentTabContent}
+                      onChange={e => setEditedSections(prev => ({ ...prev, [outputTab]: e.target.value }))}
+                      spellCheck={false}
+                    />
                   </div>
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -975,7 +1099,7 @@ export default function AssessmentBuilder() {
 
                 {/* Pro tip */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                  <strong>Pro tip:</strong> Click &quot;Download PDF&quot; to open a print-ready version — then choose &quot;Save as PDF&quot; in the print dialog. Use &quot;Copy&quot; to paste into Google Docs or Word.
+                  <strong>Pro tip:</strong> Use <strong>✏️ Edit</strong> to tweak questions, then click <strong>Copy</strong> to paste with full formatting into Google Docs or Word. Use <strong>Download PDF</strong> for a print-ready version.
                 </div>
               </>
             ) : (
