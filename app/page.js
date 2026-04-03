@@ -183,6 +183,40 @@ function FractionBar({ numerator, denominator, label='' }) {
   );
 }
 
+function MixedNumberBar({ whole, numerator, denominator, label='' }) {
+  const stripW = 240, h = 40, partW = stripW / denominator;
+  const strips = [];
+  // one full strip per whole number
+  for (let w = 0; w < whole; w++) {
+    strips.push({ filled: denominator, isWhole: true });
+  }
+  // fractional part strip
+  if (numerator > 0) strips.push({ filled: numerator, isWhole: false });
+  const totalW = strips.length * (stripW + 8);
+  const svgH = h + 28;
+  return (
+    <div className="my-3">
+      {label && <div className="text-xs text-gray-500 mb-1">{label}</div>}
+      <div className="text-xs text-gray-500 mb-1">{whole} {numerator}/{denominator}</div>
+      <svg width={totalW} height={svgH} viewBox={`0 0 ${totalW} ${svgH}`} style={{maxWidth:'100%'}}>
+        {strips.map((strip, si) => {
+          const ox = si * (stripW + 8);
+          return Array.from({length: denominator}).map((_, i) => (
+            <rect key={`${si}-${i}`} x={ox + i*partW} y={0} width={partW-1} height={h}
+              fill={i < strip.filled ? '#6366f1' : '#e0e7ff'}
+              stroke="#4f46e5" strokeWidth="1.5"/>
+          ));
+        })}
+        {strips.map((strip, si) => {
+          const ox = si * (stripW + 8);
+          const lbl = strip.isWhole ? `${denominator}/${denominator}` : `${numerator}/${denominator}`;
+          return <text key={`lbl-${si}`} x={ox + stripW/2} y={h+16} textAnchor="middle" fill="#374151" fontSize="11">{lbl}</text>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
 // ─── Visual Model Parser ────────────────────────────────────────────────────
 
 function parseVisualModel(marker) {
@@ -238,6 +272,10 @@ function parseVisualModel(marker) {
   }
   if (inner.startsWith('FRACTION:')) {
     const rest = inner.slice('FRACTION:'.length).trim();
+    // Check for mixed number: "1 2/3"
+    const mixedM = rest.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (mixedM) return <MixedNumberBar whole={parseInt(mixedM[1])} numerator={parseInt(mixedM[2])} denominator={parseInt(mixedM[3])}/>;
+    // Simple fraction: "3/4"
     const m = rest.match(/(\d+)\/(\d+)/);
     if (m) return <FractionBar numerator={parseInt(m[1])} denominator={parseInt(m[2])}/>;
   }

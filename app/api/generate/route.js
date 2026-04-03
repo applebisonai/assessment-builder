@@ -66,17 +66,23 @@ VISUAL MODELS — Include these markers INLINE in questions where a visual would
 
 For NUMBER SENSE / PLACE VALUE questions:
   [BASE10: hundreds=1 tens=2 ones=3]   ← shows base-10 blocks
-  [PV_CHART: 342]                      ← shows a place value chart
+  [PV_CHART: 342]                       ← shows a place value chart
 
 For ADDITION / SUBTRACTION / PART-WHOLE:
-  [BAR_MODEL: 4,6 | label=How many in all?]     ← colored bar segments
+  [BAR_MODEL: 4,6 | label=How many in all?]      ← colored bar segments
   [TAPE: 4:Group A,6:Group B | brace=yes | total=10]  ← tape diagram with brace
 
 For COUNTING / NUMBER LINES:
   [NUM_LINE: min=0 max=20 step=2 | label=Count by 2s]
 
 For FRACTIONS:
-  [FRACTION: 3/4]                      ← fraction bar model
+  [FRACTION: 3/4]                       ← fraction bar model (simple fraction)
+  [FRACTION: 1 2/3]                     ← mixed number bar model (whole + fraction)
+
+For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate lines before the question:
+  [FRACTION: 1 2/4]
+  [FRACTION: 2 1/4]
+  What is 1 2/4 + 2 1/4?
 
 WHEN TO USE VISUAL MODELS:
 ${isEarlyGrades ? `- Use visuals on MOST questions for K-2 (counting, adding, comparing, place value)
