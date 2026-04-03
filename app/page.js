@@ -503,16 +503,15 @@ function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
 // ─── Visual Model Inline Editor ─────────────────────────────────────────────
 
 function ModelEditWrapper({ marker, onSave, children }) {
-  const { useState: us } = React;
-  const [editing, setEditing] = us(false);
   const fm = marker.match(/\[FRACTION:\s*(.+?)\]/);
   const spec = fm ? fm[1].trim() : null;
   const mx0 = spec ? spec.match(/^(\d+)\s+(\d+)\/(\d+)$/) : null;
   const sm0 = spec ? spec.match(/^(\d+)\/(\d+)$/) : null;
-  const [isMixed, setIsMixed] = us(!!mx0);
-  const [whole, setWhole] = us(mx0 ? parseInt(mx0[1]) : 0);
-  const [numer, setNumer] = us(mx0 ? parseInt(mx0[2]) : (sm0 ? parseInt(sm0[1]) : 1));
-  const [denom, setDenom] = us(mx0 ? parseInt(mx0[3]) : (sm0 ? parseInt(sm0[2]) : 4));
+  const [editing, setEditing] = useState(false);
+  const [isMixed, setIsMixed] = useState(!!mx0);
+  const [whole, setWhole] = useState(mx0 ? parseInt(mx0[1]) : 0);
+  const [numer, setNumer] = useState(mx0 ? parseInt(mx0[2]) : (sm0 ? parseInt(sm0[1]) : 1));
+  const [denom, setDenom] = useState(mx0 ? parseInt(mx0[3]) : (sm0 ? parseInt(sm0[2]) : 4));
 
   if (!fm) return <>{children}</>;
 
