@@ -950,6 +950,19 @@ export default function AssessmentBuilder() {
     outputTab === 'versionB' ? 'assessment-version-b.txt' :
     'answer-key.txt';
 
+  const handleNewAssessment = () => {
+    setOutput('');
+    setFile(null);
+    setEditedSections({});
+    setCustomTitle('');
+    setOutputTab('versionA');
+    setViewMode('preview');
+    setError('');
+    setInputMode('file');
+    // Small delay so the input re-mounts before we trigger the picker
+    setTimeout(() => fileInputRef.current?.click(), 100);
+  };
+
   const handleModelEdit = (oldMarker, newMarker) => {
     // newMarker === '' means remove the model entirely
     const escaped = oldMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1098,22 +1111,42 @@ export default function AssessmentBuilder() {
 
               {/* File Upload */}
               {inputMode === 'file' && (
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) handleFileChange({ target: { files: e.dataTransfer.files } }); }}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={'border-2 border-dashed rounded-xl m-4 p-10 text-center cursor-pointer transition ' + (dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50')}
-                >
+                <div className="m-4">
                   <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileChange} className="hidden" />
                   {file ? (
-                    <div>
-                      <div className="text-3xl mb-2">✅</div>
-                      <div className="text-sm font-semibold text-green-600">{file.name}</div>
-                      <div className="text-xs text-gray-400 mt-1">{(file.size / 1024).toFixed(0)} KB — click to replace</div>
+                    /* File already selected — show info card with clear actions */
+                    <div className="border border-green-200 bg-green-50 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">✅</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-green-700 truncate">{file.name}</div>
+                          <div className="text-xs text-green-600 mt-0.5">{(file.size / 1024).toFixed(0)} KB</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex-1 text-xs font-semibold border border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg py-2 transition"
+                        >
+                          ↑ Replace File
+                        </button>
+                        <button
+                          onClick={() => setFile(null)}
+                          className="text-xs font-semibold border border-gray-200 text-gray-500 bg-white hover:bg-gray-50 rounded-lg px-3 py-2 transition"
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <div>
+                    /* No file yet — drag/drop zone */
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) handleFileChange({ target: { files: e.dataTransfer.files } }); }}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ' + (dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50')}
+                    >
                       <div className="text-4xl mb-3 text-gray-300">📂</div>
                       <p className="font-semibold text-gray-400">Drop a file or click to browse</p>
                       <p className="text-xs text-gray-300 mt-1">PDF, PNG, JPG up to 20MB</p>
@@ -1235,6 +1268,17 @@ export default function AssessmentBuilder() {
           <div className="space-y-4">
             {output ? (
               <>
+                {/* New Assessment banner */}
+                <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3">
+                  <span className="text-sm font-semibold text-gray-600">Assessment ready</span>
+                  <button
+                    onClick={handleNewAssessment}
+                    className="flex items-center gap-1.5 text-sm font-semibold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    <span className="text-base leading-none">+</span> New Assessment
+                  </button>
+                </div>
+
                 {/* Output Tabs */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="flex border-b border-gray-100">
