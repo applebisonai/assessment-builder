@@ -824,21 +824,24 @@ function parseVisualModel(marker) {
     const start = parseInt(rest.match(/start=(\d+)/)?.[1] || '1');
     const end   = parseInt(rest.match(/end=(\d+)/)?.[1] || '100');
     const cols  = parseInt(rest.match(/cols=(\d+)/)?.[1] || '10');
-    const shadedM = rest.match(/shaded=([\d,]+)/);
-    const shaded = shadedM ? shadedM[1].split(',').map(Number) : [];
+    // Allow spaces around commas: "shaded=3, 9, 15" or "shaded=3,9,15"
+    const shadedM = rest.match(/shaded=([\d,\s]+)/);
+    const shaded = shadedM ? shadedM[1].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
     return <NumberChart start={start} end={end} cols={cols} shaded={shaded}/>;
   }
   if (inner.startsWith('YES_NO_TABLE:')) {
     const rest = inner.slice('YES_NO_TABLE:'.length).trim();
-    const rows = rest.split('|').map(s => s.trim()).filter(Boolean);
+    // Normalise separators: support both | and ; in case AI uses semicolons
+    const rows = rest.split(/[|;]/).map(s => s.trim()).filter(Boolean);
     return <YesNoTable rows={rows}/>;
   }
   if (inner.startsWith('DATA_TABLE:')) {
     const rest = inner.slice('DATA_TABLE:'.length).trim();
-    const headerM = rest.match(/header=([^|]+)/);
+    const headerM = rest.match(/header=([^|;]+)/);
     const headers = headerM ? headerM[1].split(',').map(s => s.trim()) : [];
     // Remaining pipe-delimited segments are data rows: "Label,value"
-    const segments = rest.split('|').map(s => s.trim()).filter(s => !s.startsWith('header='));
+    // Support both | and ; as separators
+    const segments = rest.split(/[|;]/).map(s => s.trim()).filter(s => !s.startsWith('header='));
     const dataRows = segments.map(seg => seg.split(',').map(s => s.trim()));
     return (
       <div className="my-3 overflow-x-auto">
