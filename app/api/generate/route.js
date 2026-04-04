@@ -94,42 +94,54 @@ For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate li
   [FRACTION: 2 1/4]
   What is 1 2/4 + 2 1/4?
 
-CRITICAL — THE VISUAL TYPE AND VALUES MUST BOTH MATCH THE QUESTION:
-The question text must match the visual in TWO ways: (1) the TYPE of visual shown, and (2) the exact numbers used. A student should be able to look at the visual and answer the question using only what they see.
+MANDATORY WORKFLOW FOR EVERY QUESTION THAT INCLUDES A VISUAL:
+You must follow these 4 steps IN ORDER. Never skip or reverse them.
 
-RULE 1 — MATCH THE TYPE:
-- If the question says "number line" → use NUM_LINE (never ARRAY, never GROUPS)
-- If the question says "array" → use ARRAY (never NUM_LINE, never GROUPS)
-- If the question says "groups" or "groups of" → use GROUPS (never ARRAY)
-- If the question says "fraction bar" or "shaded" → use FRACTION
-- If the question says "place value chart" → use PV_CHART
-- If the question says "base-10 blocks" → use BASE10
-- NEVER show a number line for a question about arrays. NEVER show an array for a question about a number line.
+  STEP A — Choose the visual TYPE for this question (ARRAY, NUM_LINE, GROUPS, FRACTION, etc.)
+  STEP B — Choose the exact VALUES (e.g. rows=4, cols=7)
+  STEP C — Write the marker using those values: [ARRAY: rows=4 cols=7]
+  STEP D — Write the question text using ONLY the numbers already in the marker (4, 7, or 28).
+            Do not introduce any number in the question text that is not in the marker.
 
-RULE 2 — MATCH THE VALUES:
-Every specific number the question asks about must appear in the visual marker spec.
+This means: you commit to the visual first, then write the question about what you drew.
+NEVER write the question first and then try to fit a visual to it.
 
-CORRECT examples:
+TYPE RULES — the word used in the question must match the visual type:
+- Question says "number line" → marker MUST be NUM_LINE
+- Question says "array" → marker MUST be ARRAY
+- Question says "groups of" → marker MUST be GROUPS
+- Question says "fraction bar" or "shaded" → marker MUST be FRACTION
+- Question says "place value chart" → marker MUST be PV_CHART
+- Question says "base-10 blocks" → marker MUST be BASE10
+- NEVER pair a NUM_LINE marker with an array question, or an ARRAY marker with a number line question.
+
+SELF-CHECK — before writing each question with a visual, verify all 3:
+  ✓ The marker type matches the word used in the question ("array" → ARRAY, "number line" → NUM_LINE, etc.)
+  ✓ Every specific number mentioned in the question (factor, groups, rows, step, etc.) appears in the marker
+  ✓ No number appears in the question that is NOT in the marker spec
+
+CORRECT:
+  [ARRAY: rows=4 cols=7]
+  What does the factor 4 tell you about this array?  ← "array" → ARRAY ✓, 4 is in rows= ✓
+
   [NUM_LINE: min=0 max=30 step=5 jumps=yes]
-  Use the number line to skip count by 5s. What number comes after 25?  ← number line for a number line question ✓
+  Use the number line to skip count by 5s. What number comes after 25?  ← "number line" → NUM_LINE ✓, step=5 ✓
 
-  [ARRAY: rows=4 cols=6]
-  What does the factor 4 tell you about this array?  ← array for array question, 4 is in the spec ✓
+  [GROUPS: groups=3 items=6]
+  There are 3 equal groups. How many items are in each group?  ← "groups" → GROUPS ✓, 3 matches groups= ✓
 
-  [GROUPS: groups=5 items=3]
-  There are 5 groups. How many items are in each group?  ← groups visual for groups question ✓
+WRONG — never do any of these:
+  [ARRAY: rows=3 cols=4]
+  What does the factor 5 tell you about this array?  ← 5 not in marker ✗
 
-WRONG examples (never do this):
   [ARRAY: rows=3 cols=5]
-  Use the number line to find the missing number.  ← array shown but question asks for number line ✗
+  Use the number line to find the missing number.  ← wrong visual type ✗
 
   [NUM_LINE: min=0 max=20 step=4]
-  What does the factor 4 tell you about this array?  ← number line shown but question asks about an array ✗
+  What does the factor 4 tell you about this array?  ← wrong visual type ✗
 
-  [ARRAY: rows=3 cols=4]
-  What does the factor 5 tell you about this array?  ← correct type but wrong values ✗
-
-FINAL RULE: If you cannot find a visual that matches both the type AND the values in the question, do not include a visual at all. A missing visual is better than a wrong one.
+FINAL RULE: If you cannot satisfy all 3 self-check conditions, omit the visual entirely.
+A question with no visual is always better than a question with a wrong or misleading visual.
 
 CRITICAL — WHEN TO USE VISUAL MODELS:
 - If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
