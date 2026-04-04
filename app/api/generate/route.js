@@ -67,6 +67,7 @@ VISUAL MODEL MARKERS — place on their own line immediately BEFORE the question
 Allowed types (use ONLY these — never invent new types):
   [FRACTION: 3/4]                              simple fraction bar
   [FRACTION: 1 2/3]                            mixed number bar
+  [FRAC_CIRCLE: 3/4]                           fraction circle (shaded sectors)
   [BASE10: hundreds=3 tens=4 ones=2]           base-10 blocks
   [PV_CHART: 342]                              place value chart
   [NUM_LINE: min=0 max=20 step=2]              number line
@@ -75,6 +76,11 @@ Allowed types (use ONLY these — never invent new types):
   [TAPE: 4:A,6:B | brace=yes | total=10]      tape diagram
   [GROUPS: groups=3 items=5]                   equal groups (ovals with dots inside)
   [ARRAY: rows=4 cols=6]                       rectangular array of square tiles
+  [NUM_BOND: whole=10 part1=4 part2=6]         number bond (part-part-whole diagram)
+  [NUM_BOND: whole=10 part1=4 part2=6 parts=hidden]  number bond with missing parts
+  [TENS_FRAME: filled=7 total=10]              tens frame (2×5 grid with counters)
+  [TENS_FRAME: filled=3 total=5]               five frame (1×5 grid with counters)
+  [FUNC_TABLE: pairs=1:3,2:6,3:9,4:? | rule=×3]      function/input-output table
 
 ━━━ THE GOLDEN RULE ━━━
 The visual marker defines what the student SEES. The question asks them to REASON about it.
@@ -99,6 +105,18 @@ CORRECT EXAMPLES:
 
   [FRACTION: 3/8]
   6. What fraction of the bar is shaded? ___
+
+  [NUM_BOND: whole=15 part1=8 part2=7]
+  7. What is the missing part? Write the fact family for this number bond.
+
+  [TENS_FRAME: filled=7 total=10]
+  8. How many more counters are needed to fill the frame? ___
+
+  [FUNC_TABLE: pairs=2:6,4:12,6:?,8:? | rule=×3]
+  9. Complete the function table. What is the rule?
+
+  [FRAC_CIRCLE: 2/5]
+  10. What fraction of the circle is shaded? ___
 
 WRONG EXAMPLES (never do this):
   [ARRAY: rows=4 cols=7]
@@ -135,7 +153,11 @@ MARKER TYPE MUST MATCH QUESTION WORDS:
   • Question says "array" → marker must be ARRAY
   • Question says "number line" → marker must be NUM_LINE
   • Question says "equal groups" → marker must be GROUPS
-  • Question says "fraction bar" / "shaded" → marker must be FRACTION
+  • Question says "fraction bar" / "fraction strip" / "shaded bar" → marker must be FRACTION
+  • Question says "fraction circle" / "shaded circle" → marker must be FRAC_CIRCLE
+  • Question says "number bond" / "part-part-whole" → marker must be NUM_BOND
+  • Question says "tens frame" / "five frame" / "frame" with counters → marker must be TENS_FRAME
+  • Question says "function table" / "input-output table" / "in/out table" → marker must be FUNC_TABLE
   • NEVER show a number line for an array question or vice versa.
 
 If you cannot make the marker type and values exactly consistent with the question, omit the visual entirely rather than show a misleading one.
@@ -240,16 +262,24 @@ YOUR ONLY JOB: Mirror the source as closely as possible — same question types,
    • Source shows a number line → students pick which equation matches → use [NUM_LINE: ...]
    • Source shows equal groups → students pick which context it represents → use [GROUPS: ...]
    • Source shows a bar model with equal segments → use [BAR_MODEL: ...]
-   • Source shows a fraction bar → use [FRACTION: N/D]
-   For anything else (photos of objects, tables, graphs, complex diagrams), SKIP IT entirely.
+   • Source shows a fraction bar / strip → use [FRACTION: N/D]
+   • Source shows a fraction circle / pie → use [FRAC_CIRCLE: N/D]
+   • Source shows a number bond / part-part-whole → use [NUM_BOND: whole=W part1=P1 part2=P2]
+   • Source shows a tens frame or five frame → use [TENS_FRAME: filled=F total=10]
+   • Source shows an input-output / function table → use [FUNC_TABLE: pairs=...]
+   For anything else (photos of objects, complex diagrams), SKIP IT entirely.
 
 ━━━ VISUAL MARKER RULES (when you do use one) ━━━
   [ARRAY: rows=R cols=C]               rectangular array of tiles
   [NUM_LINE: min=0 max=M step=S jumps=yes]  number line with hop arcs
   [GROUPS: groups=G items=I]           equal groups (ovals with dots)
   [FRACTION: N/D]                      fraction bar
+  [FRAC_CIRCLE: N/D]                   fraction circle (shaded sectors)
   [BAR_MODEL: 4,4,4,4,4,4]           equal segment bar model
   [BASE10: hundreds=H tens=T ones=O]  base-10 blocks
+  [NUM_BOND: whole=W part1=P1 part2=P2]  number bond / part-part-whole
+  [TENS_FRAME: filled=F total=10]      tens frame with counters
+  [FUNC_TABLE: pairs=1:3,2:6,3:? | rule=×3]  function/input-output table
 
 Rules:
   • Write the marker on its own line BEFORE the question number.

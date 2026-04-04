@@ -289,6 +289,136 @@ function ArrayModel({ rows=3, cols=4 }) {
   );
 }
 
+function NumberBond({ whole=10, part1=4, part2=6, showParts=true }) {
+  // Part-part-whole diagram: large circle on top, two part circles below
+  const cr = 28; // circle radius
+  const cx = 120, topY = 36;
+  const leftX = 56, rightX = 184, partY = 110;
+  return (
+    <div className="my-3 inline-block">
+      <svg width={240} height={148} viewBox="0 0 240 148" style={{maxWidth:'100%'}}>
+        {/* Connecting lines */}
+        <line x1={cx} y1={topY+cr} x2={leftX} y2={partY-cr} stroke="#6366f1" strokeWidth="2"/>
+        <line x1={cx} y1={topY+cr} x2={rightX} y2={partY-cr} stroke="#6366f1" strokeWidth="2"/>
+        {/* Whole (top) */}
+        <circle cx={cx} cy={topY} r={cr} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2"/>
+        <text x={cx} y={topY+5} textAnchor="middle" fill="#1e1b4b" fontSize="16" fontWeight="700">{whole}</text>
+        {/* Part 1 (left) */}
+        <circle cx={leftX} cy={partY} r={cr} fill="#e0e7ff" stroke="#4f46e5" strokeWidth="2"/>
+        <text x={leftX} y={partY+5} textAnchor="middle" fill="#1e1b4b" fontSize="16" fontWeight="700">{showParts ? part1 : '?'}</text>
+        {/* Part 2 (right) */}
+        <circle cx={rightX} cy={partY} r={cr} fill="#e0e7ff" stroke="#4f46e5" strokeWidth="2"/>
+        <text x={rightX} y={partY+5} textAnchor="middle" fill="#1e1b4b" fontSize="16" fontWeight="700">{showParts ? part2 : '?'}</text>
+        {/* Labels */}
+        <text x={cx} y={142} textAnchor="middle" fill="#6b7280" fontSize="10">Whole</text>
+        <text x={leftX} y={142} textAnchor="middle" fill="#6b7280" fontSize="10">Part</text>
+        <text x={rightX} y={142} textAnchor="middle" fill="#6b7280" fontSize="10">Part</text>
+      </svg>
+    </div>
+  );
+}
+
+function TensFrame({ filled=5, total=10 }) {
+  // 2-row × 5-col grid (or 1×5 for five-frame)
+  const rows = total <= 5 ? 1 : 2;
+  const cols = 5;
+  const cw = 36, ch = 36, pad = 4, cr = 13;
+  const svgW = cols * cw + pad * 2;
+  const svgH = rows * ch + pad * 2;
+  const cells = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const x = pad + c * cw + cw / 2;
+      const y = pad + r * ch + ch / 2;
+      const isFilled = idx < filled;
+      cells.push(
+        <g key={idx}>
+          <rect x={pad + c * cw} y={pad + r * ch} width={cw} height={ch} fill="white" stroke="#374151" strokeWidth="1.5"/>
+          <circle cx={x} cy={y} r={cr} fill={isFilled ? '#4f46e5' : 'transparent'} stroke={isFilled ? '#3730a3' : '#d1d5db'} strokeWidth="1.5"/>
+        </g>
+      );
+    }
+  }
+  return (
+    <div className="my-3 inline-block">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
+        <rect x={pad} y={pad} width={cols*cw} height={rows*ch} fill="#f8faff" stroke="#4f46e5" strokeWidth="2" rx="3"/>
+        {cells}
+      </svg>
+    </div>
+  );
+}
+
+function FractionCircle({ numerator=1, denominator=4 }) {
+  const r = 60, cx = 70, cy = 70;
+  const slices = [];
+  for (let i = 0; i < denominator; i++) {
+    const startAngle = (i / denominator) * 2 * Math.PI - Math.PI / 2;
+    const endAngle = ((i + 1) / denominator) * 2 * Math.PI - Math.PI / 2;
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = (1 / denominator) > 0.5 ? 1 : 0;
+    const isFilled = i < numerator;
+    slices.push(
+      <path key={i}
+        d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`}
+        fill={isFilled ? '#6366f1' : '#e0e7ff'}
+        stroke="white" strokeWidth="2"/>
+    );
+  }
+  return (
+    <div className="my-3 inline-block">
+      <svg width={140} height={152} viewBox="0 0 140 152" style={{maxWidth:'100%'}}>
+        {slices}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#4f46e5" strokeWidth="2"/>
+        <text x={cx} y={cy+r+18} textAnchor="middle" fill="#374151" fontSize="13" fontWeight="600">{numerator}/{denominator}</text>
+      </svg>
+    </div>
+  );
+}
+
+function FunctionTable({ ruleLabel='Rule: ?', pairs=[], inputLabel='Input', outputLabel='Output' }) {
+  // pairs = [{in: 1, out: 3}, ...]
+  const headerBg = '#ede9fe', rowBg = ['#fafafa', 'white'];
+  const colW = 80, rowH = 32;
+  const svgW = colW * 2 + 4;
+  const svgH = (pairs.length + 2) * rowH + 4;
+  const rows = [];
+  // Header
+  rows.push(
+    <g key="header">
+      <rect x={2} y={2} width={colW} height={rowH} fill={headerBg} stroke="#6366f1" strokeWidth="1.5"/>
+      <rect x={2+colW} y={2} width={colW} height={rowH} fill={headerBg} stroke="#6366f1" strokeWidth="1.5"/>
+      <text x={2+colW/2} y={2+rowH/2+5} textAnchor="middle" fill="#4338ca" fontSize="12" fontWeight="700">{inputLabel}</text>
+      <text x={2+colW*1.5} y={2+rowH/2+5} textAnchor="middle" fill="#4338ca" fontSize="12" fontWeight="700">{outputLabel}</text>
+    </g>
+  );
+  // Data rows
+  pairs.forEach((p, i) => {
+    const y = 2 + (i + 1) * rowH;
+    const bg = rowBg[i % 2];
+    rows.push(
+      <g key={i}>
+        <rect x={2} y={y} width={colW} height={rowH} fill={bg} stroke="#6366f1" strokeWidth="1"/>
+        <rect x={2+colW} y={y} width={colW} height={rowH} fill={bg} stroke="#6366f1" strokeWidth="1"/>
+        <text x={2+colW/2} y={y+rowH/2+5} textAnchor="middle" fill="#1e1b4b" fontSize="13" fontWeight="600">{p.in}</text>
+        <text x={2+colW*1.5} y={y+rowH/2+5} textAnchor="middle" fill="#1e1b4b" fontSize="13" fontWeight="600">{p.out}</text>
+      </g>
+    );
+  });
+  return (
+    <div className="my-3 inline-block">
+      <div className="text-xs text-indigo-600 font-semibold mb-1 ml-1">{ruleLabel}</div>
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
+        {rows}
+      </svg>
+    </div>
+  );
+}
+
 // ─── Visual Model Parser ────────────────────────────────────────────────────
 
 function parseVisualModel(marker) {
@@ -363,6 +493,41 @@ function parseVisualModel(marker) {
     // Simple fraction: "3/4"
     const m = rest.match(/(\d+)\/(\d+)/);
     if (m) return <FractionBar numerator={parseInt(m[1])} denominator={parseInt(m[2])}/>;
+  }
+  if (inner.startsWith('NUM_BOND:')) {
+    const rest = inner.slice('NUM_BOND:'.length).trim();
+    const w = parseInt(rest.match(/whole=(\d+)/)?.[1] || '10');
+    const p1 = parseInt(rest.match(/part1=(\d+)/)?.[1] || '4');
+    const p2 = parseInt(rest.match(/part2=(\d+)/)?.[1] || '6');
+    const showP = !rest.includes('parts=hidden');
+    return <NumberBond whole={w} part1={p1} part2={p2} showParts={showP}/>;
+  }
+  if (inner.startsWith('TENS_FRAME:')) {
+    const rest = inner.slice('TENS_FRAME:'.length).trim();
+    const filled = parseInt(rest.match(/filled=(\d+)/)?.[1] || '5');
+    const total = parseInt(rest.match(/total=(\d+)/)?.[1] || '10');
+    return <TensFrame filled={Math.min(filled, total)} total={Math.min(total, 10)}/>;
+  }
+  if (inner.startsWith('FRAC_CIRCLE:')) {
+    const rest = inner.slice('FRAC_CIRCLE:'.length).trim();
+    const m = rest.match(/(\d+)\/(\d+)/);
+    if (m) return <FractionCircle numerator={parseInt(m[1])} denominator={parseInt(m[2])}/>;
+  }
+  if (inner.startsWith('FUNC_TABLE:')) {
+    const rest = inner.slice('FUNC_TABLE:'.length).trim();
+    const ruleM = rest.match(/rule=([^|]+)/);
+    const ruleLabel = ruleM ? 'Rule: ' + ruleM[1].trim() : 'Rule: ?';
+    const inLabel = rest.match(/in=([^|]+)/)?.[1]?.trim() || 'Input';
+    const outLabel = rest.match(/out=([^|]+)/)?.[1]?.trim() || 'Output';
+    // pairs like: pairs=1:3,2:6,3:9
+    const pairsM = rest.match(/pairs=([^|]+)/);
+    const pairs = pairsM
+      ? pairsM[1].split(',').map(p => {
+          const [i, o] = p.trim().split(':');
+          return { in: i ?? '?', out: o ?? '?' };
+        })
+      : [{in:1,out:'?'},{in:2,out:'?'},{in:3,out:'?'},{in:4,out:'?'}];
+    return <FunctionTable ruleLabel={ruleLabel} pairs={pairs} inputLabel={inLabel} outputLabel={outLabel}/>;
   }
   if (inner.startsWith('IMAGE:')) {
     const url = inner.slice('IMAGE:'.length).trim();
@@ -639,6 +804,26 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
   const [arrCols, setArrCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
   // NUM_LINE jumps
   const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
+  // NUMBER BOND state
+  const [nbWhole, setNbWhole] = useState(parseInt(rawSpecInit.match(/whole=(\d+)/)?.[1] || '10'));
+  const [nbPart1, setNbPart1] = useState(parseInt(rawSpecInit.match(/part1=(\d+)/)?.[1] || '4'));
+  const [nbPart2, setNbPart2] = useState(parseInt(rawSpecInit.match(/part2=(\d+)/)?.[1] || '6'));
+  const [nbShowParts, setNbShowParts] = useState(!rawSpecInit.includes('parts=hidden'));
+  // TENS FRAME state
+  const [tfFilled, setTfFilled] = useState(parseInt(rawSpecInit.match(/filled=(\d+)/)?.[1] || '5'));
+  const [tfTotal, setTfTotal] = useState(parseInt(rawSpecInit.match(/total=(\d+)/)?.[1] || '10'));
+  // FRAC CIRCLE state
+  const fcM = rawSpecInit.match(/(\d+)\/(\d+)/);
+  const [fcNumer, setFcNumer] = useState(parseInt(fcM?.[1] || '1'));
+  const [fcDenom, setFcDenom] = useState(parseInt(fcM?.[2] || '4'));
+  // FUNC TABLE state
+  const [ftRule, setFtRule] = useState(rawSpecInit.match(/rule=([^|]+)/)?.[1]?.trim() || '');
+  const [ftInLabel, setFtInLabel] = useState(rawSpecInit.match(/in=([^|]+)/)?.[1]?.trim() || 'Input');
+  const [ftOutLabel, setFtOutLabel] = useState(rawSpecInit.match(/out=([^|]+)/)?.[1]?.trim() || 'Output');
+  const [ftPairsRaw, setFtPairsRaw] = useState(() => {
+    const pm = rawSpecInit.match(/pairs=([^|]+)/);
+    return pm ? pm[1].trim() : '1:?,2:?,3:?,4:?';
+  });
   // IMAGE state
   const [imageUrl, setImageUrl] = useState(modelType === 'IMAGE' ? rawSpecInit : '');
   // Bank save state
@@ -675,6 +860,18 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
         return `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
       case 'IMAGE':
         return `[IMAGE: ${imageUrl}]`;
+      case 'NUM_BOND':
+        return `[NUM_BOND: whole=${nbWhole} part1=${nbPart1} part2=${nbPart2}${!nbShowParts ? ' parts=hidden' : ''}]`;
+      case 'TENS_FRAME':
+        return `[TENS_FRAME: filled=${Math.min(tfFilled,tfTotal)} total=${tfTotal}]`;
+      case 'FRAC_CIRCLE':
+        return `[FRAC_CIRCLE: ${fcNumer}/${fcDenom}]`;
+      case 'FUNC_TABLE': {
+        const rulePart = ftRule ? ` | rule=${ftRule}` : '';
+        const inPart = ftInLabel !== 'Input' ? ` | in=${ftInLabel}` : '';
+        const outPart = ftOutLabel !== 'Output' ? ` | out=${ftOutLabel}` : '';
+        return `[FUNC_TABLE: pairs=${ftPairsRaw}${rulePart}${inPart}${outPart}]`;
+      }
       default:
         return `[${modelType}: ${rawSpec}]`;
     }
@@ -689,6 +886,8 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
     FRACTION: 'Fraction', BASE10: 'Base-10 Blocks', NUM_LINE: 'Number Line',
     PV_CHART: 'Place Value Chart', BAR_MODEL: 'Bar Model', TAPE: 'Tape Diagram',
     GROUPS: 'Equal Groups', ARRAY: 'Array', IMAGE: 'Image',
+    NUM_BOND: 'Number Bond', TENS_FRAME: 'Tens Frame', FRAC_CIRCLE: 'Fraction Circle',
+    FUNC_TABLE: 'Function Table',
   };
 
   const renderEditor = () => {
@@ -731,6 +930,46 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
         <div className="flex items-center gap-4 flex-wrap">
           <label className={labelCls}>Rows <input type="number" min="1" max="12" value={arrRows} onChange={e => setArrRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
           <label className={labelCls}>Columns <input type="number" min="1" max="12" value={arrCols} onChange={e => setArrCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+        </div>
+      );
+      case 'NUM_BOND': return (
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className={labelCls}>Whole <input type="number" min="0" value={nbWhole} onChange={e => setNbWhole(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-16`}/></label>
+          <label className={labelCls}>Part 1 <input type="number" min="0" value={nbPart1} onChange={e => setNbPart1(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-16`}/></label>
+          <label className={labelCls}>Part 2 <input type="number" min="0" value={nbPart2} onChange={e => setNbPart2(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-16`}/></label>
+          <label className={`${labelCls} cursor-pointer select-none`}><input type="checkbox" checked={!nbShowParts} onChange={e => setNbShowParts(!e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/> Hide parts (show ?)</label>
+        </div>
+      );
+      case 'TENS_FRAME': return (
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className={labelCls}>Frame size
+            <select value={tfTotal} onChange={e => setTfTotal(parseInt(e.target.value))} className={`${inputCls} w-20`}>
+              <option value={5}>5 (one row)</option>
+              <option value={10}>10 (two rows)</option>
+            </select>
+          </label>
+          <label className={labelCls}>Filled <input type="number" min="0" max={tfTotal} value={tfFilled} onChange={e => setTfFilled(Math.max(0,Math.min(tfTotal,parseInt(e.target.value)||0)))} className={`${inputCls} w-14`}/></label>
+        </div>
+      );
+      case 'FRAC_CIRCLE': return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="number" min="0" value={fcNumer} onChange={e => setFcNumer(Math.max(0,parseInt(e.target.value)||0))} className={`${inputCls} w-14`} placeholder="num"/>
+          <span className="text-gray-500 text-sm font-bold">⁄</span>
+          <input type="number" min="1" value={fcDenom} onChange={e => setFcDenom(Math.max(1,parseInt(e.target.value)||1))} className={`${inputCls} w-14`} placeholder="den"/>
+        </div>
+      );
+      case 'FUNC_TABLE': return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className={labelCls}>Rule <input type="text" value={ftRule} onChange={e => setFtRule(e.target.value)} className={`${inputCls} w-28 text-left`} placeholder="e.g. ×3"/></label>
+            <label className={labelCls}>In label <input type="text" value={ftInLabel} onChange={e => setFtInLabel(e.target.value)} className={`${inputCls} w-20 text-left`}/></label>
+            <label className={labelCls}>Out label <input type="text" value={ftOutLabel} onChange={e => setFtOutLabel(e.target.value)} className={`${inputCls} w-20 text-left`}/></label>
+          </div>
+          <label className={`${labelCls} block`}>Pairs (input:output, comma-separated, use ? for blanks)
+            <input type="text" value={ftPairsRaw} onChange={e => setFtPairsRaw(e.target.value)}
+              className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400"
+              placeholder="e.g. 1:3,2:6,3:?,4:?"/>
+          </label>
         </div>
       );
       case 'IMAGE': return (
@@ -848,11 +1087,12 @@ function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
-  const TYPE_FILTERS = ['ALL','ARRAY','GROUPS','NUM_LINE','FRACTION','BASE10','PV_CHART','BAR_MODEL','TAPE','IMAGE'];
+  const TYPE_FILTERS = ['ALL','ARRAY','GROUPS','NUM_LINE','FRACTION','FRAC_CIRCLE','BASE10','PV_CHART','BAR_MODEL','TAPE','NUM_BOND','TENS_FRAME','FUNC_TABLE','IMAGE'];
   const TYPE_FILTER_LABELS = {
     ALL: 'All', ARRAY: 'Arrays', GROUPS: 'Groups', NUM_LINE: 'Number Lines',
-    FRACTION: 'Fractions', BASE10: 'Base-10', PV_CHART: 'Place Value',
-    BAR_MODEL: 'Bar Models', TAPE: 'Tape', IMAGE: 'Images',
+    FRACTION: 'Fraction Bars', FRAC_CIRCLE: 'Fraction Circles', BASE10: 'Base-10', PV_CHART: 'Place Value',
+    BAR_MODEL: 'Bar Models', TAPE: 'Tape', NUM_BOND: 'Number Bonds',
+    TENS_FRAME: 'Tens Frames', FUNC_TABLE: 'Function Tables', IMAGE: 'Images',
   };
 
   const filtered = bank.filter(item => {
