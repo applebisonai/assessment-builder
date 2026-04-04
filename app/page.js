@@ -1651,6 +1651,8 @@ function autoNameMarker(type, spec) {
 // ─── BuilderQuestionCard: single editable question card for Manual Builder ───
 function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank }) {
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [pasteActive, setPasteActive] = useState(false);
+  const imageInputRef = useRef(null);
   const letters = 'ABCDEFGHIJ';
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
   const QTYPE_LABELS = { mc:'Multiple Choice', multi_answer:'Multiple Answer', short:'Short Answer', fill_blank:'Fill in the Blank', true_false:'True / False', open:'Open Response' };
@@ -1667,6 +1669,45 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
     }
   };
 
+  // Convert an image File/Blob to a base64 [IMAGE: ...] marker and attach it
+  const handleImageFile = (file) => {
+    if (!file) return;
+    // Accept images and PDFs (PDF: take as-is via object URL for display)
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') return;
+    if (file.type === 'application/pdf') {
+      // For PDFs, store a placeholder — user can screenshot specific pages
+      const url = URL.createObjectURL(file);
+      onUpdate({ models: [...(q.models||[]), `[IMAGE: ${url}]`] });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const marker = `[IMAGE: ${e.target.result}]`;
+      onUpdate({ models: [...(q.models||[]), marker] });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle image paste (Ctrl+V or right-click paste) anywhere in the card editor
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        handleImageFile(file);
+        e.preventDefault();
+        setPasteActive(false);
+        break;
+      }
+    }
+  };
+
+  // Separate IMAGE markers from other visual markers for display
+  const imageMarkers = (q.models||[]).filter(m => m.startsWith('[IMAGE:'));
+  const visualMarkers = (q.models||[]).filter(m => !m.startsWith('[IMAGE:'));
+  const imageCount = imageMarkers.length;
+
   return (
     <div className={'bg-white rounded-2xl shadow-sm border transition ' + (isEditing ? 'border-indigo-300 shadow-md' : 'border-gray-100 hover:border-gray-200')}>
       <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={onToggleEdit}>
@@ -1677,7 +1718,8 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + (QTYPE_COLORS[q.type] || 'bg-gray-100 text-gray-600')}>{QTYPE_LABELS[q.type]}</span>
-            {q.models && q.models.length > 0 && <span className="text-xs text-indigo-500">📊 {q.models.length} visual</span>}
+            {visualMarkers.length > 0 && <span className="text-xs text-indigo-500">📊 {visualMarkers.length} visual</span>}
+            {imageCount > 0 && <span className="text-xs text-rose-500">🖼 {imageCount} image{imageCount>1?'s':''}</span>}
           </div>
         </div>
         <div className="flex items-center gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -1688,7 +1730,7 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
       </div>
 
       {isEditing && (
-        <div className="border-t border-gray-100 px-4 pb-5 pt-3 space-y-3">
+        <div className="border-t border-gray-100 px-4 pb-5 pt-3 space-y-3" onPaste={handlePaste}>
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Question Type</label>
             <select value={q.type} onChange={e => {
@@ -1752,6 +1794,7 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
             </div>
           )}
 
+          {/* Standard + Visual Bank row */}
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <label className="block text-xs font-semibold text-gray-600 mb-1">Standard <span className="font-normal text-gray-400">(optional)</span></label>
@@ -1775,14 +1818,70 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
             </div>
           </div>
 
-          {q.models && q.models.length > 0 && (
+          {/* Image upload section */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Images</label>
+            <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf"
+              onChange={e => { handleImageFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
+            <div className="flex gap-2">
+              {/* Upload button */}
+              <button onClick={() => imageInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg px-3 py-2.5 hover:bg-gray-50 hover:border-gray-300 transition">
+                <span className="text-base leading-none">📁</span>
+                <span>Upload image or PDF</span>
+              </button>
+              {/* Paste zone */}
+              <button
+                onClick={() => setPasteActive(v => !v)}
+                className={'flex-1 flex items-center justify-center gap-1.5 text-xs border rounded-lg px-3 py-2.5 transition ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600')}
+              >
+                <span className="text-base leading-none">📋</span>
+                <span>{pasteActive ? 'Now press Ctrl+V / ⌘V' : 'Paste image'}</span>
+              </button>
+            </div>
+            {pasteActive && (
+              <p className="mt-1.5 text-xs text-indigo-500 text-center">
+                Copy an image (e.g. screenshot or right-click → Copy Image), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere in this card.
+              </p>
+            )}
+          </div>
+
+          {/* Attached images — thumbnails */}
+          {imageMarkers.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-gray-600 mb-1.5">Attached Images</div>
+              <div className="flex flex-wrap gap-3">
+                {imageMarkers.map((m, mi) => {
+                  const src = m.replace(/^\[IMAGE:\s*/, '').replace(/\]$/, '').trim();
+                  const globalIdx = (q.models||[]).indexOf(m);
+                  return (
+                    <div key={mi} className="relative group">
+                      <img src={src} alt={`Image ${mi+1}`}
+                        className="h-24 w-auto max-w-[160px] object-contain rounded-lg border border-gray-200 bg-gray-50" />
+                      <button
+                        onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== globalIdx) })}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow">
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Attached visual markers (non-image) */}
+          {visualMarkers.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {q.models.map((m, mi) => (
-                <span key={mi} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded-lg">
-                  <span className="truncate max-w-[180px]">{m}</span>
-                  <button onClick={() => onUpdate({ models: q.models.filter((_,j) => j !== mi) })} className="text-indigo-300 hover:text-red-400 flex-shrink-0">✕</button>
-                </span>
-              ))}
+              {visualMarkers.map((m, mi) => {
+                const globalIdx = (q.models||[]).indexOf(m);
+                return (
+                  <span key={mi} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded-lg">
+                    <span className="truncate max-w-[180px]">{m}</span>
+                    <button onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== globalIdx) })} className="text-indigo-300 hover:text-red-400 flex-shrink-0">✕</button>
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
