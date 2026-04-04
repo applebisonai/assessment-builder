@@ -722,11 +722,12 @@ function parseAssessment(text) {
 
     if (!currentQ) continue;
 
-    // Answer choices — various formats
+    // Answer choices — various formats, supports A–J so assessments with
+    // 5 or more options (E, F …) display correctly alongside A–D.
     // O A) text  or  O A. text  or  A) text  or  (A) text
-    const choiceMatch = trimmed.match(/^[Oo○◯]\s*([A-Da-d])[\.\)]\s*(.+)/) ||
-                        trimmed.match(/^([A-Da-d])[\.\)]\s+(.+)/) ||
-                        trimmed.match(/^\(([A-Da-d])\)\s*(.+)/);
+    const choiceMatch = trimmed.match(/^[Oo○◯]\s*([A-Ja-j])[\.\)]\s*(.+)/) ||
+                        trimmed.match(/^([A-Ja-j])[\.\)]\s+(.+)/) ||
+                        trimmed.match(/^\(([A-Ja-j])\)\s*(.+)/);
     if (choiceMatch) {
       currentQ.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
       currentQ.type = 'mc';
@@ -741,10 +742,7 @@ function parseAssessment(text) {
     }
 
     // Extra context lines (not a new question, not a choice)
-    // Skip spurious E/F/G... choices beyond D — AI sometimes generates a 5th option
-    if (currentQ &&
-        !trimmed.match(/^(TEACHER|ANSWER KEY|Version [AB])/i) &&
-        !trimmed.match(/^[E-Ze-z][\.\)]\s/)) {
+    if (currentQ && !trimmed.match(/^(TEACHER|ANSWER KEY|Version [AB])/i)) {
       currentQ.extra.push(trimmed);
     }
   }
@@ -1461,9 +1459,9 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                   <div className="flex-1">
                     <p className="text-gray-800 font-semibold text-base leading-relaxed">{q.text}</p>
                     {q.extra.length > 0 && (
-                      <div className="text-gray-600 text-sm mt-2 space-y-1.5">
+                      <div className="mt-2 space-y-1.5">
                         {q.extra.map((line, i) => (
-                          <p key={i} className="leading-relaxed">{line}</p>
+                          <p key={i} className="text-gray-800 text-base leading-relaxed">{line}</p>
                         ))}
                       </div>
                     )}
@@ -1657,6 +1655,8 @@ export default function AssessmentBuilder() {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState('');
   const [pastedText, setPastedText] = useState('');
+  const [scratchTopic, setScratchTopic] = useState('');
+  const [scratchInstructions, setScratchInstructions] = useState('');
   const [gradeLevel, setGradeLevel] = useState('3');
   const [subject, setSubject] = useState('Math');
   const [standard, setStandard] = useState('');
@@ -1677,6 +1677,7 @@ export default function AssessmentBuilder() {
   const [modelBank, setModelBank] = useState([]);
   const [showBank, setShowBank] = useState(false);
   const [bankTarget, setBankTarget] = useState(null); // question num
+  const [bankSavedCount, setBankSavedCount] = useState(0); // how many auto-saved last generation
   const fileInputRef = useRef(null);
   const previewRef = useRef(null);
 
@@ -1745,7 +1746,7 @@ export default function AssessmentBuilder() {
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url: inputMode === 'url' ? url : '', pastedText: inputMode === 'paste' ? pastedText : '', apiKey }),
+          body: JSON.stringify({ gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url: inputMode === 'url' ? url : '', pastedText: inputMode === 'paste' ? pastedText : '', scratchTopic: inputMode === 'scratch' ? scratchTopic : '', scratchInstructions: inputMode === 'scratch' ? scratchInstructions : '', apiKey }),
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -1851,9 +1852,11 @@ export default function AssessmentBuilder() {
           marker: f.marker,
           name: autoNameMarker(f.type, f.spec),
           type: f.type,
-          autoSaved: true,   // flag so UI can show "from assessment"
+          autoSaved: true,
         }));
       if (toAdd.length === 0) return prev;
+      setBankSavedCount(toAdd.length);
+      setTimeout(() => setBankSavedCount(0), 5000); // clear badge after 5 s
       return [...prev, ...toAdd];
     });
   };
@@ -1959,6 +1962,7 @@ export default function AssessmentBuilder() {
     { id: 'file', label: 'Upload File', desc: 'PDF or image' },
     { id: 'url', label: 'Enter URL', desc: 'Web page' },
     { id: 'paste', label: 'Paste Text', desc: 'Any content' },
+    { id: 'scratch', label: 'From Scratch', desc: 'Build your own' },
   ];
   const GRADE_LEVELS = ['K','1','2','3','4','5','6','7','8','9','10','11','12'];
   const SUBJECTS = ['Math','ELA','Reading','Science','Social Studies','History','Writing'];
@@ -2112,6 +2116,39 @@ export default function AssessmentBuilder() {
                   />
                 </div>
               )}
+
+              {/* From Scratch */}
+              {inputMode === 'scratch' && (
+                <div className="p-4 space-y-4">
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700">
+                    <span className="font-semibold">✏️ Build from scratch</span> — describe what you want and Claude will write the full assessment. Use the options below to set grade, subject, and question count.
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                      Topic / Skill <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={scratchTopic}
+                      onChange={(e) => setScratchTopic(e.target.value)}
+                      placeholder="e.g. Multiplication facts for 3s and 4s, Comparing fractions, Main idea..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                      Additional Instructions <span className="text-gray-400 font-normal">(optional)</span>
+                    </label>
+                    <textarea
+                      value={scratchInstructions}
+                      onChange={(e) => setScratchInstructions(e.target.value)}
+                      placeholder="e.g. Include 2 word problems and 1 diagram question. Use arrays for visual models. Focus on conceptual understanding."
+                      rows={4}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Options Card */}
@@ -2171,7 +2208,7 @@ export default function AssessmentBuilder() {
               {/* Generate Button */}
               <button
                 onClick={handleGenerate}
-                disabled={loading || (inputMode === 'file' && !file) || (inputMode === 'url' && !url) || (inputMode === 'paste' && !pastedText)}
+                disabled={loading || (inputMode === 'file' && !file) || (inputMode === 'url' && !url) || (inputMode === 'paste' && !pastedText) || (inputMode === 'scratch' && !scratchTopic.trim())}
                 className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-lg font-bold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition mt-5"
               >
                 {loading ? (
@@ -2208,6 +2245,14 @@ export default function AssessmentBuilder() {
                     <span className="text-base leading-none">+</span> New Assessment
                   </button>
                 </div>
+
+                {/* Auto-save confirmation badge */}
+                {bankSavedCount > 0 && (
+                  <div className="mb-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 text-sm text-emerald-700 font-medium">
+                    <span>✅</span>
+                    <span>{bankSavedCount} visual model{bankSavedCount > 1 ? 's' : ''} from this assessment saved to your Model Bank automatically.</span>
+                  </div>
+                )}
 
                 {/* Output Tabs */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
