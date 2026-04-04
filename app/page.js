@@ -1701,15 +1701,105 @@ function autoNameMarker(type, spec) {
 
 // ─── Main App ───────────────────────────────────────────────────────────────
 
+// ─── Pre-built visual library for Build Your Own mode ────────────────────────
+const VISUAL_LIBRARY = [
+  { category: 'Number Lines', items: [
+    { name: '0–10', marker: '[NUM_LINE: min=0 max=10 step=1]' },
+    { name: '0–20 by 2s', marker: '[NUM_LINE: min=0 max=20 step=2]' },
+    { name: '0–20 hops', marker: '[NUM_LINE: min=0 max=20 step=5 jumps=yes]' },
+    { name: '0–30 by 5s', marker: '[NUM_LINE: min=0 max=30 step=5]' },
+    { name: '0–50 by 10s', marker: '[NUM_LINE: min=0 max=50 step=10]' },
+    { name: '0–100 by 10s', marker: '[NUM_LINE: min=0 max=100 step=10]' },
+    { name: '0–12 hops (×3)', marker: '[NUM_LINE: min=0 max=12 step=3 jumps=yes]' },
+  ]},
+  { category: 'Frames & Number Bonds', items: [
+    { name: 'Five Frame (3/5)', marker: '[TENS_FRAME: filled=3 total=5]' },
+    { name: 'Five Frame (4/5)', marker: '[TENS_FRAME: filled=4 total=5]' },
+    { name: 'Tens Frame (6)', marker: '[TENS_FRAME: filled=6 total=10]' },
+    { name: 'Tens Frame (7)', marker: '[TENS_FRAME: filled=7 total=10]' },
+    { name: 'Tens Frame (8)', marker: '[TENS_FRAME: filled=8 total=10]' },
+    { name: 'Tens Frame (9)', marker: '[TENS_FRAME: filled=9 total=10]' },
+    { name: 'Number Bond (whole=10)', marker: '[NUM_BOND: whole=10 part1=4 part2=6]' },
+    { name: 'Number Bond (missing parts)', marker: '[NUM_BOND: whole=10 part1=4 part2=6 parts=hidden]' },
+    { name: 'Number Bond (whole=15)', marker: '[NUM_BOND: whole=15 part1=8 part2=7]' },
+    { name: 'Number Bond (whole=20)', marker: '[NUM_BOND: whole=20 part1=12 part2=8]' },
+  ]},
+  { category: 'Place Value', items: [
+    { name: 'Base-10 Blocks (12)', marker: '[BASE10: hundreds=0 tens=1 ones=2]' },
+    { name: 'Base-10 Blocks (134)', marker: '[BASE10: hundreds=1 tens=3 ones=4]' },
+    { name: 'Base-10 Blocks (245)', marker: '[BASE10: hundreds=2 tens=4 ones=5]' },
+    { name: 'Base-10 Blocks (321)', marker: '[BASE10: hundreds=3 tens=2 ones=1]' },
+    { name: 'PV Chart (342)', marker: '[PV_CHART: 342]' },
+    { name: 'PV Chart (1,234)', marker: '[PV_CHART: 1234]' },
+    { name: 'PV Chart (4,506)', marker: '[PV_CHART: 4506]' },
+  ]},
+  { category: 'Arrays & Equal Groups', items: [
+    { name: 'Array 2×4', marker: '[ARRAY: rows=2 cols=4]' },
+    { name: 'Array 3×3', marker: '[ARRAY: rows=3 cols=3]' },
+    { name: 'Array 3×4', marker: '[ARRAY: rows=3 cols=4]' },
+    { name: 'Array 3×6', marker: '[ARRAY: rows=3 cols=6]' },
+    { name: 'Array 4×5', marker: '[ARRAY: rows=4 cols=5]' },
+    { name: 'Array 4×7', marker: '[ARRAY: rows=4 cols=7]' },
+    { name: 'Array 5×6', marker: '[ARRAY: rows=5 cols=6]' },
+    { name: '3 groups of 4', marker: '[GROUPS: groups=3 items=4]' },
+    { name: '4 groups of 5', marker: '[GROUPS: groups=4 items=5]' },
+    { name: '5 groups of 3', marker: '[GROUPS: groups=5 items=3]' },
+    { name: '6 groups of 2', marker: '[GROUPS: groups=6 items=2]' },
+  ]},
+  { category: 'Area & Bar Models', items: [
+    { name: 'Area Model 4×23', marker: '[AREA_MODEL: collabels=20,3 | rowlabels=4]' },
+    { name: 'Area Model 3×24', marker: '[AREA_MODEL: collabels=20,4 | rowlabels=3]' },
+    { name: 'Area Model 6×15', marker: '[AREA_MODEL: collabels=10,5 | rowlabels=6]' },
+    { name: 'Area Model 7×12', marker: '[AREA_MODEL: collabels=10,2 | rowlabels=7]' },
+    { name: 'Bar Model (4+6)', marker: '[BAR_MODEL: 4,6 | label=Total]' },
+    { name: 'Bar Model (3+5+2)', marker: '[BAR_MODEL: 3,5,2 | label=Total is 10]' },
+    { name: 'Tape Diagram (4+6)', marker: '[TAPE: 4:Part A,6:Part B | brace=yes | total=10]' },
+    { name: 'Tape Diagram (3 parts)', marker: '[TAPE: 3:A,4:B,5:C | brace=yes | total=12]' },
+  ]},
+  { category: 'Fractions', items: [
+    { name: 'Bar ½', marker: '[FRACTION: 1/2]' },
+    { name: 'Bar ⅓', marker: '[FRACTION: 1/3]' },
+    { name: 'Bar ¼', marker: '[FRACTION: 1/4]' },
+    { name: 'Bar ¾', marker: '[FRACTION: 3/4]' },
+    { name: 'Bar ⅔', marker: '[FRACTION: 2/3]' },
+    { name: 'Bar ⅜', marker: '[FRACTION: 3/8]' },
+    { name: 'Bar ⅝', marker: '[FRACTION: 5/8]' },
+    { name: 'Mixed 1⅔', marker: '[FRACTION: 1 2/3]' },
+    { name: 'Circle ¼', marker: '[FRAC_CIRCLE: 1/4]' },
+    { name: 'Circle ½', marker: '[FRAC_CIRCLE: 1/2]' },
+    { name: 'Circle ¾', marker: '[FRAC_CIRCLE: 3/4]' },
+    { name: 'Circle ⅖', marker: '[FRAC_CIRCLE: 2/5]' },
+    { name: 'Circle ⅓', marker: '[FRAC_CIRCLE: 1/3]' },
+  ]},
+  { category: 'Function Tables', items: [
+    { name: 'Table ×2', marker: '[FUNC_TABLE: pairs=1:2,2:4,3:6,4:? | rule=×2]' },
+    { name: 'Table ×3', marker: '[FUNC_TABLE: pairs=1:3,2:6,3:9,4:? | rule=×3]' },
+    { name: 'Table ×4', marker: '[FUNC_TABLE: pairs=1:4,2:8,3:12,4:? | rule=×4]' },
+    { name: 'Table ×5', marker: '[FUNC_TABLE: pairs=1:5,2:10,3:15,4:? | rule=×5]' },
+    { name: 'Table +4', marker: '[FUNC_TABLE: pairs=1:5,2:6,3:7,4:? | rule=+4]' },
+    { name: 'Table +6', marker: '[FUNC_TABLE: pairs=2:8,4:10,6:12,8:? | rule=+6]' },
+    { name: 'Table ÷3', marker: '[FUNC_TABLE: pairs=3:1,6:2,9:3,12:? | rule=÷3]' },
+  ]},
+];
+
 // ─── BuilderQuestionCard: single editable question card for Manual Builder ───
 function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank }) {
-  const [showModelPicker, setShowModelPicker] = useState(false);
-  const [pasteActive, setPasteActive] = useState(false);
+  const [showInsertPanel, setShowInsertPanel] = useState(false);
+  const [editingModelIdx, setEditingModelIdx] = useState(null);
+  const [editMarkerText, setEditMarkerText] = useState('');
   const imageInputRef = useRef(null);
+  const pasteZoneRef = useRef(null);
   const letters = 'ABCDEFGHIJ';
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
   const QTYPE_LABELS = { mc:'Multiple Choice', multi_answer:'Multiple Answer', short:'Short Answer', fill_blank:'Fill in the Blank', true_false:'True / False', open:'Open Response' };
   const QTYPE_COLORS = { mc:'bg-indigo-100 text-indigo-700', multi_answer:'bg-purple-100 text-purple-700', short:'bg-emerald-100 text-emerald-700', fill_blank:'bg-amber-100 text-amber-700', true_false:'bg-blue-100 text-blue-700', open:'bg-gray-100 text-gray-600' };
+
+  // Auto-focus paste zone when insert panel opens
+  useEffect(() => {
+    if (showInsertPanel && pasteZoneRef.current) {
+      setTimeout(() => pasteZoneRef.current?.focus(), 50);
+    }
+  }, [showInsertPanel]);
 
   const addChoice = () => onUpdate({ choices: [...q.choices, { id: uid(), text: '', correct: false }] });
   const removeChoice = (id) => { if (q.choices.length > 2) onUpdate({ choices: q.choices.filter(c => c.id !== id) }); };
@@ -1725,35 +1815,45 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
   // Convert an image File/Blob to a base64 [IMAGE: ...] marker and attach it
   const handleImageFile = (file) => {
     if (!file) return;
-    // Accept images and PDFs (PDF: take as-is via object URL for display)
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') return;
     if (file.type === 'application/pdf') {
-      // For PDFs, store a placeholder — user can screenshot specific pages
       const url = URL.createObjectURL(file);
       onUpdate({ models: [...(q.models||[]), `[IMAGE: ${url}]`] });
+      setShowInsertPanel(false);
       return;
     }
     const reader = new FileReader();
     reader.onload = (e) => {
-      const marker = `[IMAGE: ${e.target.result}]`;
-      onUpdate({ models: [...(q.models||[]), marker] });
+      onUpdate({ models: [...(q.models||[]), `[IMAGE: ${e.target.result}]`] });
+      setShowInsertPanel(false);
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle image paste (Ctrl+V or right-click paste) anywhere in the card editor
-  const handlePaste = (e) => {
+  // Paste handler for the dedicated paste zone (gets proper focus)
+  const handlePasteInZone = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        handleImageFile(file);
+        handleImageFile(item.getAsFile());
         e.preventDefault();
-        setPasteActive(false);
-        break;
+        return;
       }
     }
+  };
+
+  // Add a visual marker from library or bank
+  const addVisualMarker = (marker) => {
+    onUpdate({ models: [...(q.models||[]), marker] });
+    setShowInsertPanel(false);
+  };
+
+  // Apply edit to a model marker
+  const applyModelEdit = (idx) => {
+    const updated = (q.models||[]).map((m, i) => i === idx ? editMarkerText.trim() : m);
+    onUpdate({ models: updated });
+    setEditingModelIdx(null);
   };
 
   // Separate IMAGE markers from other visual markers for display
@@ -1806,51 +1906,74 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
             </select>
           </div>
 
-          {/* ── Images & Visuals — above the question text so you can see them while writing ── */}
+          {/* ── Images & Visuals — above question text so you see the visual while writing ── */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-gray-600">Images &amp; Visuals</label>
-              {/* Compact action buttons inline with the label */}
               <div className="flex items-center gap-1">
                 <button onClick={() => imageInputRef.current?.click()}
-                  title="Upload image or PDF"
-                  className="flex items-center gap-1 text-xs border border-gray-200 text-gray-500 rounded-md px-2 py-0.5 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition">
+                  className="text-xs border border-gray-200 text-gray-500 rounded-md px-2 py-0.5 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition">
                   📁 Upload
                 </button>
-                <button onClick={() => setPasteActive(v => !v)}
-                  title="Paste a copied image (Ctrl+V / ⌘V)"
-                  className={'flex items-center gap-1 text-xs border rounded-md px-2 py-0.5 transition ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:text-indigo-600')}>
-                  📋 Paste
+                <button
+                  onClick={() => setShowInsertPanel(v => !v)}
+                  className={'text-xs border rounded-md px-2 py-0.5 transition font-medium ' + (showInsertPanel ? 'border-indigo-400 bg-indigo-600 text-white' : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50')}>
+                  + Insert Visual
                 </button>
-                <div className="relative">
-                  <button onClick={() => setShowModelPicker(v => !v)}
-                    title="Add a visual from the Model Bank"
-                    className={'flex items-center gap-1 text-xs border rounded-md px-2 py-0.5 transition ' + (showModelPicker ? 'border-violet-400 bg-violet-50 text-violet-700 font-semibold' : 'border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600')}>
-                    📊 Bank {modelBank.length > 0 ? `(${modelBank.length})` : ''}
-                  </button>
-                  {showModelPicker && (
-                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-40 w-60 max-h-48 overflow-y-auto">
-                      {modelBank.length > 0 ? modelBank.map(item => (
-                        <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
-                          className="w-full text-left text-xs px-2.5 py-1.5 hover:bg-violet-50 hover:text-violet-700 rounded-lg">
-                          <div className="font-medium truncate">{item.name}</div>
-                          <div className="text-gray-400 truncate text-[10px]">{item.marker}</div>
-                        </button>
-                      )) : (
-                        <p className="text-xs text-gray-400 px-2.5 py-2.5 text-center">
-                          No items yet — generate an AI assessment to populate the bank automatically.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 
-            {pasteActive && (
-              <p className="mb-2 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 px-2.5 text-center">
-                First copy an image (screenshot / right-click → Copy Image), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere on this card.
-              </p>
+            {/* ── Insert Visual panel ── */}
+            {showInsertPanel && (
+              <div className="mb-2 border border-indigo-200 bg-indigo-50 rounded-xl p-3 space-y-3">
+                {/* Paste zone — auto-focused so Ctrl+V works immediately */}
+                <div>
+                  <p className="text-[11px] font-semibold text-indigo-700 mb-1">📋 Paste an image</p>
+                  <div
+                    ref={pasteZoneRef}
+                    tabIndex={0}
+                    onPaste={handlePasteInZone}
+                    className="w-full border-2 border-dashed border-indigo-300 rounded-lg px-3 py-4 text-xs text-indigo-500 text-center cursor-text select-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white focus:border-indigo-400 hover:bg-white transition"
+                    style={{minHeight: 44}}
+                  >
+                    Click here → then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> to paste a screenshot or copied image
+                  </div>
+                </div>
+
+                {/* Visual Library */}
+                <div>
+                  <p className="text-[11px] font-semibold text-indigo-700 mb-1.5">📊 Visual Library</p>
+                  <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                    {VISUAL_LIBRARY.map(cat => (
+                      <div key={cat.category}>
+                        <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide mb-1">{cat.category}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {cat.items.map(item => (
+                            <button key={item.marker} onClick={() => addVisualMarker(item.marker)}
+                              className="text-[11px] bg-white border border-indigo-200 text-indigo-700 rounded-md px-2 py-0.5 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition">
+                              {item.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {/* AI Model Bank items if any */}
+                    {modelBank.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-violet-400 uppercase tracking-wide mb-1">From AI Model Bank</div>
+                        <div className="flex flex-wrap gap-1">
+                          {modelBank.map(item => (
+                            <button key={item.id} onClick={() => addVisualMarker(item.marker)}
+                              className="text-[11px] bg-white border border-violet-200 text-violet-700 rounded-md px-2 py-0.5 hover:bg-violet-600 hover:text-white hover:border-violet-600 transition">
+                              {item.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Rendered previews of all attached images + visual models */}
@@ -1858,25 +1981,51 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-3 overflow-hidden">
                 {(q.models||[]).map((m, mi) => {
                   const rendered = parseVisualModel(m);
+                  const isEditingThis = editingModelIdx === mi;
                   return (
                     <div key={mi} className="relative group">
-                      {rendered
-                        ? <div className="overflow-x-auto">{rendered}</div>
-                        : <div className="text-xs text-gray-400 italic px-1">{m}</div>}
-                      <button
-                        onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== mi) })}
-                        className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow">
-                        ✕
-                      </button>
+                      {isEditingThis ? (
+                        <div className="space-y-1.5">
+                          <textarea
+                            value={editMarkerText}
+                            onChange={e => setEditMarkerText(e.target.value)}
+                            rows={2}
+                            className="w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                          />
+                          <div className="flex gap-1.5">
+                            <button onClick={() => applyModelEdit(mi)}
+                              className="text-xs bg-indigo-600 text-white rounded-md px-3 py-1 hover:bg-indigo-700 transition font-medium">Apply</button>
+                            <button onClick={() => setEditingModelIdx(null)}
+                              className="text-xs border border-gray-200 text-gray-500 rounded-md px-3 py-1 hover:bg-gray-50 transition">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {rendered
+                            ? <div className="overflow-x-auto">{rendered}</div>
+                            : <div className="text-xs text-gray-400 italic font-mono px-1">{m}</div>}
+                          {/* Edit + Remove buttons — visible on hover */}
+                          <div className="absolute top-0 right-0 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button
+                              onClick={() => { setEditingModelIdx(mi); setEditMarkerText(m); }}
+                              className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center text-[9px] shadow hover:bg-indigo-600"
+                              title="Edit marker">✎</button>
+                            <button
+                              onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== mi) })}
+                              className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs shadow hover:bg-red-600"
+                              title="Remove">✕</button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {(q.models||[]).length === 0 && (
+            {(q.models||[]).length === 0 && !showInsertPanel && (
               <div className="border-2 border-dashed border-gray-200 rounded-xl py-3 text-center text-xs text-gray-400">
-                No image or visual added yet — use the buttons above
+                No image or visual yet — click <strong>+ Insert Visual</strong> above
               </div>
             )}
           </div>
