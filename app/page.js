@@ -1648,7 +1648,541 @@ function autoNameMarker(type, spec) {
 
 // ─── Main App ───────────────────────────────────────────────────────────────
 
+// ─── BuilderQuestionCard: single editable question card for Manual Builder ───
+function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank }) {
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const letters = 'ABCDEFGHIJ';
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const QTYPE_LABELS = { mc:'Multiple Choice', multi_answer:'Multiple Answer', short:'Short Answer', fill_blank:'Fill in the Blank', true_false:'True / False', open:'Open Response' };
+  const QTYPE_COLORS = { mc:'bg-indigo-100 text-indigo-700', multi_answer:'bg-purple-100 text-purple-700', short:'bg-emerald-100 text-emerald-700', fill_blank:'bg-amber-100 text-amber-700', true_false:'bg-blue-100 text-blue-700', open:'bg-gray-100 text-gray-600' };
+
+  const addChoice = () => onUpdate({ choices: [...q.choices, { id: uid(), text: '', correct: false }] });
+  const removeChoice = (id) => { if (q.choices.length > 2) onUpdate({ choices: q.choices.filter(c => c.id !== id) }); };
+  const updateChoice = (id, text) => onUpdate({ choices: q.choices.map(c => c.id === id ? { ...c, text } : c) });
+  const toggleCorrect = (id) => {
+    if (q.type === 'mc' || q.type === 'true_false') {
+      onUpdate({ choices: q.choices.map(c => ({ ...c, correct: c.id === id })) });
+    } else {
+      onUpdate({ choices: q.choices.map(c => c.id === id ? { ...c, correct: !c.correct } : c) });
+    }
+  };
+
+  return (
+    <div className={'bg-white rounded-2xl shadow-sm border transition ' + (isEditing ? 'border-indigo-300 shadow-md' : 'border-gray-100 hover:border-gray-200')}>
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={onToggleEdit}>
+        <div className="flex-shrink-0 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold">{num}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-800 truncate">
+            {q.text || <span className="text-gray-400 italic">Click to edit...</span>}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + (QTYPE_COLORS[q.type] || 'bg-gray-100 text-gray-600')}>{QTYPE_LABELS[q.type]}</span>
+            {q.models && q.models.length > 0 && <span className="text-xs text-indigo-500">📊 {q.models.length} visual</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <button onClick={onMoveUp} disabled={isFirst} className="p-1.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs">▲</button>
+          <button onClick={onMoveDown} disabled={isLast} className="p-1.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs">▼</button>
+          <button onClick={onDelete} className="p-1.5 text-red-300 hover:text-red-500 text-xs ml-1">✕</button>
+        </div>
+      </div>
+
+      {isEditing && (
+        <div className="border-t border-gray-100 px-4 pb-5 pt-3 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Question Type</label>
+            <select value={q.type} onChange={e => {
+              const t = e.target.value;
+              const nc = (t === 'mc' || t === 'multi_answer') ? (q.choices.length >= 2 ? q.choices.map(c=>({...c})) : ['','','',''].map(()=>({id:uid(),text:'',correct:false})))
+                       : t === 'true_false' ? [{id:uid(),text:'True',correct:false},{id:uid(),text:'False',correct:false}]
+                       : [];
+              onUpdate({ type: t, choices: nc });
+            }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="mc">Multiple Choice — one correct answer</option>
+              <option value="multi_answer">Multiple Answer — select all that apply</option>
+              <option value="short">Short Answer</option>
+              <option value="fill_blank">Fill in the Blank — use ___ for each blank</option>
+              <option value="true_false">True / False</option>
+              <option value="open">Open Response</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Question Text</label>
+            <textarea value={q.text} onChange={e => onUpdate({ text: e.target.value })}
+              placeholder={q.type === 'fill_blank' ? 'e.g. The product of ___ × ___ = ___.' : 'Type your question here...'}
+              rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+          </div>
+
+          {(q.type === 'mc' || q.type === 'multi_answer' || q.type === 'true_false') && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Choices — <span className="font-normal text-gray-400">{q.type === 'mc' || q.type === 'true_false' ? 'click ○ to mark correct' : 'check all correct'}</span>
+              </label>
+              <div className="space-y-2">
+                {q.choices.map((c, ci) => (
+                  <div key={c.id} className="flex items-center gap-2">
+                    <button onClick={() => toggleCorrect(c.id)}
+                      className={'w-5 h-5 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition ' + (c.correct ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 hover:border-indigo-400')}>
+                      {c.correct && <span className="text-white" style={{fontSize:'9px'}}>✓</span>}
+                    </button>
+                    <span className="text-xs font-bold text-gray-400 w-5">{letters[ci]})</span>
+                    {q.type === 'true_false'
+                      ? <span className="flex-1 text-sm text-gray-700">{c.text}</span>
+                      : <input value={c.text} onChange={e => updateChoice(c.id, e.target.value)} placeholder={`Option ${letters[ci]}`}
+                          className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />}
+                    {q.type !== 'true_false' && q.choices.length > 2 && (
+                      <button onClick={() => removeChoice(c.id)} className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {(q.type === 'mc' || q.type === 'multi_answer') && q.choices.length < 8 && (
+                <button onClick={addChoice} className="mt-2 text-xs text-indigo-500 hover:text-indigo-700 font-semibold">+ Add Option</button>
+              )}
+            </div>
+          )}
+
+          {(q.type === 'short' || q.type === 'fill_blank' || q.type === 'open') && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Sample Answer <span className="font-normal text-gray-400">(optional)</span></label>
+              <input value={q.answerHint || ''} onChange={e => onUpdate({ answerHint: e.target.value })}
+                placeholder="e.g. 4 × 7 = 28"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+          )}
+
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Standard <span className="font-normal text-gray-400">(optional)</span></label>
+              <input value={q.standard || ''} onChange={e => onUpdate({ standard: e.target.value })}
+                placeholder="e.g. 3.OA.A.1"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+            <div className="relative flex-shrink-0">
+              <button onClick={() => setShowModelPicker(v => !v)}
+                className="text-xs border border-indigo-200 text-indigo-600 rounded-lg px-3 py-2 hover:bg-indigo-50 transition whitespace-nowrap">
+                📊 Add Visual
+              </button>
+              {showModelPicker && (
+                <div className="absolute right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-xl shadow-xl p-2 z-30 w-56 max-h-52 overflow-y-auto">
+                  {modelBank.length > 0 ? modelBank.map(item => (
+                    <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
+                      className="w-full text-left text-xs px-3 py-2 hover:bg-indigo-50 rounded-lg truncate">{item.name}</button>
+                  )) : <p className="text-xs text-gray-400 px-3 py-2">No items in Model Bank yet. Generate an AI assessment first to auto-populate.</p>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {q.models && q.models.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {q.models.map((m, mi) => (
+                <span key={mi} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded-lg">
+                  <span className="truncate max-w-[180px]">{m}</span>
+                  <button onClick={() => onUpdate({ models: q.models.filter((_,j) => j !== mi) })} className="text-indigo-300 hover:text-red-400 flex-shrink-0">✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ManualBuilder: full manual assessment building mode ──────────────────────
+function ManualBuilder({ modelBank, onBack, gradeLevel, setGradeLevel, subject, setSubject }) {
+  const [questions, setQuestions] = useState([]);
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('Directions: Show your work.');
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [viewMode, setViewMode] = useState('build');
+  const [copied, setCopied] = useState(false);
+  const previewRef = useRef(null);
+
+  const QTYPES = [
+    { id: 'mc', icon: '🔘', label: 'Multiple Choice', desc: 'One correct answer' },
+    { id: 'multi_answer', icon: '☑️', label: 'Multiple Answer', desc: 'Select all that apply' },
+    { id: 'short', icon: '✏️', label: 'Short Answer', desc: 'Brief written response' },
+    { id: 'fill_blank', icon: '___', label: 'Fill in the Blank', desc: 'Complete the sentence with ___' },
+    { id: 'true_false', icon: '✓✗', label: 'True / False', desc: 'True or False' },
+    { id: 'open', icon: '📝', label: 'Open Response', desc: 'Extended written response' },
+  ];
+
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const letters = 'ABCDEFGHIJ';
+
+  const addQuestion = (type) => {
+    const choices = (type === 'mc' || type === 'multi_answer')
+      ? ['','','',''].map(() => ({ id: uid(), text: '', correct: false }))
+      : type === 'true_false'
+      ? [{ id: uid(), text: 'True', correct: false }, { id: uid(), text: 'False', correct: false }]
+      : [];
+    const q = { id: uid(), type, text: '', choices, answerHint: '', standard: '', models: [] };
+    setQuestions(prev => [...prev, q]);
+    setEditingId(q.id);
+    setShowTypePicker(false);
+  };
+
+  const updateQ = (id, updates) => setQuestions(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
+  const deleteQ = (id) => { setQuestions(prev => prev.filter(q => q.id !== id)); if (editingId === id) setEditingId(null); };
+  const moveQ = (id, dir) => setQuestions(prev => {
+    const i = prev.findIndex(q => q.id === id);
+    if (i < 0) return prev;
+    const j = i + dir;
+    if (j < 0 || j >= prev.length) return prev;
+    const arr = [...prev]; [arr[i], arr[j]] = [arr[j], arr[i]]; return arr;
+  });
+
+  const serializeToText = () => {
+    const lines = [title || 'My Assessment'];
+    if (subtitle) lines.push(subtitle);
+    questions.forEach((q, i) => {
+      (q.models || []).forEach(m => lines.push(m));
+      lines.push(`${i + 1}. ${q.text || '(Question text)'}`);
+      if (q.type === 'mc' || q.type === 'multi_answer' || q.type === 'true_false') {
+        q.choices.forEach((c, ci) => lines.push(`${letters[ci]}) ${c.text || '(option)'}`));
+      }
+      if (q.standard) lines.push(`[${q.standard}]`);
+    });
+    return lines.join('\n');
+  };
+
+  const copyText = async () => {
+    try { await navigator.clipboard.writeText(serializeToText()); } catch {}
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
+
+  const printPreview = () => {
+    const el = previewRef.current;
+    if (!el) return;
+    const pw = window.open('', '_blank');
+    pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title||'Assessment'}</title><script src="https://cdn.tailwindcss.com"><\/script><style>@media print{body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@page{margin:0.65in;size:letter}}body{background:white;font-family:ui-sans-serif,system-ui,sans-serif}</style></head><body class="p-8">${el.innerHTML}<script>window.onload=function(){setTimeout(function(){window.print()},600)}<\/script></body></html>`);
+    pw.document.close();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50">
+      <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition flex-shrink-0">← Back</button>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl">✏️</span>
+            <span className="font-bold text-gray-800">Build Your Own Assessment</span>
+          </div>
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+            <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <button onClick={() => setViewMode('build')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode==='build' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>✏️ Build</button>
+              <button onClick={() => setViewMode('preview')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode==='preview' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>👁 Preview</button>
+            </div>
+            <button onClick={copyText} className="text-sm bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition min-w-[70px]">{copied ? '✓ Copied!' : 'Copy'}</button>
+            <button onClick={printPreview} className="text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition">Print / PDF</button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {viewMode === 'preview' ? (
+          <div ref={previewRef}>
+            <AssessmentPreview text={serializeToText()} subject={subject} gradeLevel={gradeLevel}
+              onModelEdit={() => {}} onAddImage={() => {}} onBrowseBank={() => {}} onSaveToBank={() => {}} customTitle={title} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Settings column */}
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+                <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Assessment Info</h2>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Title</label>
+                  <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Chapter 3 Check-In"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Directions</label>
+                  <input value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Directions: Show your work."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Grade</label>
+                    <select value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none">
+                      {['K','1','2','3','4','5','6','7','8','9','10','11','12'].map(g => <option key={g} value={g}>{g==='K'?'K':g}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Subject</label>
+                    <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none">
+                      {['Math','ELA','Reading','Science','Social Studies','History','Writing'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                <div className="text-xs font-bold text-indigo-700 mb-2">Quick Tips</div>
+                <div className="text-xs text-indigo-600 space-y-1">
+                  <div>• Click a question to expand and edit it</div>
+                  <div>• Click ○ to mark the correct answer</div>
+                  <div>• Use ▲▼ to reorder questions</div>
+                  <div>• Add visual models from the Model Bank</div>
+                  <div>• Preview to see the finished look</div>
+                </div>
+              </div>
+
+              {questions.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center">
+                  <div className="text-3xl font-bold text-indigo-600">{questions.length}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">question{questions.length!==1?'s':''} added</div>
+                </div>
+              )}
+            </div>
+
+            {/* Questions column */}
+            <div className="lg:col-span-2 space-y-3">
+              {questions.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-gray-200 p-14 flex flex-col items-center text-center">
+                  <div className="text-5xl mb-4">📋</div>
+                  <p className="font-semibold text-gray-500 text-lg">Start building your assessment</p>
+                  <p className="text-sm text-gray-400 mt-2">Click "Add Question" below and choose a question type</p>
+                </div>
+              )}
+
+              {questions.map((q, i) => (
+                <BuilderQuestionCard key={q.id} q={q} num={i+1}
+                  isEditing={editingId === q.id}
+                  onToggleEdit={() => setEditingId(editingId === q.id ? null : q.id)}
+                  onUpdate={updates => updateQ(q.id, updates)}
+                  onDelete={() => deleteQ(q.id)}
+                  onMoveUp={() => moveQ(q.id, -1)} onMoveDown={() => moveQ(q.id, 1)}
+                  isFirst={i===0} isLast={i===questions.length-1}
+                  modelBank={modelBank} />
+              ))}
+
+              <div className="relative">
+                <button onClick={() => setShowTypePicker(v => !v)}
+                  className="w-full py-3.5 border-2 border-dashed border-indigo-300 text-indigo-600 font-semibold rounded-2xl hover:bg-indigo-50 hover:border-indigo-400 transition flex items-center justify-center gap-2">
+                  <span className="text-xl leading-none">+</span> Add Question
+                </button>
+                {showTypePicker && (
+                  <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 z-20 grid grid-cols-2 gap-2">
+                    {QTYPES.map(qt => (
+                      <button key={qt.id} onClick={() => addQuestion(qt.id)}
+                        className="flex items-start gap-3 p-3 rounded-xl hover:bg-indigo-50 text-left transition border border-transparent hover:border-indigo-100 group">
+                        <span className="text-xl mt-0.5">{qt.icon}</span>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-800 group-hover:text-indigo-700">{qt.label}</div>
+                          <div className="text-xs text-gray-400">{qt.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─── GenQuestionCard: editable card for AI-generated questions ────────────────
+function GenQuestionCard({ q, isExpanded, onToggle, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) {
+  const letters = 'ABCDEFGHIJ';
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const QTYPE_LABELS = { mc:'Multiple Choice', short:'Short Answer', fill_blank:'Fill in the Blank', true_false:'True / False', open:'Open Response' };
+
+  const getDetectedType = () => {
+    if (q.choices.length === 2 && q.choices.some(c => /^true$/i.test(c.text.trim()))) return 'true_false';
+    if (q.choices.length > 0) return 'mc';
+    if (q.text.includes('___')) return 'fill_blank';
+    return 'open';
+  };
+  const [localType, setLocalType] = useState(q.type || getDetectedType());
+
+  return (
+    <div className={'bg-white rounded-2xl shadow-sm border transition ' + (isExpanded ? 'border-indigo-300 shadow-md' : 'border-gray-100 hover:border-gray-200')}>
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={onToggle}>
+        <div className="flex-shrink-0 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold">{q.num}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-800 truncate">{q.text || '(empty)'}</p>
+          <div className="flex gap-2 mt-0.5">
+            <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{QTYPE_LABELS[localType] || 'Open Response'}</span>
+            {q.choices.length > 0 && <span className="text-xs text-gray-400">{q.choices.length} choices</span>}
+          </div>
+        </div>
+        <div className="flex gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <button onClick={onMoveUp} disabled={isFirst} className="p-1.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs">▲</button>
+          <button onClick={onMoveDown} disabled={isLast} className="p-1.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 text-xs">▼</button>
+          <button onClick={onDelete} className="p-1.5 text-red-300 hover:text-red-500 text-xs ml-1">✕</button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="border-t border-gray-100 px-4 pb-5 pt-3 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Question Format</label>
+            <select value={localType} onChange={e => {
+              const t = e.target.value;
+              setLocalType(t);
+              let nc = q.choices;
+              if (t === 'mc' && q.choices.length === 0) nc = ['A','B','C','D'].map(l => ({ letter: l, text: '' }));
+              else if (t === 'true_false') nc = [{ letter: 'A', text: 'True' }, { letter: 'B', text: 'False' }];
+              else if (t === 'open' || t === 'short' || t === 'fill_blank') nc = [];
+              onUpdate({ type: t, choices: nc });
+            }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="mc">Multiple Choice</option>
+              <option value="short">Short Answer</option>
+              <option value="fill_blank">Fill in the Blank</option>
+              <option value="true_false">True / False</option>
+              <option value="open">Open Response</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Question Text</label>
+            <textarea value={q.text} onChange={e => onUpdate({ text: e.target.value })}
+              rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+          </div>
+
+          {q.extra && q.extra.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Sub-parts / Additional Text</label>
+              <textarea value={q.extra.join('\n')} onChange={e => onUpdate({ extra: e.target.value.split('\n') })}
+                rows={Math.max(2, q.extra.length + 1)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+            </div>
+          )}
+
+          {(localType === 'mc' || localType === 'true_false') && q.choices.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Answer Choices</label>
+              <div className="space-y-2">
+                {q.choices.map((c, ci) => (
+                  <div key={ci} className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-400 w-5">{c.letter})</span>
+                    <input value={c.text} onChange={e => {
+                      const nc = q.choices.map((ch, i) => i === ci ? { ...ch, text: e.target.value } : ch);
+                      onUpdate({ choices: nc });
+                    }} className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                    {localType === 'mc' && q.choices.length > 2 && (
+                      <button onClick={() => {
+                        const nc = q.choices.filter((_,i) => i !== ci).map((ch, i) => ({ ...ch, letter: letters[i] }));
+                        onUpdate({ choices: nc });
+                      }} className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {localType === 'mc' && q.choices.length < 8 && (
+                <button onClick={() => onUpdate({ choices: [...q.choices, { letter: letters[q.choices.length], text: '' }] })}
+                  className="mt-2 text-xs text-indigo-500 hover:text-indigo-700 font-semibold">+ Add Option</button>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Standard Tag</label>
+            <input value={q.standard || ''} onChange={e => onUpdate({ standard: e.target.value })}
+              placeholder="e.g. 3.OA.A.1"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── StructuredEditor: parse + rebuild AI-generated text via question cards ───
+function StructuredEditor({ text, onTextChange }) {
+  const letters = 'ABCDEFGHIJ';
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+  const questionsToText = ({ title, subtitle, questions }) => {
+    const lines = [];
+    if (title) lines.push(title);
+    if (subtitle) lines.push(subtitle);
+    questions.forEach(q => {
+      (q.models || []).forEach(m => lines.push(m));
+      lines.push(`${q.num}. ${q.text}`);
+      if (q.choices && q.choices.length) q.choices.forEach(c => lines.push(`${c.letter}) ${c.text}`));
+      (q.extra || []).forEach(e => { if (e.trim()) lines.push(e); });
+      if (q.standard) lines.push(`[${q.standard}]`);
+    });
+    return lines.join('\n');
+  };
+
+  const initial = parseAssessment(text);
+  const [editTitle, setEditTitle] = useState(initial.title);
+  const [editSubtitle, setEditSubtitle] = useState(initial.subtitle);
+  const [editQ, setEditQ] = useState(initial.questions);
+  const [expandedNum, setExpandedNum] = useState(null);
+
+  const rebuild = (title, subtitle, questions) => onTextChange(questionsToText({ title, subtitle, questions }));
+
+  const updateQ = (num, updates) => {
+    const nq = editQ.map(q => q.num === num ? { ...q, ...updates } : q);
+    setEditQ(nq); rebuild(editTitle, editSubtitle, nq);
+  };
+  const deleteQ = (num) => {
+    const nq = editQ.filter(q => q.num !== num).map((q, i) => ({ ...q, num: i+1 }));
+    setEditQ(nq); rebuild(editTitle, editSubtitle, nq);
+    if (expandedNum === num) setExpandedNum(null);
+  };
+  const moveQ = (num, dir) => {
+    const i = editQ.findIndex(q => q.num === num);
+    if (i < 0) return;
+    const j = i + dir;
+    if (j < 0 || j >= editQ.length) return;
+    const arr = [...editQ]; [arr[i], arr[j]] = [arr[j], arr[i]];
+    const renumbered = arr.map((q, k) => ({ ...q, num: k+1 }));
+    setEditQ(renumbered); rebuild(editTitle, editSubtitle, renumbered);
+  };
+  const addQ = () => {
+    const num = editQ.length + 1;
+    const nq = [...editQ, { num, text: '', choices: [], extra: [], standard: '', models: [], type: 'open' }];
+    setEditQ(nq); rebuild(editTitle, editSubtitle, nq); setExpandedNum(num);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+      <p className="text-xs text-indigo-700 font-semibold">📋 Edit question text, format, and choices. Changes update the Preview and Raw tabs immediately.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Assessment Title</label>
+          <input value={editTitle} onChange={e => { setEditTitle(e.target.value); rebuild(e.target.value, editSubtitle, editQ); }}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Subtitle / Directions</label>
+          <input value={editSubtitle} onChange={e => { setEditSubtitle(e.target.value); rebuild(editTitle, e.target.value, editQ); }}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        {editQ.map((q, i) => (
+          <GenQuestionCard key={`${q.num}-${i}`} q={q}
+            isExpanded={expandedNum === q.num}
+            onToggle={() => setExpandedNum(expandedNum === q.num ? null : q.num)}
+            onUpdate={updates => updateQ(q.num, updates)}
+            onDelete={() => deleteQ(q.num)}
+            onMoveUp={() => moveQ(q.num, -1)} onMoveDown={() => moveQ(q.num, 1)}
+            isFirst={i===0} isLast={i===editQ.length-1} />
+        ))}
+      </div>
+      <button onClick={addQ}
+        className="w-full py-3 border-2 border-dashed border-indigo-300 text-indigo-600 font-semibold rounded-xl hover:bg-indigo-50 transition text-sm">
+        + Add Question
+      </button>
+    </div>
+  );
+}
+
 export default function AssessmentBuilder() {
+  const [appMode, setAppMode] = useState(null); // null=landing | 'build' | 'generate'
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [inputMode, setInputMode] = useState('file');
@@ -1967,6 +2501,104 @@ export default function AssessmentBuilder() {
   const GRADE_LEVELS = ['K','1','2','3','4','5','6','7','8','9','10','11','12'];
   const SUBJECTS = ['Math','ELA','Reading','Science','Social Studies','History','Writing'];
 
+  // ── Landing page ──────────────────────────────────────────────────────────
+  if (appMode === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 flex flex-col">
+        <header className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📝</span>
+              <span className="font-bold text-gray-800 text-lg">Assessment Builder</span>
+            </div>
+            <button onClick={() => setShowSettings(true)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
+              <span>⚙</span> Settings
+            </button>
+          </div>
+        </header>
+        {showSettings && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-start justify-end">
+            <div className="bg-white w-80 h-full shadow-2xl p-6 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-gray-800">Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Anthropic API Key</label>
+                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                <button onClick={() => { localStorage.setItem('anthropic_api_key', apiKey); setShowSettings(false); }}
+                  className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">Save Key</button>
+                <p className="mt-3 text-xs text-gray-400">Your key is stored locally and never shared.</p>
+              </div>
+            </div>
+          </div>
+        )}
+        <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-extrabold text-gray-800 mb-3">Create Your Assessment</h1>
+            <p className="text-lg text-gray-500 max-w-lg mx-auto">Choose how you want to build your assessment. Build manually question by question, or let AI generate one from your content.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+            {/* Build Your Own card */}
+            <button onClick={() => setAppMode('build')}
+              className="group bg-white rounded-3xl shadow-sm border-2 border-gray-100 hover:border-indigo-300 hover:shadow-lg p-8 text-left transition-all duration-200 flex flex-col">
+              <div className="text-5xl mb-5">✏️</div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-indigo-700 transition">Build Your Own</h2>
+              <p className="text-sm text-gray-500 mb-5 flex-1">Create your assessment question by question. Input questions manually, choose question types, and add visuals from your Model Bank.</p>
+              <div className="space-y-1.5 mb-6">
+                {['Multiple Choice, Short Answer, Fill in the Blank, True/False, and more','Mark correct answers and add answer key notes','Add visual models from your Model Bank','Reorder and edit questions anytime'].map((feat, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-gray-500">
+                    <span className="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+                    <span>{feat}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="w-full bg-indigo-600 group-hover:bg-indigo-700 text-white text-sm font-bold py-3 rounded-2xl text-center transition">
+                Start Building →
+              </div>
+            </button>
+
+            {/* AI Generate card */}
+            <button onClick={() => setAppMode('generate')}
+              className="group bg-white rounded-3xl shadow-sm border-2 border-gray-100 hover:border-violet-300 hover:shadow-lg p-8 text-left transition-all duration-200 flex flex-col">
+              <div className="text-5xl mb-5">✨</div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-violet-700 transition">AI Generate</h2>
+              <p className="text-sm text-gray-500 mb-5 flex-1">Upload a PDF, paste text, enter a URL, or describe a topic. Claude AI generates a complete, formatted assessment in seconds.</p>
+              <div className="space-y-1.5 mb-6">
+                {['Upload existing tests to create parallel forms','Generate from scratch with any topic or standard','Visual models (arrays, number lines, fraction bars) auto-added','Edit questions by format after generation'].map((feat, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-gray-500">
+                    <span className="text-violet-500 mt-0.5 flex-shrink-0">✓</span>
+                    <span>{feat}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="w-full bg-violet-600 group-hover:bg-violet-700 text-white text-sm font-bold py-3 rounded-2xl text-center transition">
+                Generate with AI →
+              </div>
+            </button>
+          </div>
+        </main>
+        <footer className="text-center py-6 text-xs text-gray-400">
+          Assessment Builder · Powered by Claude AI · Your API key is stored locally and never shared
+        </footer>
+      </div>
+    );
+  }
+
+  // ── Manual Builder mode ───────────────────────────────────────────────────
+  if (appMode === 'build') {
+    return (
+      <ManualBuilder
+        modelBank={modelBank}
+        onBack={() => setAppMode(null)}
+        gradeLevel={gradeLevel} setGradeLevel={setGradeLevel}
+        subject={subject} setSubject={setSubject}
+      />
+    );
+  }
+
+  // ── AI Generate mode (existing UI) ────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50">
       {/* Settings Drawer */}
@@ -2010,12 +2642,15 @@ export default function AssessmentBuilder() {
 
       {/* Header */}
       <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setAppMode(null)} className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition flex-shrink-0">
+            ← Back
+          </button>
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📝</span>
-            <span className="font-bold text-gray-800 text-lg">Assessment Builder</span>
+            <span className="text-2xl">✨</span>
+            <span className="font-bold text-gray-800 text-lg">AI Generate</span>
           </div>
-          <button onClick={() => setShowSettings(true)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
+          <button onClick={() => setShowSettings(true)} className="ml-auto flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
             <span>⚙</span> Settings
           </button>
         </div>
@@ -2278,11 +2913,14 @@ export default function AssessmentBuilder() {
                       <button onClick={() => setViewMode('preview')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'preview' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>
                         👁 Preview
                       </button>
+                      <button onClick={() => setViewMode('questions')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'questions' ? 'bg-white shadow text-violet-700' : 'text-gray-500')}>
+                        📋 Questions
+                      </button>
                       <button onClick={() => setViewMode('edit')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'edit' ? 'bg-white shadow text-emerald-700' : 'text-gray-500')}>
-                        ✏️ Edit
+                        ✏️ Raw Edit
                       </button>
                       <button onClick={() => setViewMode('raw')} className={'px-3 py-1 text-xs font-semibold rounded-md transition ' + (viewMode === 'raw' ? 'bg-white shadow text-indigo-700' : 'text-gray-500')}>
-                        📄 Raw
+                        📄 Text
                       </button>
                     </div>
                     <div className="flex gap-2">
@@ -2296,8 +2934,13 @@ export default function AssessmentBuilder() {
                   </div>
                 </div>
 
-                {/* Preview / Edit / Raw content */}
-                {viewMode === 'preview' ? (
+                {/* Preview / Questions / Edit / Raw content */}
+                {viewMode === 'questions' && outputTab !== 'answerKey' ? (
+                  <StructuredEditor
+                    text={currentTabContent}
+                    onTextChange={newText => setEditedSections(prev => ({ ...prev, [outputTab]: newText }))}
+                  />
+                ) : viewMode === 'preview' ? (
                   <div ref={previewRef}>
                   {outputTab === 'answerKey' ? (
                     <AnswerKeyPreview text={currentTabContent}/>
@@ -2343,7 +2986,7 @@ export default function AssessmentBuilder() {
 
                 {/* Pro tip */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                  <strong>Pro tip:</strong> Use <strong>✏️ Edit</strong> to tweak questions, then click <strong>Copy</strong> to paste with full formatting into Google Docs or Word. Use <strong>Download PDF</strong> for a print-ready version.
+                  <strong>Pro tip:</strong> Use <strong>📋 Questions</strong> to edit question text, formats (MC, Short Answer, Fill in Blank…), and answer choices. Use <strong>✏️ Raw Edit</strong> for free-form text editing. Click <strong>Copy</strong> to paste with full formatting into Google Docs.
                 </div>
               </>
             ) : (
