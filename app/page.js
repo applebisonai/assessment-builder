@@ -1020,7 +1020,21 @@ function parseAssessment(text) {
   }
   if (currentQ) questions.push(currentQ);
 
-  return { title: titleLine, subtitle: subtitleLine, questions };
+  // ── Visual inference pass ──────────────────────────────────────────────────
+  // For questions that reliably signal a visual type in their text but had no
+  // marker in the source (e.g. plain-text PDFs), auto-add the correct marker.
+  const inferredQuestions = questions.map(q => {
+    if (q.models && q.models.length > 0) return q; // already has a visual
+    const full = ((q.text || '') + ' ' + (q.extra || []).join(' ')).toLowerCase();
+
+    // Gridded response bubble grid
+    if (/record.{0,25}(on the grid|your answer on the grid)|fill.{0,15}(the )?bubbles?/.test(full)) {
+      return { ...q, models: ['[GRID_RESPONSE: cols=4]'] };
+    }
+    return q;
+  });
+
+  return { title: titleLine, subtitle: subtitleLine, questions: inferredQuestions };
 }
 
 // ─── Question Type Configs ─────────────────────────────────────────────────

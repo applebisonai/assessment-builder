@@ -19,9 +19,8 @@ function fixMarkerTypeMismatches(text) {
     { pattern: /\bplace\s+value\s+(chart|table)\b/i,                  allowed: ['PV_CHART'] },
     { pattern: /\bbase[\s-]?10\b/i,                                   allowed: ['BASE10'] },
     { pattern: /\b(record.{0,20}grid|fill.{0,10}bubbles?)\b/i,        allowed: ['GRID_RESPONSE'] },
-    { pattern: /\b(shaded|pattern).{0,30}(chart|grid|number)\b/i,     allowed: ['NUM_CHART'] },
-    { pattern: /\b(yes\s+or\s+no|yes\s*/\s*no)\b/i,                   allowed: ['YES_NO_TABLE'] },
-    { pattern: /\b(table|tally|survey|data)\b/i,                       allowed: ['DATA_TABLE', 'FUNC_TABLE'] },
+    { pattern: /\b(shaded|pattern).{0,30}(chart|hundreds.{0,10}chart)\b/i, allowed: ['NUM_CHART'] },
+    { pattern: /\b(yes\s+or\s+no)\b/i,                                allowed: ['YES_NO_TABLE'] },
   ];
 
   const lines = text.split('\n');
@@ -347,15 +346,37 @@ RULE 4 — COPY QUESTION FORMAT EXACTLY.
   Source: open response / show work        → Output: open response / show work
   Source: fill-in-the-blank               → Output: fill-in-the-blank (same blank positions)
 
-RULE 5 — COPY VISUAL TYPES. NEVER SWAP THEM.
-  Source has an array → output gets an array [ARRAY: rows=R cols=C]
-  Source has a number line → output gets a number line [NUM_LINE: ...]
-  Source has a tens frame → output gets a tens frame [TENS_FRAME: ...]
-  Source has a fraction bar → output gets [FRACTION: N/D]
-  Source has equal groups → output gets [GROUPS: ...]
-  Source has a number bond → output gets [NUM_BOND: ...]
-  Source has a function table → output gets [FUNC_TABLE: ...]
-  NEVER replace an array with a number line or any other type.
+RULE 5 — MATCH VISUAL TYPES FROM SOURCE (TEXT OR MARKER).
+The source may be a plain-text PDF with no markers. In that case, READ the question text and
+TABLE/GRID STRUCTURE to decide whether a visual is needed.
+
+If source HAS a visual marker already → copy it to the output with updated values.
+If source DESCRIBES a visual in text → add the appropriate marker to the output.
+If source has no visual and does not describe one → no marker.
+
+Visual inference guide — add a marker whenever the source question:
+
+  Mentions "the array", "an array", "this array"         → [ARRAY: rows=R cols=C]  (match the new multiplication fact)
+  Mentions "the number line", "a number line"             → [NUM_LINE: min=0 max=M step=S]
+  Mentions "equal groups", "groups of ___"               → [GROUPS: groups=G items=I]
+  Mentions "number bond"                                  → [NUM_BOND: whole=W part1=P1 part2=P2]
+  Mentions "tens frame", "five frame"                     → [TENS_FRAME: filled=F total=10]
+  Mentions "area model", "box method"                     → [AREA_MODEL: collabels=... | rowlabels=...]
+  Mentions "fraction bar"                                 → [FRACTION: N/D]
+  Mentions "fraction circle"                              → [FRAC_CIRCLE: N/D]
+  Mentions "function table", "input/output table"         → [FUNC_TABLE: pairs=... | rule=...]
+  Mentions "place value chart"                            → [PV_CHART: number]
+  Mentions "base-10 blocks"                              → [BASE10: hundreds=H tens=T ones=O]
+  Mentions "the chart below", "shaded part of the chart", "hundreds chart", "number chart"
+                                                          → [NUM_CHART: start=S end=E cols=10 shaded=n1,n2,n3,...]
+  Says "record your answer on the grid" / "fill in the bubbles"
+                                                          → [GRID_RESPONSE: cols=4]
+  Has a data table in the source (rows of categories + numbers, e.g. insect counts, survey results)
+                                                          → [DATA_TABLE: header=Col1,Col2 | row1val1,row1val2 | ...]
+  Has a Yes/No decision table (rows of equations, student picks Yes or No for each)
+                                                          → [YES_NO_TABLE: equation1 | equation2 | ...]
+  Shows equal groups of objects used as a model (e.g. Maya's plates model)
+                                                          → [GROUPS: groups=G items=I]
 
 RULE 5a — ARRAY DIMENSIONS MUST MATCH THE MULTIPLICATION FACT IN THE QUESTION.
   Read the swapped question to find the multiplication fact, then set rows × cols accordingly.
@@ -369,11 +390,12 @@ RULE 5b — QUESTION TEXT MUST REFERENCE THE VISUAL TYPE.
   WRONG: [NUM_LINE: ...] before "What is 6 × 5?" — question never mentions a number line ✗
   CORRECT: [NUM_LINE: ...] before "Which equation matches this number line?" ✓
 
-RULE 6 — NEVER ADD VISUALS WHERE SOURCE HAS NONE.
-  If the source question has no pre-drawn model, the output gets no visual marker.
-  • "Use a model to represent..." → NO marker (student draws it — blank work space only)
-  • "Use any strategy. Show your work." → NO marker
-  • "420 ÷ 7 =" → NO marker (pure computation)
+RULE 6 — NEVER ADD VISUALS TO "SHOW YOUR WORK" OR PURE COMPUTATION QUESTIONS.
+  NO visual marker for these:
+  • "Use a model to represent..." — student draws it, don't show one
+  • "Use any strategy. Show your work." — blank work space only
+  • "420 ÷ 7 =" — pure computation, no model needed
+  • "Explain how you would..." — open response, no model needed
 
 RULE 7 — VISUAL MARKER FORMAT.
 Place the marker on its own line immediately BEFORE the question number.
