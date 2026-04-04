@@ -285,86 +285,93 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
 - Include notes on common misconceptions to watch for` : ''}`;
 
     let userContent;
+    let activeSystemPrompt = systemPrompt;
 
     if (fileContent) {
       const isImageFile = ['image/png','image/jpeg','image/gif','image/webp'].includes(fileMediaType);
+
+      // For file uploads use a completely separate system prompt focused on
+      // faithful transcription — NOT creative generation.
+      activeSystemPrompt = `You are a PARALLEL FORM GENERATOR. Your ONLY job is to reproduce the uploaded assessment almost word-for-word, swapping numbers and minor contexts. You are NOT writing a new assessment from scratch. You are making a parallel version.
+
+━━━ TRANSCRIPTION RULES ━━━
+
+RULE 1 — SAME NUMBER OF QUESTIONS, SAME ORDER.
+Count the questions in the source. Output exactly that many, in the same order. Do not add or remove any.
+
+RULE 2 — COPY EVERY QUESTION ALMOST WORD FOR WORD.
+Change ONLY these things:
+  • Specific numbers (e.g., 420 → 560)
+  • Specific proper names in word problems (e.g., "Maria" → "James")
+  • Specific objects/contexts in word problems (e.g., "apples" → "books")
+  • Answer choices — recalculate to match the new numbers
+Do NOT change: question wording, question structure, blank layout, sub-parts (a/b/c), skill being assessed.
+
+RULE 3 — COPY SECTION HEADERS AND DIRECTION LINES EXACTLY.
+  "Part A: Word Problems" → copy it exactly
+  "Use any strategy to solve. Show your work." → copy it exactly
+  "Directions: Circle the correct answer." → copy it exactly
+  These are NOT questions. They go on their own line, no number.
+
+RULE 4 — COPY QUESTION FORMAT EXACTLY.
+  Source: "The array shows ___ × ___."     → Output: "The array shows ___ × ___."   (keep blanks)
+  Source: "420 ÷ 7 ="                      → Output: "560 ÷ 8 ="                    (keep format)
+  Source: MC with 4 options (A B C D)      → Output: MC with 4 options (A B C D)
+  Source: sub-parts a) b) c)               → Output: sub-parts a) b) c)
+  Source: open response / show work        → Output: open response / show work
+  Source: fill-in-the-blank               → Output: fill-in-the-blank (same blank positions)
+
+RULE 5 — COPY VISUAL TYPES. NEVER SWAP THEM.
+  Source has an array → output gets an array [ARRAY: rows=R cols=C]
+  Source has a number line → output gets a number line [NUM_LINE: ...]
+  Source has a tens frame → output gets a tens frame [TENS_FRAME: ...]
+  Source has a fraction bar → output gets [FRACTION: N/D]
+  Source has equal groups → output gets [GROUPS: ...]
+  Source has a number bond → output gets [NUM_BOND: ...]
+  Source has a function table → output gets [FUNC_TABLE: ...]
+  NEVER replace an array with a number line or any other type.
+
+RULE 6 — NEVER ADD VISUALS WHERE SOURCE HAS NONE.
+  If the source question has no pre-drawn model, the output gets no visual marker.
+  • "Use a model to represent..." → NO marker (student draws it — blank work space only)
+  • "Use any strategy. Show your work." → NO marker
+  • "420 ÷ 7 =" → NO marker (pure computation)
+
+RULE 7 — VISUAL MARKER FORMAT.
+Place the marker on its own line immediately BEFORE the question number.
+Question text must NOT restate the marker values — say "this array", "the model shown".
+Available markers:
+  [ARRAY: rows=R cols=C]
+  [AREA_MODEL: collabels=20,3 | rowlabels=4]
+  [NUM_LINE: min=0 max=M step=S]
+  [NUM_LINE: min=0 max=M step=S jumps=yes]
+  [GROUPS: groups=G items=I]
+  [FRACTION: N/D]
+  [FRAC_CIRCLE: N/D]
+  [BAR_MODEL: v1,v2,v3]
+  [TAPE: v1:label,v2:label | brace=yes | total=X]
+  [BASE10: hundreds=H tens=T ones=O]
+  [PV_CHART: number]
+  [NUM_BOND: whole=W part1=P1 part2=P2]
+  [TENS_FRAME: filled=F total=10]
+  [FUNC_TABLE: pairs=1:3,2:6,3:? | rule=×3]
+
+RULE 8 — OUTPUT FORMAT.
+  Line 1: Assessment title${customTitle ? ` — use exactly: "${customTitle}"` : ' (same as source or close parallel)'}
+  Line 2: Directions/subtitle (same as source)
+  Then: questions numbered exactly as in source
+  Answer choices: A) B) C) D) format
+  Sub-parts: a) b) c) format
+  Standard tags: [3.OA.A.1] on their own line after a question
+  No asterisks, no markdown, no bold text.
+${includeVersionB ? `\nAfter all questions, write "VERSION B" on its own line, then repeat the same structure with a second set of swapped numbers/contexts.` : ''}
+${includeAnswerKey ? `\nAfter all questions, write "TEACHER ANSWER KEY" on its own line, then list answers: "1. C — explanation" for MC, computed value for fill-in-blank, sample answer for open response.` : ''}
+${standard ? `\nAlign to standard: ${standard}` : ''}`;
+
       userContent = [
         {
           type: 'text',
-          text: `Create a parallel ${gradeDisplay} ${subject} assessment based on the source document attached.
-
-YOUR ONLY JOB: Mirror the source as closely as possible — same question types, same skill sequence, same wording structure — but with different numbers and contexts. Do NOT rewrite from scratch.
-
-━━━ WHAT TO PRESERVE FROM THE SOURCE ━━━
-
-1. QUESTION FORMAT: Keep the exact format of each question.
-   • If source has fill-in-the-blank ("The array shows ___ × ___"), keep the blanks.
-   • If source has computation ("420 ÷ 7 ="), keep that format — just change the numbers.
-   • If source has MC with 4 options, keep MC. If open response, keep open response.
-   • If source has sub-parts (a, b, c), keep the sub-parts.
-
-2. SECTION HEADERS AND DIRECTIONS: Preserve direction lines and section headers.
-   • If source has "Part A: Word Problems" → keep that section header.
-   • If source has "Use any strategy to solve. Show your work." → keep that direction.
-   • If source has "Solve the equations below." → keep that direction.
-
-3. QUESTION STRUCTURE: Keep the same cognitive demand.
-   • Interpretation question ("What does this model show?") → keep interpretation question.
-   • Word problem → keep word problem (just change names, numbers, context).
-   • Computation problem → keep computation (just change the numbers).
-   • Conceptual question ("What does the factor ___ tell you?") → keep that question type.
-
-━━━ THE MOST IMPORTANT RULE ABOUT VISUALS ━━━
-
-🚫 NEVER add a visual marker to questions where the STUDENT creates the model:
-   • "Use a model to represent..." → NO marker (student draws it)
-   • "Use a different model to..." → NO marker (student draws it)
-   • "Use any strategy. Show your work." → NO marker
-   • "Draw a picture to show..." → NO marker
-   These MUST have blank work space. The teacher uses the Add Image button separately.
-
-🚫 NEVER add a visual marker to pure computation questions:
-   • "420 ÷ 7 =" → NO marker (just change to a new computation problem)
-   • "3 × 6 = ___" → NO marker
-
-✅ ONLY add a visual marker when the SOURCE shows a pre-drawn model that students read/interpret:
-   • Source shows a dot array (discrete items in rows/columns) → use [ARRAY: rows=R cols=C]
-   • Source shows a filled rectangle model (area, partial products) → use [AREA_MODEL: rows=R cols=C]
-   • Source shows a number line → students pick which equation matches → use [NUM_LINE: ...]
-   • Source shows equal groups → students pick which context it represents → use [GROUPS: ...]
-   • Source shows a bar model with equal segments → use [BAR_MODEL: ...]
-   • Source shows a fraction bar / strip → use [FRACTION: N/D]
-   • Source shows a fraction circle / pie → use [FRAC_CIRCLE: N/D]
-   • Source shows a number bond / part-part-whole → use [NUM_BOND: whole=W part1=P1 part2=P2]
-   • Source shows a tens frame or five frame → use [TENS_FRAME: filled=F total=10]
-   • Source shows an input-output / function table → use [FUNC_TABLE: pairs=...]
-   For anything else (photos of objects, complex diagrams), SKIP IT entirely.
-
-━━━ VISUAL MARKER RULES (when you do use one) ━━━
-  [ARRAY: rows=R cols=C]               dot array — individual circles, equal items per row and per column; small factors only
-  [AREA_MODEL: collabels=20,3 | rowlabels=4]  filled rectangle (box method) with dimension labels and partial products
-  [NUM_LINE: min=0 max=M step=S jumps=yes]  number line with hop arcs
-  [GROUPS: groups=G items=I]           equal groups (ovals with dots)
-  [FRACTION: N/D]                      fraction bar
-  [FRAC_CIRCLE: N/D]                   fraction circle (shaded sectors)
-  [BAR_MODEL: 4,4,4,4,4,4]           equal segment bar model
-  [BASE10: hundreds=H tens=T ones=O]  base-10 blocks
-  [NUM_BOND: whole=W part1=P1 part2=P2]  number bond / part-part-whole
-  [TENS_FRAME: filled=F total=10]      tens frame with counters
-  [FUNC_TABLE: pairs=1:3,2:6,3:? | rule=×3]  function/input-output table
-
-Rules:
-  • Write the marker on its own line BEFORE the question number.
-  • Question text must NOT state the marker dimensions. Say "this array" or "the model", not "a 4×6 array".
-  • If you are not 100% certain the marker matches the question exactly, leave it out.
-
-━━━ WHAT NOT TO DO ━━━
-  ✗ Don't add visuals to word problems or "show your work" questions
-  ✗ Don't change the question type (MC → open, computation → word problem)
-  ✗ Don't skip questions that require photos or complex diagrams — just omit the visual and keep the text
-  ✗ Don't restate marker values in the question text
-
-${standard ? 'Align to standard: ' + standard : ''}`
+          text: `Here is the source assessment. Read every question carefully. Then reproduce it following the transcription rules — same structure, same wording, same format — with only the numbers and minor contexts changed.`
         },
         {
           type: isImageFile ? 'image' : 'document',
@@ -382,7 +389,7 @@ ${standard ? 'Align to standard: ' + standard : ''}`
     const response = await client.messages.create({
       model: 'claude-opus-4-5',
       max_tokens: 4000,
-      system: systemPrompt,
+      system: activeSystemPrompt,
       messages: [{ role: 'user', content: userContent }]
     });
 
