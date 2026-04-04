@@ -1529,38 +1529,58 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const qTextRef = useRef();
   const dropZoneRef = useRef();
 
-  const loadImageFromItem = item => {
-    const blob = item.getAsFile();
+  const loadBlob = blob => {
     if (!blob) return;
     const reader = new FileReader();
     reader.onload = ev => setCustomImg(ev.target.result);
     reader.readAsDataURL(blob);
   };
 
-  const handlePaste = e => {
-    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-    if (item) { e.preventDefault(); loadImageFromItem(item); }
+  // Primary: clipboard API button — reads clipboard directly on user click, no focus needed
+  const [clipMsg, setClipMsg] = useState('');
+  const pasteFromClipboard = async () => {
+    setClipMsg('');
+    try {
+      if (!navigator.clipboard?.read) {
+        setClipMsg('Use Ctrl+V with the box focused, or browse for a file.');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      let found = false;
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            loadBlob(blob);
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (!found) setClipMsg('No image in clipboard — copy an image first, then try again.');
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setClipMsg('Clipboard access denied. Allow it in your browser or use "Browse for file" below.');
+      } else {
+        setClipMsg('Could not read clipboard. Try browsing for a file instead.');
+      }
+    }
   };
 
+  // Fallback: drop handler
   const handleDrop = e => {
     e.preventDefault();
     const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
-    if (file) { const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(file); }
+    if (file) loadBlob(file);
   };
 
-  // Auto-focus the drop zone when Custom Image is selected so onPaste fires
-  useEffect(() => {
-    if (visualType === 'custom') {
-      setTimeout(() => dropZoneRef.current?.focus(), 50);
-    }
-  }, [visualType]);
-
-  // Document-level paste listener — catches Ctrl+V regardless of which element has focus
+  // Fallback: document paste event
   useEffect(() => {
     if (visualType !== 'custom') return;
     const onDocPaste = e => {
       const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-      if (item) { e.preventDefault(); loadImageFromItem(item); }
+      if (item) { e.preventDefault(); loadBlob(item.getAsFile()); }
     };
     document.addEventListener('paste', onDocPaste);
     return () => document.removeEventListener('paste', onDocPaste);
@@ -1690,28 +1710,38 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         )}
 
         {visualType === 'custom' && (
-          <div className="space-y-1.5">
-            {/* Paste / drag-drop zone — clicking here focuses it for Ctrl+V */}
-            <div ref={dropZoneRef} tabIndex={0}
-              className="border-2 border-dashed border-gray-300 rounded p-4 text-center cursor-default hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-              onClick={() => dropZoneRef.current?.focus()}>
-              {customImg
-                ? <img src={customImg} alt="custom" className="max-h-24 mx-auto" />
-                : (
-                  <>
-                    <p className="text-xs font-medium text-gray-600">Click here, then press Ctrl+V to paste</p>
-                    <p className="text-xs text-gray-400 mt-0.5">or drag and drop an image onto this box</p>
-                  </>
-                )}
-            </div>
-            {/* Browse button — separate so it doesn't steal focus from drop zone */}
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
-              📁 Browse for image file…
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(f); }} />
+          <div className="space-y-2">
+            {customImg ? (
+              <div className="text-center">
+                <img src={customImg} alt="custom" className="max-h-28 mx-auto border rounded mb-1" />
+                <button type="button" onClick={() => setCustomImg(null)}
+                  className="text-xs text-red-500 hover:underline">Remove image</button>
+              </div>
+            ) : (
+              <>
+                {/* Primary: clipboard API button */}
+                <button type="button" onClick={pasteFromClipboard}
+                  className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors">
+                  📋 Paste Image from Clipboard
+                </button>
+                {clipMsg && <p className="text-xs text-amber-600">{clipMsg}</p>}
+
+                {/* Drag-and-drop fallback */}
+                <div ref={dropZoneRef}
+                  className="border-2 border-dashed border-gray-200 rounded p-3 text-center text-xs text-gray-400"
+                  onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+                  or drag and drop an image here
+                </div>
+
+                {/* File browse fallback */}
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
+                  📁 Browse for image file…
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1964,27 +1994,48 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
 function ModelEditor({ marker, onSave, onClose }) {
   const [val, setVal] = useState(marker || '');
   const [pastedImg, setPastedImg] = useState(null);
+  const [clipMsg, setClipMsg] = useState('');
   const fileRef = useRef();
   const imgDropRef = useRef();
 
-  const loadImageFile = file => {
-    if (!file) return;
+  const loadBlob = blob => {
+    if (!blob) return;
     const reader = new FileReader();
     reader.onload = ev => setPastedImg(ev.target.result);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
+  };
+
+  const pasteFromClipboard = async () => {
+    setClipMsg('');
+    try {
+      if (!navigator.clipboard?.read) { setClipMsg('Use Ctrl+V or browse for a file.'); return; }
+      const items = await navigator.clipboard.read();
+      let found = false;
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) { loadBlob(await item.getType(type)); found = true; break; }
+        }
+        if (found) break;
+      }
+      if (!found) setClipMsg('No image in clipboard — copy an image first, then try again.');
+    } catch (err) {
+      setClipMsg(err.name === 'NotAllowedError'
+        ? 'Clipboard access denied. Allow it in your browser or use "Browse for file" below.'
+        : 'Could not read clipboard. Try browsing for a file instead.');
+    }
   };
 
   const handleDrop = e => {
     e.preventDefault();
     const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
-    if (file) loadImageFile(file);
+    if (file) loadBlob(file);
   };
 
-  // Document-level paste — catches Ctrl+V no matter what element is focused
+  // Fallback: document paste event
   useEffect(() => {
     const onDocPaste = e => {
       const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-      if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
+      if (item) { e.preventDefault(); loadBlob(item.getAsFile()); }
     };
     document.addEventListener('paste', onDocPaste);
     return () => document.removeEventListener('paste', onDocPaste);
@@ -2018,21 +2069,27 @@ function ModelEditor({ marker, onSave, onClose }) {
                 <ErrorBoundary><div>{preview}</div></ErrorBoundary>
               </div>
             )}
-            {/* Paste / drag-drop zone */}
-            <div ref={imgDropRef} tabIndex={0}
-              className="border-2 border-dashed border-gray-300 rounded p-4 text-center mb-2 cursor-default hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-              onClick={() => imgDropRef.current?.focus()}>
-              <p className="text-sm font-medium text-gray-600">Press Ctrl+V to paste an image</p>
-              <p className="text-xs text-gray-400 mt-0.5">or drag and drop an image here</p>
+            {/* Primary: clipboard API button */}
+            <button type="button" onClick={pasteFromClipboard}
+              className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors mb-2">
+              📋 Paste Image from Clipboard
+            </button>
+            {clipMsg && <p className="text-xs text-amber-600 mb-2">{clipMsg}</p>}
+
+            {/* Drag-and-drop fallback */}
+            <div ref={imgDropRef}
+              className="border-2 border-dashed border-gray-200 rounded p-3 text-center text-xs text-gray-400 mb-2"
+              onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+              or drag and drop an image here
             </div>
-            {/* Browse button — separate so it doesn't steal focus */}
+
+            {/* File browse fallback */}
             <button type="button" onClick={() => fileRef.current?.click()}
               className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50 mb-3">
               📁 Browse for image file…
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => loadImageFile(e.target.files[0])} />
+              onChange={e => loadBlob(e.target.files[0])} />
           </>
         )}
 
