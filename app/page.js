@@ -2510,13 +2510,14 @@ async function copyToGoogleDocs(questions) {
     } else if (q.type === 'answer-key') {
       html += `<p style="font-family:monospace;font-size:11pt;margin:0 0 2px 0">${q.text}</p>`;
     } else if (q.type === 'question') {
-      html += `<p style="margin:12px 0 2px 0"></p>`;
+      // Wrap each question in a page-break-safe container with extra top spacing
+      html += `<div style="page-break-inside:avoid;margin-top:28px">`;
 
       // Visual — use captured PNG if available, else fallback to table HTML
       if (q.marker) {
         const png = visualPngs[q.marker];
         if (png) {
-          html += `<p style="margin:4px 0"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
+          html += `<p style="margin:0 0 4px 0"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
         } else {
           html += visualToHtml(q.marker);
         }
@@ -2544,6 +2545,8 @@ async function copyToGoogleDocs(questions) {
           html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
         });
       }
+
+      html += `</div>`;
     }
   });
 
