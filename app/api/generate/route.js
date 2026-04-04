@@ -62,6 +62,15 @@ function fixMarkerTypeMismatches(text) {
   return out.join('\n');
 }
 
+// Strip any answer choices beyond D (E, F, G, ...) that the AI occasionally adds.
+// Multiple choice questions must have exactly A–D. Extra options are silently removed.
+function stripExtraChoices(text) {
+  return text
+    .split('\n')
+    .filter(line => !line.trim().match(/^[E-Ze-z][\.\)]\s/))
+    .join('\n');
+}
+
 export async function POST(request) {
   try {
     let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url, pastedText, apiKey;
@@ -421,7 +430,7 @@ ${standard ? `\nAlign to standard: ${standard}` : ''}`;
     });
 
     const rawResult = response.content[0].text;
-    const result = fixMarkerTypeMismatches(rawResult);
+    const result = stripExtraChoices(fixMarkerTypeMismatches(rawResult));
     return Response.json({ result });
 
   } catch (error) {

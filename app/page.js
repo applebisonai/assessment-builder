@@ -741,7 +741,10 @@ function parseAssessment(text) {
     }
 
     // Extra context lines (not a new question, not a choice)
-    if (currentQ && !trimmed.match(/^(TEACHER|ANSWER KEY|Version [AB])/i)) {
+    // Skip spurious E/F/G... choices beyond D — AI sometimes generates a 5th option
+    if (currentQ &&
+        !trimmed.match(/^(TEACHER|ANSWER KEY|Version [AB])/i) &&
+        !trimmed.match(/^[E-Ze-z][\.\)]\s/)) {
       currentQ.extra.push(trimmed);
     }
   }
