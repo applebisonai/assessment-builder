@@ -1,5 +1,32 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Component } from 'react';
+
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 flex items-center justify-center p-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-red-200 p-8 max-w-lg w-full text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Something went wrong</h2>
+            <p className="text-sm text-gray-500 mb-4">An unexpected error occurred. Try refreshing the page — your work may be recovered from local storage.</p>
+            <pre className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-3 text-left whitespace-pre-wrap mb-4 max-h-32 overflow-y-auto">
+              {this.state.error?.message || 'Unknown error'}
+            </pre>
+            <button onClick={() => window.location.reload()}
+              className="bg-indigo-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition">
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── SVG Visual Model Renderers ────────────────────────────────────────────
 
@@ -1607,7 +1634,7 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
               <p className="text-sm text-gray-500">The AI generated a response, but the question numbering format wasn't recognized. Switch to <strong>✏️ Raw Edit</strong> view to fix the formatting manually, or copy the raw text below and share it so we can improve the parser.</p>
             </div>
             <div className="flex justify-end mb-2">
-              <button onClick={() => navigator.clipboard?.writeText(text)}
+              <button onClick={() => navigator.clipboard?.writeText(text).catch(() => {})}
                 className="text-xs border border-amber-300 text-amber-700 bg-white rounded-lg px-3 py-1.5 hover:bg-amber-50 transition font-medium">
                 📋 Copy raw output
               </button>
@@ -1630,7 +1657,7 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
 // ─── Answer Key Preview ─────────────────────────────────────────────────────
 
 function AnswerKeyPreview({ text }) {
-  const lines = text.split('\n').filter(l => l.trim());
+  const lines = (text || '').split('\n').filter(l => l.trim());
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center gap-2 mb-4">
@@ -2492,7 +2519,7 @@ function StructuredEditor({ text, onTextChange }) {
   );
 }
 
-export default function AssessmentBuilder() {
+function AssessmentBuilderInner() {
   const [appMode, setAppMode] = useState(null); // null=landing | 'build' | 'generate'
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -2525,6 +2552,10 @@ export default function AssessmentBuilder() {
   const [bankSavedCount, setBankSavedCount] = useState(0); // how many auto-saved last generation
   const fileInputRef = useRef(null);
   const previewRef = useRef(null);
+  // skipNextPersist is set true while the load effect is running so the
+  // persist effect doesn't overwrite localStorage with the initial empty []
+  // before the loaded data has been applied.
+  const skipNextPersistRef = useRef(true);
 
   // Default starter items pre-loaded into a fresh bank
   const DEFAULT_BANK_ITEMS = [
@@ -2536,22 +2567,27 @@ export default function AssessmentBuilder() {
   ];
 
   useEffect(() => {
-    const saved = localStorage.getItem('anthropic_api_key');
-    if (saved) setApiKey(saved);
+    try { const saved = localStorage.getItem('anthropic_api_key'); if (saved) setApiKey(saved); } catch {}
     // Load model bank from localStorage; seed with defaults if first run
     try {
       const bankSaved = localStorage.getItem('assessBuilderBank');
       if (bankSaved) {
-        setModelBank(JSON.parse(bankSaved));
+        const parsed = JSON.parse(bankSaved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setModelBank(parsed);
+        } else {
+          setModelBank(DEFAULT_BANK_ITEMS);
+        }
       } else {
-        // First time — seed with starter templates
         setModelBank(DEFAULT_BANK_ITEMS);
       }
-    } catch {}
+    } catch { setModelBank(DEFAULT_BANK_ITEMS); }
   }, []);
 
-  // Persist model bank to localStorage whenever it changes
+  // Persist model bank to localStorage whenever it changes.
+  // Skip the very first run (initial [] before load effect fires).
   useEffect(() => {
+    if (skipNextPersistRef.current) { skipNextPersistRef.current = false; return; }
     try {
       localStorage.setItem('assessBuilderBank', JSON.stringify(modelBank));
     } catch {}
@@ -3318,5 +3354,13 @@ export default function AssessmentBuilder() {
         Assessment Builder * Powered by Claude AI * Your API key is stored locally and never shared
       </footer>
     </div>
+  );
+}
+
+export default function AssessmentBuilder() {
+  return (
+    <ErrorBoundary>
+      <AssessmentBuilderInner />
+    </ErrorBoundary>
   );
 }
