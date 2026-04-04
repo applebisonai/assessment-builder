@@ -80,10 +80,20 @@ Standard vector types (recreated automatically):
       Number bond with one missing part (student fills in).
   [FRACTION: N/D]
       Horizontal fraction bar shaded N out of D sections.
+      If N > D (improper fraction), automatically renders as multiple bars — e.g. [FRACTION: 5/3] shows 1 full bar + 2/3 bar.
   [FRAC_CIRCLE: N/D]
       Circle (pie) model shaded N out of D sectors.
+      If N > D (improper fraction), renders as multiple circles automatically.
+  [MIXED_NUM: whole=W n=N d=D]
+      Mixed number fraction bar. W whole bars + N/D partial bar. e.g. whole=2 n=1 d=3 → 2 and 1/3.
+  [MIXED_CIRCLE: whole=W n=N d=D]
+      Mixed number circle model. W full circles + N/D partial circle.
   [AREA_MODEL: cols=A,B rows=R]
-      Blank area model (multiplication). Cells are EMPTY — student fills in products.
+      Blank 1-row area model (multiplication). Cells are EMPTY — student fills in products.
+  [AREA_MODEL: cols=A,B rows=R,S]
+      Multi-digit area model. Comma-separate BOTH cols and rows for 2×2 or larger grids.
+      Example 23×14: [AREA_MODEL: cols=20,3 rows=10,4] → 2×2 grid with cells for 200,30,40,12
+      Example 3-digit: [AREA_MODEL: cols=200,40,7 rows=10,3] → 2×3 grid
   [AREA_MODEL: cols=A,B rows=R vals=V1,V2]
       Area model with products shown inside cells (use for DIVISION models where products are given).
   [BASE10: hundreds=H tens=T ones=O]
@@ -126,7 +136,11 @@ CHOOSING THE RIGHT MARKER:
   • Bar with labeled equal segments (multiplication/division model) → [BAR_MODEL: v,v,v,v]
   • Area rectangle for multiplication (blank cells) → [AREA_MODEL: cols=... rows=...]
   • Area rectangle for division (products shown inside) → [AREA_MODEL: cols=... rows=... vals=...]
-  • Fraction bar segments → [FRACTION: N/D]
+  • Fraction bar segments, proper fraction → [FRACTION: N/D]
+  • Improper fraction bar → [FRACTION: N/D] where N > D (auto renders multiple bars)
+  • Mixed number bar → [MIXED_NUM: whole=W n=N d=D]
+  • Mixed number circles → [MIXED_CIRCLE: whole=W n=N d=D]
+  • Multi-digit area model (e.g. 23×14) → [AREA_MODEL: cols=20,3 rows=10,4]
   • Real-world pictures (clipart, photographs) → [IMAGE: description]
   • Partial quotients long division work → [IMAGE: partial quotients]
   • Student draw/show-work blank → [WORK_SPACE]

@@ -154,33 +154,105 @@ function NumberBond({ whole, part1, part2 }) {
 
 function FractionBar({ n, d }) {
   const N = parseInt(n) || 1, D = Math.max(parseInt(d) || 4, 1);
-  const W = 220, segW = W / D, H = 36;
+  const barW = 140, H = 36, segW = barW / D, gap = 10, pad = 2;
+
+  // Simple proper fraction (N ≤ D): single bar
+  if (N <= D) {
+    return (
+      <svg width={barW + 4} height={H + 2} style={{ display: 'block' }}>
+        {Array.from({ length: D }, (_, i) => (
+          <rect key={i} x={pad + i * segW} y={1} width={segW - 1} height={H}
+            fill={i < N ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />
+        ))}
+      </svg>
+    );
+  }
+
+  // Improper fraction (N > D): render whole bars + partial bar
+  const wholeCount = Math.floor(N / D);
+  const remainder = N % D;
+  const hasPartial = remainder > 0;
+  const totalBars = wholeCount + (hasPartial ? 1 : 0);
+  const totalW = totalBars * barW + (totalBars - 1) * gap + pad * 2;
   return (
-    <svg width={W + 2} height={H + 2} style={{ display: 'block' }}>
-      {Array.from({ length: D }, (_, i) => (
-        <rect key={i} x={1 + i * segW} y={1} width={segW - 1} height={H}
-          fill={i < N ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />
+    <svg width={totalW} height={H + 22} style={{ display: 'block' }}>
+      {Array.from({ length: wholeCount }, (_, bi) => (
+        <g key={`w${bi}`}>
+          {Array.from({ length: D }, (_, si) => (
+            <rect key={si} x={pad + bi * (barW + gap) + si * segW} y={1}
+              width={segW - 1} height={H} fill="#93c5fd" stroke="#334155" strokeWidth={1.5} />
+          ))}
+          <text x={pad + bi * (barW + gap) + barW / 2} y={H + 17}
+            textAnchor="middle" fontSize={10} fill="#6b7280">1 whole</text>
+        </g>
       ))}
+      {hasPartial && (
+        <g>
+          {Array.from({ length: D }, (_, si) => (
+            <rect key={si} x={pad + wholeCount * (barW + gap) + si * segW} y={1}
+              width={segW - 1} height={H}
+              fill={si < remainder ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />
+          ))}
+          <text x={pad + wholeCount * (barW + gap) + barW / 2} y={H + 17}
+            textAnchor="middle" fontSize={10} fill="#6b7280">{remainder}/{D}</text>
+        </g>
+      )}
     </svg>
   );
 }
 
 function FractionCircle({ n, d }) {
   const N = parseInt(n) || 1, D = Math.max(parseInt(d) || 4, 1);
-  const R = 50, cx = 56, cy = 56;
-  const slices = Array.from({ length: D }, (_, i) => {
+  const R = 44, circleD = R * 2 + 12, gap = 10;
+
+  // Build one circle SVG group at given cx/cy
+  const makeCircle = (cx, cy, filledN) => Array.from({ length: D }, (_, i) => {
     const a0 = (i / D) * 2 * Math.PI - Math.PI / 2;
     const a1 = ((i + 1) / D) * 2 * Math.PI - Math.PI / 2;
     const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0);
     const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
     const large = D === 1 ? 1 : 0;
-    return `M${cx},${cy} L${x0},${y0} A${R},${R} 0 ${large},1 ${x1},${y1} Z`;
+    const path = `M${cx},${cy} L${x0},${y0} A${R},${R} 0 ${large},1 ${x1},${y1} Z`;
+    return <path key={i} d={path} fill={i < filledN ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />;
   });
+
+  // Simple proper fraction (N ≤ D): single circle
+  if (N <= D) {
+    const cx = circleD / 2, cy = circleD / 2;
+    return (
+      <svg width={circleD} height={circleD} style={{ display: 'block' }}>
+        {makeCircle(cx, cy, N)}
+      </svg>
+    );
+  }
+
+  // Improper fraction (N > D): multiple circles
+  const wholeCount = Math.floor(N / D);
+  const remainder = N % D;
+  const hasPartial = remainder > 0;
+  const totalCircles = wholeCount + (hasPartial ? 1 : 0);
+  const totalW = totalCircles * circleD + (totalCircles - 1) * gap;
+  const cy = circleD / 2;
   return (
-    <svg width={112} height={112} style={{ display: 'block' }}>
-      {slices.map((d2, i) => (
-        <path key={i} d={d2} fill={i < N ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />
-      ))}
+    <svg width={totalW} height={circleD + 20} style={{ display: 'block' }}>
+      {Array.from({ length: wholeCount }, (_, bi) => {
+        const cx = bi * (circleD + gap) + circleD / 2;
+        return (
+          <g key={`w${bi}`}>
+            {makeCircle(cx, cy, D)}
+            <text x={cx} y={circleD + 15} textAnchor="middle" fontSize={10} fill="#6b7280">1 whole</text>
+          </g>
+        );
+      })}
+      {hasPartial && (() => {
+        const cx = wholeCount * (circleD + gap) + circleD / 2;
+        return (
+          <g key="frac">
+            {makeCircle(cx, cy, remainder)}
+            <text x={cx} y={circleD + 15} textAnchor="middle" fontSize={10} fill="#6b7280">{remainder}/{D}</text>
+          </g>
+        );
+      })()}
     </svg>
   );
 }
@@ -489,6 +561,18 @@ function parseVisualModel(marker) {
     const [n, d] = frac.split('/');
     return <FractionCircle n={n} d={d} />;
   }
+  // Mixed number bar: whole=W n=N d=D  → convert to improper → FractionBar auto-renders multi bars
+  if (m.startsWith('[MIXED_NUM:')) {
+    const D = Math.max(parseInt(kv.d) || 4, 1);
+    const totalN = (parseInt(kv.whole) || 0) * D + (parseInt(kv.n) || 0);
+    return <FractionBar n={totalN} d={D} />;
+  }
+  // Mixed number circle: same logic → FractionCircle auto-renders multi circles
+  if (m.startsWith('[MIXED_CIRCLE:')) {
+    const D = Math.max(parseInt(kv.d) || 4, 1);
+    const totalN = (parseInt(kv.whole) || 0) * D + (parseInt(kv.n) || 0);
+    return <FractionCircle n={totalN} d={D} />;
+  }
   if (m.startsWith('[AREA_MODEL:')) {
     return <AreaModel cols={kv.cols} rows={kv.rows} vals={kv.vals} />;
   }
@@ -552,7 +636,7 @@ function parseAssessment(text) {
   let current = null;
   let inVersionB = false;
   let inAnswerKey = false;
-  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
+  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
 
   const flush = () => { if (current) { questions.push(current); current = null; } };
 
@@ -652,9 +736,12 @@ const VISUAL_TYPES_LIST = [
   { id: 'GROUPS', label: 'Groups / Ovals' },
   { id: 'TENS_FRAME', label: 'Tens Frame' },
   { id: 'NUM_BOND', label: 'Number Bond' },
-  { id: 'FRACTION', label: 'Fraction Bar' },
-  { id: 'FRAC_CIRCLE', label: 'Fraction Circle' },
-  { id: 'AREA_MODEL', label: 'Area Model' },
+  { id: 'FRACTION', label: 'Fraction Bar (proper / improper)' },
+  { id: 'FRAC_CIRCLE', label: 'Fraction Circle (proper / improper)' },
+  { id: 'MIXED_NUM', label: 'Mixed Number Bar' },
+  { id: 'MIXED_CIRCLE', label: 'Mixed Number Circle' },
+  { id: 'AREA_MODEL', label: 'Area Model (multi-digit)' },
+  { id: 'BASE10', label: 'Place Value Blocks' },
   { id: 'BAR_MODEL', label: 'Bar Model' },
   { id: 'DATA_TABLE', label: 'Data Table' },
   { id: 'WORK_SPACE', label: 'Work Space (blank box)' },
@@ -698,13 +785,38 @@ function VisualParamForm({ type, params, onChange }) {
       return <div className="flex flex-wrap gap-2">{inp('Whole', 'whole')}{inp('Part 1', 'part1')}{inp('Part 2', 'part2')}</div>;
     case 'FRACTION':
     case 'FRAC_CIRCLE':
-      return <div className="flex gap-2">{inp('Numerator', 'n', { type: 'number', min: 0 })}{inp('Denominator', 'd', { type: 'number', min: 1 })}</div>;
+      return (
+        <div className="space-y-1">
+          <div className="flex gap-2">{inp('Numerator', 'n', { type: 'number', min: 0 })}{inp('Denominator', 'd', { type: 'number', min: 1 })}</div>
+          <p className="text-xs text-slate-400">Tip: if numerator &gt; denominator, renders as improper fraction (multiple bars/circles)</p>
+        </div>
+      );
+    case 'MIXED_NUM':
+    case 'MIXED_CIRCLE':
+      return (
+        <div className="space-y-1">
+          <div className="flex gap-2">{inp('Whole #', 'whole', { type: 'number', min: 0 })}{inp('Numerator', 'n', { type: 'number', min: 0 })}{inp('Denominator', 'd', { type: 'number', min: 1 })}</div>
+          <p className="text-xs text-slate-400">e.g. Whole=2, N=1, D=3 → 2 and 1/3</p>
+        </div>
+      );
     case 'AREA_MODEL':
       return (
         <div className="space-y-1">
-          <label className="text-xs block">Column values (comma-sep) <input value={params.cols || ''} onChange={e => set('cols', e.target.value)} placeholder="e.g. 20,7" className="border rounded p-1 w-28 ml-1" /></label>
-          <label className="text-xs block">Row values (comma-sep) <input value={params.rows || ''} onChange={e => set('rows', e.target.value)} placeholder="e.g. 4" className="border rounded p-1 w-28 ml-1" /></label>
-          <label className="text-xs block">Cell values (optional) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 80,56" className="border rounded p-1 w-28 ml-1" /></label>
+          <label className="text-xs block">Column values (comma-sep) <input value={params.cols || ''} onChange={e => set('cols', e.target.value)} placeholder="e.g. 20,3 or 200,40,7" className="border rounded p-1 w-36 ml-1" /></label>
+          <label className="text-xs block">Row values (comma-sep) <input value={params.rows || ''} onChange={e => set('rows', e.target.value)} placeholder="e.g. 10,4 or 30,2" className="border rounded p-1 w-36 ml-1" /></label>
+          <label className="text-xs block">Cell values (optional, comma-sep) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 200,6,400,12" className="border rounded p-1 w-36 ml-1" /></label>
+          <p className="text-xs text-slate-400">Multi-digit: cols=20,3 rows=10,4 → 2×2 grid for 23×14</p>
+        </div>
+      );
+    case 'BASE10':
+      return (
+        <div className="space-y-1">
+          <div className="flex gap-2">
+            {inp('Hundreds', 'hundreds', { type: 'number', min: 0, max: 9 })}
+            {inp('Tens', 'tens', { type: 'number', min: 0, max: 9 })}
+            {inp('Ones', 'ones', { type: 'number', min: 0, max: 9 })}
+          </div>
+          <p className="text-xs text-slate-400">Shows flat squares (100s), rods (10s), and unit cubes (1s)</p>
         </div>
       );
     case 'BAR_MODEL':
@@ -743,8 +855,11 @@ function paramsToMarker(type, params) {
   if (type === 'NUM_BOND') return `[NUM_BOND: whole=${params.whole || ''} part1=${params.part1 || ''} part2=${params.part2 || '?'}]`;
   if (type === 'FRACTION') return `[FRACTION: ${params.n || 1}/${params.d || 4}]`;
   if (type === 'FRAC_CIRCLE') return `[FRAC_CIRCLE: ${params.n || 1}/${params.d || 4}]`;
+  if (type === 'MIXED_NUM') return `[MIXED_NUM: whole=${params.whole || 1} n=${params.n || 1} d=${params.d || 3}]`;
+  if (type === 'MIXED_CIRCLE') return `[MIXED_CIRCLE: whole=${params.whole || 1} n=${params.n || 1} d=${params.d || 3}]`;
+  if (type === 'BASE10') return `[BASE10: hundreds=${params.hundreds || 0} tens=${params.tens || 0} ones=${params.ones || 0}]`;
   if (type === 'AREA_MODEL') {
-    let m = `[AREA_MODEL: cols=${params.cols || '20,7'} rows=${params.rows || '4'}`;
+    let m = `[AREA_MODEL: cols=${params.cols || '20,7'} rows=${params.rows || '10,4'}`;
     if (params.vals) m += ` vals=${params.vals}`;
     return m + ']';
   }
@@ -1440,21 +1555,60 @@ function visualToHtml(marker) {
     </tbody></table>`;
   }
 
-  // ── FRACTION BAR ──
-  if (m.startsWith('FRACTION:')) {
-    const frac = m.replace('FRACTION:', '').trim();
-    const [ns, ds] = frac.split('/');
-    const n = parseInt(ns) || 0, d = parseInt(ds) || 1;
-    let t = `<table style="${tbl}"><tbody><tr>`;
-    for (let i = 1; i <= d; i++)
-      t += `<td style="${cell}width:32px;height:28px;background:${i <= n ? '#334155' : '#fff'}"></td>`;
+  // ── FRACTION BAR (proper + improper) ──
+  if (m.startsWith('FRACTION:') || m.startsWith('MIXED_NUM:')) {
+    let n, d;
+    if (m.startsWith('MIXED_NUM:')) {
+      const whole = parseInt((m.match(/whole=(\d+)/) || [])[1]) || 0;
+      n = whole * (parseInt((m.match(/d=(\d+)/) || [])[1]) || 1) + (parseInt((m.match(/\bn=(\d+)/) || [])[1]) || 0);
+      d = parseInt((m.match(/d=(\d+)/) || [])[1]) || 1;
+    } else {
+      const frac = m.replace('FRACTION:', '').trim();
+      [n, d] = frac.split('/').map(Number);
+    }
+    n = parseInt(n) || 0; d = Math.max(parseInt(d) || 1, 1);
+    const wholeCount = Math.floor(n / d);
+    const remainder = n % d;
+    const hasPartial = remainder > 0 || wholeCount === 0;
+    const totalBars = wholeCount + (hasPartial ? 1 : 0);
+    let t = `<table style="${tbl}border:none;"><tbody><tr>`;
+    for (let bi = 0; bi < wholeCount; bi++) {
+      t += `<td style="border:none;padding-right:6px"><table style="border-collapse:collapse;display:inline-table"><tbody><tr>`;
+      for (let si = 0; si < d; si++) t += `<td style="${cell}width:20px;height:22px;background:#93c5fd"></td>`;
+      t += `</tr></tbody></table><br/><span style="font-size:9pt;color:#666">1 whole</span></td>`;
+    }
+    if (hasPartial) {
+      t += `<td style="border:none;padding-right:6px"><table style="border-collapse:collapse;display:inline-table"><tbody><tr>`;
+      for (let si = 0; si < d; si++) t += `<td style="${cell}width:20px;height:22px;background:${si < remainder ? '#93c5fd' : '#fff'}"></td>`;
+      t += `</tr></tbody></table><br/><span style="font-size:9pt;color:#666">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</span></td>`;
+    }
     return t + '</tr></tbody></table>';
   }
 
-  // ── FRACTION CIRCLE ──
-  if (m.startsWith('FRAC_CIRCLE:')) {
-    const frac = m.replace('FRAC_CIRCLE:', '').trim();
-    return `<p style="border:2px solid #333;border-radius:50%;width:64px;height:64px;line-height:64px;text-align:center;font-size:10pt;margin:8px 0">${frac}</p>`;
+  // ── FRACTION CIRCLE (proper + improper) ──
+  if (m.startsWith('FRAC_CIRCLE:') || m.startsWith('MIXED_CIRCLE:')) {
+    let n, d;
+    if (m.startsWith('MIXED_CIRCLE:')) {
+      const whole = parseInt((m.match(/whole=(\d+)/) || [])[1]) || 0;
+      d = parseInt((m.match(/d=(\d+)/) || [])[1]) || 1;
+      n = whole * d + (parseInt((m.match(/\bn=(\d+)/) || [])[1]) || 0);
+    } else {
+      const frac = m.replace('FRAC_CIRCLE:', '').trim();
+      [n, d] = frac.split('/').map(Number);
+    }
+    n = parseInt(n) || 0; d = Math.max(parseInt(d) || 1, 1);
+    const wholeCount = Math.floor(n / d);
+    const remainder = n % d;
+    const hasPartial = remainder > 0 || wholeCount === 0;
+    const totalCircles = wholeCount + (hasPartial ? 1 : 0);
+    // Represent circles as simple labeled pies using unicode pie symbol
+    let t = `<table style="${tbl}border:none;"><tbody><tr>`;
+    for (let bi = 0; bi < wholeCount; bi++)
+      t += `<td style="border:none;text-align:center;padding:0 6px"><div style="border:2px solid #333;border-radius:50%;width:52px;height:52px;background:#93c5fd;line-height:52px;text-align:center;font-size:9pt"></div><div style="font-size:9pt;color:#666;margin-top:2px">1 whole</div></td>`;
+    if (hasPartial) {
+      t += `<td style="border:none;text-align:center;padding:0 6px"><div style="border:2px solid #333;border-radius:50%;width:52px;height:52px;background:linear-gradient(to right,#93c5fd 50%,#fff 50%);line-height:52px;text-align:center;font-size:9pt">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</div><div style="font-size:9pt;color:#666;margin-top:2px">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</div></td>`;
+    }
+    return t + '</tr></tbody></table>';
   }
 
   // ── AREA MODEL ──
@@ -1698,14 +1852,38 @@ function copyToGoogleDocs(questions) {
     })
     .join('\n\n');
 
+  // Use execCommand('copy') on a rendered contenteditable div —
+  // this is the most reliable way to get HTML (including tables) into Google Docs.
+  // ClipboardItem text/html is often ignored by Docs in favor of plain text.
   try {
-    const htmlBlob = new Blob([html], { type: 'text/html' });
-    const textBlob = new Blob([plain], { type: 'text/plain' });
-    navigator.clipboard.write([
-      new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })
-    ]).catch(() => navigator.clipboard.writeText(plain).catch(() => {}));
+    const bodyHtml = html.replace(/^<html><body[^>]*>/, '').replace(/<\/body><\/html>$/, '');
+    const div = document.createElement('div');
+    div.setAttribute('contenteditable', 'true');
+    div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.01;pointer-events:none;width:600px;';
+    div.innerHTML = bodyHtml;
+    document.body.appendChild(div);
+
+    div.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(div);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const ok = document.execCommand('copy');
+    sel.removeAllRanges();
+    document.body.removeChild(div);
+
+    if (!ok) throw new Error('execCommand failed');
   } catch {
-    navigator.clipboard.writeText(plain).catch(() => {});
+    // Fallback: ClipboardItem API
+    try {
+      const htmlBlob = new Blob([html], { type: 'text/html' });
+      const textBlob = new Blob([plain], { type: 'text/plain' });
+      navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).catch(() => {});
+    } catch {
+      navigator.clipboard.writeText(plain).catch(() => {});
+    }
   }
 
   window.open('https://docs.google.com/document/create', '_blank');
