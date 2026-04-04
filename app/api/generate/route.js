@@ -86,6 +86,14 @@ For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate li
   [FRACTION: 2 1/4]
   What is 1 2/4 + 2 1/4?
 
+CRITICAL — USE EXACT VALUES FROM EACH QUESTION IN EVERY MARKER:
+- The visual must show the EXACT numbers used in that specific question — not a generic example.
+- If the question asks about 3/4, write [FRACTION: 3/4] — NOT [FRACTION: 1/2].
+- If the question asks about the number 342, write [BASE10: hundreds=3 tens=4 ones=2] — NOT [BASE10: hundreds=1 tens=2 ones=3].
+- If the question asks "What is 2/5 + 1/5?", place [FRACTION: 2/5] and [FRACTION: 1/5] before that question.
+- If a number line question counts by 5s from 0 to 50, write [NUM_LINE: min=0 max=50 step=5] — not arbitrary values.
+- Always derive the marker spec directly from the numbers in the question. The visual is a representation of THAT question's specific content.
+
 CRITICAL — WHEN TO USE VISUAL MODELS:
 - If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
 - Do NOT skip visuals for questions about fractions, place value, number lines, or part-whole relationships if those visuals appear in the source.
@@ -137,7 +145,7 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
 
 STEP 1 — Carefully examine every visual in the document: fraction strips, number lines, base-10 blocks, bar models, place value charts, tape diagrams, and any other math representations.
 
-STEP 2 — For every question you write that tests a concept shown visually in the document, place the matching visual model marker on its own line immediately before that question. Use the exact same representation type as the source (e.g. if the source shows fraction strips for a fraction question, use [FRACTION:]; if it shows base-10 blocks for a place value question, use [BASE10:]).
+STEP 2 — For every question you write that tests a concept shown visually in the document, place the matching visual model marker on its own line immediately before that question. Use the exact same representation type as the source (e.g. if the source shows fraction strips, use [FRACTION:]; if it shows base-10 blocks, use [BASE10:]). CRITICAL: the marker must use the EXACT values from that specific question — if the question is about 3/4, write [FRACTION: 3/4]; if it's about the number 205, write [BASE10: hundreds=2 tens=0 ones=5]; if the number line counts by 2s to 20, write [NUM_LINE: min=0 max=20 step=2]. Never use placeholder or generic values.
 
 STEP 3 — Do not skip visuals. If the source document is heavy with visuals, your assessment should match that density.`
         },
