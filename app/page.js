@@ -1296,7 +1296,10 @@ function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
                   </div>
                   {/* Name + type badge */}
                   <p className="text-xs font-semibold text-gray-700 mt-2 text-center truncate" title={item.name}>{item.name}</p>
-                  <p className="text-xs text-violet-400 text-center font-medium">{item.type}</p>
+                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                    <p className="text-xs text-violet-400 font-medium">{item.type}</p>
+                    {item.autoSaved && <span className="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 px-1 rounded font-medium">auto</span>}
+                  </div>
                   {/* Action buttons */}
                   <div className="flex gap-1 mt-2.5">
                     <button onClick={() => onInsert(item.marker)}
@@ -1534,6 +1537,68 @@ function AnswerKeyPreview({ text }) {
   );
 }
 
+// ─── Auto-name a marker for the Model Bank ──────────────────────────────────
+
+function autoNameMarker(type, spec) {
+  switch (type) {
+    case 'ARRAY': {
+      const r = spec.match(/rows=(\d+)/)?.[1];
+      const c = spec.match(/cols=(\d+)/)?.[1];
+      return r && c ? `Array ${r}×${c}` : 'Array';
+    }
+    case 'AREA_MODEL': {
+      const cl = spec.match(/collabels=([^|]+)/)?.[1]?.trim();
+      const rl = spec.match(/rowlabels=([^|]+)/)?.[1]?.trim();
+      return cl && rl ? `Area Model ${rl}×(${cl})` : 'Area Model';
+    }
+    case 'GROUPS': {
+      const g  = spec.match(/groups=(\d+)/)?.[1];
+      const it = spec.match(/items=(\d+)/)?.[1];
+      return g && it ? `${g} Groups of ${it}` : 'Equal Groups';
+    }
+    case 'NUM_LINE': {
+      const mn   = spec.match(/min=(-?\d+)/)?.[1];
+      const mx   = spec.match(/max=(\d+)/)?.[1];
+      const st   = spec.match(/step=(\d+)/)?.[1];
+      const jump = spec.includes('jumps=yes') ? ' +jumps' : '';
+      return mn !== undefined && mx
+        ? `Number Line ${mn}–${mx}${st && st !== '1' ? ` by ${st}` : ''}${jump}`
+        : 'Number Line';
+    }
+    case 'FRACTION':     return `Fraction Bar ${spec.trim()}`;
+    case 'FRAC_CIRCLE':  return `Fraction Circle ${spec.trim()}`;
+    case 'BASE10': {
+      const h = spec.match(/hundreds=(\d+)/)?.[1] || '0';
+      const t = spec.match(/tens=(\d+)/)?.[1]     || '0';
+      const o = spec.match(/ones=(\d+)/)?.[1]     || '0';
+      return `Base-10 ${h}h ${t}t ${o}o`;
+    }
+    case 'PV_CHART': {
+      const n = spec.match(/(\d+)/)?.[1];
+      return n ? `Place Value ${n}` : 'Place Value Chart';
+    }
+    case 'BAR_MODEL':    return `Bar Model (${spec.split('|')[0].trim()})`;
+    case 'TAPE':         return `Tape Diagram (${spec.split('|')[0].trim()})`;
+    case 'NUM_BOND': {
+      const w  = spec.match(/whole=(\d+)/)?.[1];
+      const p1 = spec.match(/part1=(\d+)/)?.[1];
+      const p2 = spec.match(/part2=(\d+)/)?.[1];
+      return w ? `Number Bond ${w} (${p1}+${p2})` : 'Number Bond';
+    }
+    case 'TENS_FRAME': {
+      const f = spec.match(/filled=(\d+)/)?.[1];
+      const t = spec.match(/total=(\d+)/)?.[1];
+      return f && t ? `Tens Frame ${f}/${t}` : 'Tens Frame';
+    }
+    case 'FUNC_TABLE': {
+      const r = spec.match(/rule=([^|]+)/)?.[1]?.trim();
+      return r ? `Function Table (${r})` : 'Function Table';
+    }
+    case 'IMAGE':  return 'Image';
+    default:       return type.replace(/_/g, ' ');
+  }
+}
+
 // ─── Main App ───────────────────────────────────────────────────────────────
 
 export default function AssessmentBuilder() {
@@ -1611,6 +1676,7 @@ export default function AssessmentBuilder() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setOutput(data.result);
+        autoSaveMarkersToBank(data.result);
       } else {
         setLoadingStep('Generating assessment...');
         const res = await fetch('/api/generate', {
@@ -1621,6 +1687,7 @@ export default function AssessmentBuilder() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setOutput(data.result);
+        autoSaveMarkersToBank(data.result);
       }
       setOutputTab('versionA');
       setViewMode('preview');
@@ -1696,6 +1763,36 @@ export default function AssessmentBuilder() {
     const type = inner.split(':')[0].trim();
     const newItem = { id: Date.now().toString() + Math.random().toString(36).slice(2), marker, name, type };
     setModelBank(prev => [...prev, newItem]);
+  };
+
+  // Auto-save all markers found in generated text into the Model Bank.
+  // Skips duplicates (by exact marker string). Runs after every generation.
+  const autoSaveMarkersToBank = (text) => {
+    const found = [];
+    const seen = new Set();
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      const m = trimmed.match(/^\[([A-Z][A-Z0-9_]*):(.+)\]$/);
+      if (m && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        found.push({ marker: trimmed, type: m[1], spec: m[2].trim() });
+      }
+    }
+    if (found.length === 0) return;
+    setModelBank(prev => {
+      const existingMarkers = new Set(prev.map(item => item.marker));
+      const toAdd = found
+        .filter(f => !existingMarkers.has(f.marker))
+        .map(f => ({
+          id: Date.now().toString() + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2),
+          marker: f.marker,
+          name: autoNameMarker(f.type, f.spec),
+          type: f.type,
+          autoSaved: true,   // flag so UI can show "from assessment"
+        }));
+      if (toAdd.length === 0) return prev;
+      return [...prev, ...toAdd];
+    });
   };
 
   const handleBrowseBank = (questionNum) => {
