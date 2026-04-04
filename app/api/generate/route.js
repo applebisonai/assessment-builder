@@ -18,6 +18,10 @@ function fixMarkerTypeMismatches(text) {
     { pattern: /\bbar\s+model\b/i,                                    allowed: ['BAR_MODEL'] },
     { pattern: /\bplace\s+value\s+(chart|table)\b/i,                  allowed: ['PV_CHART'] },
     { pattern: /\bbase[\s-]?10\b/i,                                   allowed: ['BASE10'] },
+    { pattern: /\b(record.{0,20}grid|fill.{0,10}bubbles?)\b/i,        allowed: ['GRID_RESPONSE'] },
+    { pattern: /\b(shaded|pattern).{0,30}(chart|grid|number)\b/i,     allowed: ['NUM_CHART'] },
+    { pattern: /\b(yes\s+or\s+no|yes\s*/\s*no)\b/i,                   allowed: ['YES_NO_TABLE'] },
+    { pattern: /\b(table|tally|survey|data)\b/i,                       allowed: ['DATA_TABLE', 'FUNC_TABLE'] },
   ];
 
   const lines = text.split('\n');
@@ -147,6 +151,10 @@ Allowed types (use ONLY these — never invent new types):
   [TENS_FRAME: filled=7 total=10]              tens frame (2×5 grid with counters)
   [TENS_FRAME: filled=3 total=5]               five frame (1×5 grid with counters)
   [FUNC_TABLE: pairs=1:3,2:6,3:9,4:? | rule=×3]      function/input-output table
+  [GRID_RESPONSE: cols=4]                          student bubble-in answer grid (for questions that say "Record on the grid" or "fill in the bubbles")
+  [NUM_CHART: start=1 end=40 cols=10 shaded=3,9,15,21,27,33,39]  number chart/hundreds chart with highlighted cells
+  [DATA_TABLE: header=Category,Count | Beetles,6 | Butterflies,6]  data table (for tally charts, frequency tables, survey results)
+  [YES_NO_TABLE: 42÷__=7 | __×9=54 | 36÷6=__ | 6×__=30]        yes/no decision table (each row gets a Yes/No bubble pair)
 
 ━━━ THE GOLDEN RULE ━━━
 The visual marker defines what the student SEES. The question asks them to REASON about it.
@@ -385,6 +393,10 @@ Available markers:
   [NUM_BOND: whole=W part1=P1 part2=P2]
   [TENS_FRAME: filled=F total=10]
   [FUNC_TABLE: pairs=1:3,2:6,3:? | rule=×3]
+  [GRID_RESPONSE: cols=4]
+  [NUM_CHART: start=1 end=40 cols=10 shaded=3,9,15,21,27,33,39]
+  [DATA_TABLE: header=Col1,Col2 | Row1val1,Row1val2 | Row2val1,Row2val2]
+  [YES_NO_TABLE: equation1 | equation2 | equation3]
 
 RULE 8 — OUTPUT FORMAT.
   Line 1: Assessment title${customTitle ? ` — use exactly: "${customTitle}"` : ' (same as source or close parallel)'}

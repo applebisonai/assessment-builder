@@ -549,6 +549,130 @@ function FunctionTable({ ruleLabel='Rule: ?', pairs=[], inputLabel='Input', outp
   );
 }
 
+// ─── GridResponse ────────────────────────────────────────────────────────────
+// Renders the standard gridded-response bubble grid used on standardized tests.
+// Students write the answer digits in boxes across the top, then bubble the
+// corresponding digit 0–9 in each column below.
+// Marker: [GRID_RESPONSE: cols=4]
+function GridResponse({ cols = 4 }) {
+  const digits = [0,1,2,3,4,5,6,7,8,9];
+  const cellW = 36, digitH = 28, boxH = 36;
+  const svgW = cellW * cols + 2;
+  const svgH = boxH + digits.length * digitH + 8;
+  const columns = Array.from({ length: cols });
+  return (
+    <div className="my-3 inline-block">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
+        {/* Write-in boxes at top */}
+        {columns.map((_, c) => (
+          <rect key={`box-${c}`} x={1 + c * cellW} y={1} width={cellW - 1} height={boxH - 1}
+            fill="#f9fafb" stroke="#9ca3af" strokeWidth="1.5" rx="2"/>
+        ))}
+        {/* Digit bubble rows */}
+        {digits.map((d, di) => (
+          columns.map((_, c) => {
+            const x = 1 + c * cellW;
+            const y = boxH + di * digitH;
+            const cx2 = x + cellW / 2;
+            const cy = y + digitH / 2;
+            const r = 11;
+            return (
+              <g key={`${c}-${d}`}>
+                <circle cx={cx2} cy={cy} r={r} fill="#f9fafb" stroke="#9ca3af" strokeWidth="1"/>
+                <text x={cx2} y={cy + 4} textAnchor="middle" fontSize="11" fill="#374151">{d}</text>
+              </g>
+            );
+          })
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+// ─── NumberChart ─────────────────────────────────────────────────────────────
+// Renders a number grid (like a hundreds chart or portion of one) with
+// optional shaded cells.
+// Marker: [NUM_CHART: start=1 end=40 cols=10 shaded=3,9,15,21,27,33,39]
+function NumberChart({ start = 1, end = 100, cols = 10, shaded = [] }) {
+  const shadedSet = new Set(shaded.map(Number));
+  const cellW = 36, cellH = 32;
+  const count = end - start + 1;
+  const rows = Math.ceil(count / cols);
+  const svgW = cellW * cols;
+  const svgH = cellH * rows;
+  const cells = [];
+  for (let n = start; n <= end; n++) {
+    const idx = n - start;
+    const row = Math.floor(idx / cols);
+    const col = idx % cols;
+    const x = col * cellW;
+    const y = row * cellH;
+    const isShaded = shadedSet.has(n);
+    cells.push(
+      <g key={n}>
+        <rect x={x} y={y} width={cellW} height={cellH}
+          fill={isShaded ? '#6366f1' : '#f9fafb'}
+          stroke="#d1d5db" strokeWidth="0.75"/>
+        <text x={x + cellW / 2} y={y + cellH / 2 + 5}
+          textAnchor="middle" fontSize="12"
+          fontWeight={isShaded ? '700' : '400'}
+          fill={isShaded ? 'white' : '#374151'}>{n}</text>
+      </g>
+    );
+  }
+  return (
+    <div className="my-3 overflow-x-auto">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}
+        style={{ display: 'block', maxWidth: '100%' }}>
+        {cells}
+      </svg>
+    </div>
+  );
+}
+
+// ─── YesNoTable ───────────────────────────────────────────────────────────────
+// Renders a two-column (Yes / No) decision table where students circle a
+// bubble letter.
+// Marker: [YES_NO_TABLE: 42÷__=7 | __×9=54 | 36÷6=__ | 6×__=30]
+function YesNoTable({ rows }) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  let letterIdx = 0;
+  return (
+    <div className="my-3 overflow-x-auto">
+      <table style={{ borderCollapse: 'collapse', minWidth: '320px', width: '100%' }}>
+        <thead>
+          <tr>
+            <th style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', background: '#f3f4f6', fontSize: '13px', fontWeight: 600, textAlign: 'left', width: '60%' }}></th>
+            <th style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', background: '#f3f4f6', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>Yes</th>
+            <th style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', background: '#f3f4f6', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>No</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((label, i) => {
+            const yesLetter = letters[letterIdx++];
+            const noLetter = letters[letterIdx++];
+            return (
+              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                <td style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', fontSize: '13px', color: '#1f2937' }}>{label}</td>
+                <td style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 24, height: 24, borderRadius: '50%', border: '1.5px solid #6366f1',
+                    fontSize: '12px', fontWeight: 600, color: '#6366f1' }}>{yesLetter}</span>
+                </td>
+                <td style={{ border: '1.5px solid #d1d5db', padding: '6px 12px', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 24, height: 24, borderRadius: '50%', border: '1.5px solid #6b7280',
+                    fontSize: '12px', fontWeight: 600, color: '#6b7280' }}>{noLetter}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Visual Model Parser ────────────────────────────────────────────────────
 
 function parseVisualModel(marker) {
@@ -676,6 +800,61 @@ function parseVisualModel(marker) {
         })
       : [{in:1,out:'?'},{in:2,out:'?'},{in:3,out:'?'},{in:4,out:'?'}];
     return <FunctionTable ruleLabel={ruleLabel} pairs={pairs} inputLabel={inLabel} outputLabel={outLabel}/>;
+  }
+  if (inner.startsWith('GRID_RESPONSE:')) {
+    const rest = inner.slice('GRID_RESPONSE:'.length).trim();
+    const cols = parseInt(rest.match(/cols=(\d+)/)?.[1] || rest.match(/(\d+)/)?.[1] || '4');
+    return <GridResponse cols={Math.min(Math.max(cols, 1), 8)}/>;
+  }
+  if (inner.startsWith('NUM_CHART:')) {
+    const rest = inner.slice('NUM_CHART:'.length).trim();
+    const start = parseInt(rest.match(/start=(\d+)/)?.[1] || '1');
+    const end   = parseInt(rest.match(/end=(\d+)/)?.[1] || '100');
+    const cols  = parseInt(rest.match(/cols=(\d+)/)?.[1] || '10');
+    const shadedM = rest.match(/shaded=([\d,]+)/);
+    const shaded = shadedM ? shadedM[1].split(',').map(Number) : [];
+    return <NumberChart start={start} end={end} cols={cols} shaded={shaded}/>;
+  }
+  if (inner.startsWith('YES_NO_TABLE:')) {
+    const rest = inner.slice('YES_NO_TABLE:'.length).trim();
+    const rows = rest.split('|').map(s => s.trim()).filter(Boolean);
+    return <YesNoTable rows={rows}/>;
+  }
+  if (inner.startsWith('DATA_TABLE:')) {
+    const rest = inner.slice('DATA_TABLE:'.length).trim();
+    const headerM = rest.match(/header=([^|]+)/);
+    const headers = headerM ? headerM[1].split(',').map(s => s.trim()) : [];
+    // Remaining pipe-delimited segments are data rows: "Label,value"
+    const segments = rest.split('|').map(s => s.trim()).filter(s => !s.startsWith('header='));
+    const dataRows = segments.map(seg => seg.split(',').map(s => s.trim()));
+    return (
+      <div className="my-3 overflow-x-auto">
+        <table style={{ borderCollapse: 'collapse', minWidth: '260px' }}>
+          {headers.length > 0 && (
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} style={{ border: '1.5px solid #d1d5db', padding: '6px 14px',
+                    background: '#f3f4f6', fontSize: '13px', fontWeight: 600,
+                    textAlign: i === 0 ? 'left' : 'center' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {dataRows.map((row, i) => (
+              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                {row.map((cell, j) => (
+                  <td key={j} style={{ border: '1.5px solid #d1d5db', padding: '6px 14px',
+                    fontSize: '13px', color: '#1f2937',
+                    textAlign: j === 0 ? 'left' : 'center' }}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   }
   if (inner.startsWith('IMAGE:')) {
     const url = inner.slice('IMAGE:'.length).trim();
