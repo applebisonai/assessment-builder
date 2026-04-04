@@ -289,31 +289,88 @@ function ArrayModel({ rows=3, cols=4 }) {
   );
 }
 
-function AreaModel({ rows=3, cols=4, rowLabel='', colLabel='' }) {
-  // Area / rectangle model: a solid filled rectangle divided by grid lines.
-  // Different from ArrayModel (discrete dots). Used for area, multiplication
-  // partial products, and fraction × fraction problems.
-  const cellSize = Math.min(32, Math.max(18, Math.floor(360 / Math.max(cols, rows))));
-  const pad = 2;
-  const labelOffset = (rowLabel || colLabel) ? 18 : 0;
-  const totalW = cols * cellSize + pad * 2 + labelOffset;
-  const totalH = rows * cellSize + pad * 2 + labelOffset;
-  const ox = labelOffset; // x-offset for the rectangle (room for row label)
-  const oy = labelOffset; // y-offset for the rectangle (room for col label)
-  const lines = [];
-  for (let c = 1; c < cols; c++) {
-    lines.push(<line key={`v${c}`} x1={ox + pad + c * cellSize} y1={oy + pad} x2={ox + pad + c * cellSize} y2={oy + pad + rows * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
+function AreaModel({ colLabels=[], rowLabels=[], showProducts=true }) {
+  // Area / rectangle model — filled rectangle with labeled sections.
+  // colLabels: dimension of each column section (e.g. ['20','3'])
+  // rowLabels: dimension of each row section (e.g. ['4'])
+  // Used for area, distributive property, partial products (box method).
+  const cols = Math.max(1, colLabels.length || 1);
+  const rows = Math.max(1, rowLabels.length || 1);
+
+  // Size each section proportionally to its numeric value (or equal if not numeric)
+  const toNum = s => { const n = parseInt(String(s).replace(/\D/g,'')); return isNaN(n) || n === 0 ? 1 : n; };
+  const colVals = colLabels.length ? colLabels.map(toNum) : [1];
+  const rowVals = rowLabels.length ? rowLabels.map(toNum) : [1];
+  const totalColVal = colVals.reduce((a,b)=>a+b,0);
+  const totalRowVal = rowVals.reduce((a,b)=>a+b,0);
+
+  const maxW = 360, minCellW = 52, minCellH = 40;
+  const labelPad = 28; // space for outside labels
+  const innerW = Math.max(cols * minCellW, maxW - labelPad);
+  const innerH = Math.max(rows * minCellH, rows * 54);
+
+  // x positions of each column
+  const colWidths = colVals.map(v => Math.round(v / totalColVal * innerW));
+  const rowHeights = rowVals.map(v => Math.round(v / totalRowVal * innerH));
+
+  // Fix rounding drift
+  const wSum = colWidths.reduce((a,b)=>a+b,0);
+  if (wSum !== innerW) colWidths[colWidths.length-1] += innerW - wSum;
+  const hSum = rowHeights.reduce((a,b)=>a+b,0);
+  if (hSum !== innerH) rowHeights[rowHeights.length-1] += innerH - hSum;
+
+  const ox = labelPad, oy = labelPad;
+  const svgW = innerW + labelPad + 8;
+  const svgH = innerH + labelPad + 8;
+
+  // Build column x positions
+  const colXs = [ox];
+  for (let c = 0; c < cols - 1; c++) colXs.push(colXs[c] + colWidths[c]);
+  // Build row y positions
+  const rowYs = [oy];
+  for (let r = 0; r < rows - 1; r++) rowYs.push(rowYs[r] + rowHeights[r]);
+
+  const cells = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = colXs[c], y = rowYs[r];
+      const w = colWidths[c], h = rowHeights[r];
+      // Compute partial product if both labels are numeric
+      const cv = parseInt(colLabels[c]), rv = parseInt(rowLabels[r]);
+      const product = (!isNaN(cv) && !isNaN(rv) && showProducts) ? String(cv * rv) : '';
+      cells.push(
+        <g key={`${r}-${c}`}>
+          <rect x={x} y={y} width={w} height={h} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="1.5"/>
+          {product && (
+            <text x={x + w/2} y={y + h/2 + 6} textAnchor="middle" fill="#1e1b4b" fontSize="14" fontWeight="700">{product}</text>
+          )}
+        </g>
+      );
+    }
   }
-  for (let r = 1; r < rows; r++) {
-    lines.push(<line key={`h${r}`} x1={ox + pad} y1={oy + pad + r * cellSize} x2={ox + pad + cols * cellSize} y2={oy + pad + r * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
-  }
+
+  // Outer border
+  const outerBorder = <rect x={ox} y={oy} width={innerW} height={innerH} fill="none" stroke="#4f46e5" strokeWidth="2.5"/>;
+
+  // Column labels (top)
+  const colLabelEls = colLabels.map((lbl, c) => (
+    <text key={`cl${c}`} x={colXs[c] + colWidths[c]/2} y={oy - 8}
+      textAnchor="middle" fill="#1e1b4b" fontSize="13" fontWeight="700">{lbl}</text>
+  ));
+
+  // Row labels (left)
+  const rowLabelEls = rowLabels.map((lbl, r) => (
+    <text key={`rl${r}`} x={ox - 8} y={rowYs[r] + rowHeights[r]/2 + 5}
+      textAnchor="end" fill="#1e1b4b" fontSize="13" fontWeight="700">{lbl}</text>
+  ));
+
   return (
     <div className="my-3">
-      <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
-        {colLabel && <text x={ox + pad + (cols * cellSize) / 2} y={labelOffset - 4} textAnchor="middle" fill="#374151" fontSize="11" fontWeight="600">{colLabel}</text>}
-        {rowLabel && <text x={labelOffset - 4} y={oy + pad + (rows * cellSize) / 2 + 4} textAnchor="middle" fill="#374151" fontSize="11" fontWeight="600" transform={`rotate(-90, ${labelOffset-4}, ${oy + pad + (rows*cellSize)/2})`}>{rowLabel}</text>}
-        <rect x={ox + pad} y={oy + pad} width={cols * cellSize} height={rows * cellSize} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" rx="2"/>
-        {lines}
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
+        {cells}
+        {outerBorder}
+        {colLabelEls}
+        {rowLabelEls}
       </svg>
     </div>
   );
@@ -510,11 +567,21 @@ function parseVisualModel(marker) {
   }
   if (inner.startsWith('AREA_MODEL:')) {
     const rest = inner.slice('AREA_MODEL:'.length).trim();
-    const r = parseInt(rest.match(/rows=(\d+)/)?.[1] || '3');
-    const c = parseInt(rest.match(/cols=(\d+)/)?.[1] || '4');
-    const rl = rest.match(/rowlabel=([^|]+)/)?.[1]?.trim() || '';
-    const cl = rest.match(/collabel=([^|]+)/)?.[1]?.trim() || '';
-    return <AreaModel rows={Math.min(r, 12)} cols={Math.min(c, 12)} rowLabel={rl} colLabel={cl}/>;
+    // New format: collabels=20,3 | rowlabels=4
+    const clM = rest.match(/collabels=([^|]+)/);
+    const rlM = rest.match(/rowlabels=([^|]+)/);
+    const showP = !rest.includes('products=hidden');
+    if (clM || rlM) {
+      const colLabels = clM ? clM[1].trim().split(',').map(s => s.trim()) : [''];
+      const rowLabels = rlM ? rlM[1].trim().split(',').map(s => s.trim()) : [''];
+      return <AreaModel colLabels={colLabels} rowLabels={rowLabels} showProducts={showP}/>;
+    }
+    // Legacy / simple format: rows=R cols=C
+    const r = parseInt(rest.match(/rows=(\d+)/)?.[1] || '1');
+    const c = parseInt(rest.match(/cols=(\d+)/)?.[1] || '1');
+    const colLabels = Array.from({length: Math.min(c,6)}, () => '');
+    const rowLabels = Array.from({length: Math.min(r,6)}, () => '');
+    return <AreaModel colLabels={colLabels} rowLabels={rowLabels} showProducts={false}/>;
   }
   if (inner.startsWith('PV_CHART:')) {
     const rest = inner.slice('PV_CHART:'.length).trim();
@@ -841,10 +908,15 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
   const [arrRows, setArrRows] = useState(parseInt(rawSpecInit.match(/rows=(\d+)/)?.[1] || '3'));
   const [arrCols, setArrCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
   // AREA_MODEL state
-  const [areaRows, setAreaRows] = useState(parseInt(rawSpecInit.match(/rows=(\d+)/)?.[1] || '3'));
-  const [areaCols, setAreaCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
-  const [areaRowLabel, setAreaRowLabel] = useState(rawSpecInit.match(/rowlabel=([^|]+)/)?.[1]?.trim() || '');
-  const [areaColLabel, setAreaColLabel] = useState(rawSpecInit.match(/collabel=([^|]+)/)?.[1]?.trim() || '');
+  const [areaColLabels, setAreaColLabels] = useState(() => {
+    const m = rawSpecInit.match(/collabels=([^|]+)/);
+    return m ? m[1].trim() : '20, 3';
+  });
+  const [areaRowLabels, setAreaRowLabels] = useState(() => {
+    const m = rawSpecInit.match(/rowlabels=([^|]+)/);
+    return m ? m[1].trim() : '4';
+  });
+  const [areaShowProducts, setAreaShowProducts] = useState(!rawSpecInit.includes('products=hidden'));
   // NUM_LINE jumps
   const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
   // NUMBER BOND state
@@ -902,9 +974,8 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
       case 'ARRAY':
         return `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
       case 'AREA_MODEL': {
-        const rlPart = areaRowLabel ? ` | rowlabel=${areaRowLabel}` : '';
-        const clPart = areaColLabel ? ` | collabel=${areaColLabel}` : '';
-        return `[AREA_MODEL: rows=${areaRows} cols=${areaCols}${rlPart}${clPart}]`;
+        const pp = areaShowProducts ? '' : ' | products=hidden';
+        return `[AREA_MODEL: collabels=${areaColLabels} | rowlabels=${areaRowLabels}${pp}]`;
       }
       case 'IMAGE':
         return `[IMAGE: ${imageUrl}]`;
@@ -984,13 +1055,23 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
         </div>
       );
       case 'AREA_MODEL': return (
-        <div className="space-y-1">
-          <p className="text-xs text-gray-400">Area model = filled rectangle with grid lines (for area, partial products, fractions). Use Array for discrete dot arrays.</p>
-          <div className="flex items-center gap-4 flex-wrap">
-            <label className={labelCls}>Rows <input type="number" min="1" max="12" value={areaRows} onChange={e => setAreaRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
-            <label className={labelCls}>Columns <input type="number" min="1" max="12" value={areaCols} onChange={e => setAreaCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
-            <label className={labelCls}>Row label <input type="text" value={areaRowLabel} onChange={e => setAreaRowLabel(e.target.value)} className={`${inputCls} w-20 text-left`} placeholder="e.g. 4"/></label>
-            <label className={labelCls}>Col label <input type="text" value={areaColLabel} onChange={e => setAreaColLabel(e.target.value)} className={`${inputCls} w-20 text-left`} placeholder="e.g. 7"/></label>
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400">Filled rectangle for area/partial products (box method). Enter dimension labels as comma-separated values — e.g. col labels <strong>20, 3</strong> × row labels <strong>4</strong> → shows 80 | 12 inside.</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className={`${labelCls} block`}>Column dimensions (top)
+              <input type="text" value={areaColLabels} onChange={e => setAreaColLabels(e.target.value)}
+                className="mt-0.5 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400 w-40 text-left"
+                placeholder="e.g. 20, 3"/>
+            </label>
+            <label className={`${labelCls} block`}>Row dimensions (left)
+              <input type="text" value={areaRowLabels} onChange={e => setAreaRowLabels(e.target.value)}
+                className="mt-0.5 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400 w-28 text-left"
+                placeholder="e.g. 4"/>
+            </label>
+            <label className={`${labelCls} cursor-pointer select-none`}>
+              <input type="checkbox" checked={areaShowProducts} onChange={e => setAreaShowProducts(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/>
+              Show partial products
+            </label>
           </div>
         </div>
       );

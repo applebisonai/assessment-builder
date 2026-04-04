@@ -75,8 +75,8 @@ Allowed types (use ONLY these — never invent new types):
   [BAR_MODEL: 4,6 | label=Total]              bar model (equal or unequal segments)
   [TAPE: 4:A,6:B | brace=yes | total=10]      tape diagram
   [GROUPS: groups=3 items=5]                   equal groups (ovals with dots inside)
-  [ARRAY: rows=4 cols=6]                       dot array — discrete dots in a grid; every row has the same count, every column has the same count
-  [AREA_MODEL: rows=3 cols=4]                  filled rectangle divided by grid lines (for area, partial products)
+  [ARRAY: rows=4 cols=6]                       dot array — discrete dots in a grid; equal items per row AND per column; ONLY for small numbers (factors ≤ 12); intro to multiplication (grades 2-3)
+  [AREA_MODEL: collabels=20,3 | rowlabels=4]  filled rectangle (box method); shows dimension labels outside, partial products inside; for larger numbers, distributive property, grades 3-5
   [NUM_BOND: whole=10 part1=4 part2=6]         number bond (part-part-whole diagram)
   [NUM_BOND: whole=10 part1=4 part2=6 parts=hidden]  number bond with missing parts
   [TENS_FRAME: filled=7 total=10]              tens frame (2×5 grid with counters)
@@ -96,6 +96,10 @@ HOW TO WRITE A QUESTION WITH A VISUAL (always this order):
 CORRECT EXAMPLES:
   [ARRAY: rows=4 cols=7]
   3. The array shows ___ × ___.
+
+  [AREA_MODEL: collabels=20,3 | rowlabels=4]
+  4. Use the area model to find 4 × 23. Fill in the partial products.
+  ___ + ___ = ___
 
   [NUM_LINE: min=0 max=30 step=5 jumps=yes]
   4. Which equation matches this number line?
@@ -151,8 +155,8 @@ WRONG EXAMPLES (never do this):
   • "Write the equation this bar model represents."
 
 MARKER TYPE MUST MATCH QUESTION WORDS:
-  • Question says "array" or "rows and columns" of objects → marker must be ARRAY (discrete dots)
-  • Question says "area model" or shows a filled rectangle (multiplication/area) → marker must be AREA_MODEL
+  • Question says "array" or "rows and columns" with small factors (≤12) → marker must be ARRAY (discrete dots)
+  • Question says "area model", "box method", "partial products", or involves 2-digit multiplication → marker must be AREA_MODEL with collabels and rowlabels showing the decomposed factors
   • Question says "number line" → marker must be NUM_LINE
   • Question says "equal groups" → marker must be GROUPS
   • Question says "fraction bar" / "fraction strip" / "shaded bar" → marker must be FRACTION
@@ -273,8 +277,8 @@ YOUR ONLY JOB: Mirror the source as closely as possible — same question types,
    For anything else (photos of objects, complex diagrams), SKIP IT entirely.
 
 ━━━ VISUAL MARKER RULES (when you do use one) ━━━
-  [ARRAY: rows=R cols=C]               dot array — individual circles, equal items per row and per column
-  [AREA_MODEL: rows=R cols=C]          filled rectangle (area/multiplication model)
+  [ARRAY: rows=R cols=C]               dot array — individual circles, equal items per row and per column; small factors only
+  [AREA_MODEL: collabels=20,3 | rowlabels=4]  filled rectangle (box method) with dimension labels and partial products
   [NUM_LINE: min=0 max=M step=S jumps=yes]  number line with hop arcs
   [GROUPS: groups=G items=I]           equal groups (ovals with dots)
   [FRACTION: N/D]                      fraction bar
