@@ -1406,6 +1406,17 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
     }
   }, [visualType]);
 
+  // Document-level paste listener — catches Ctrl+V regardless of which element has focus
+  useEffect(() => {
+    if (visualType !== 'custom') return;
+    const onDocPaste = e => {
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+      if (item) { e.preventDefault(); loadImageFromItem(item); }
+    };
+    document.addEventListener('paste', onDocPaste);
+    return () => document.removeEventListener('paste', onDocPaste);
+  }, [visualType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
   const hasChoices = qType === 'mc' || qType === 'multiselect';
   const addChoice = () => {
@@ -1530,13 +1541,26 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         )}
 
         {visualType === 'custom' && (
-          <div ref={dropZoneRef} tabIndex={0}
-            className="border-2 border-dashed border-gray-300 rounded p-3 text-center cursor-pointer hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-            onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-            onClick={() => fileRef.current?.click()}>
-            {customImg
-              ? <img src={customImg} alt="custom" className="max-h-24 mx-auto" />
-              : <p className="text-xs text-gray-500">Click to upload · Paste (Ctrl+V) · or drag-and-drop an image</p>}
+          <div className="space-y-1.5">
+            {/* Paste / drag-drop zone — clicking here focuses it for Ctrl+V */}
+            <div ref={dropZoneRef} tabIndex={0}
+              className="border-2 border-dashed border-gray-300 rounded p-4 text-center cursor-default hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+              onClick={() => dropZoneRef.current?.focus()}>
+              {customImg
+                ? <img src={customImg} alt="custom" className="max-h-24 mx-auto" />
+                : (
+                  <>
+                    <p className="text-xs font-medium text-gray-600">Click here, then press Ctrl+V to paste</p>
+                    <p className="text-xs text-gray-400 mt-0.5">or drag and drop an image onto this box</p>
+                  </>
+                )}
+            </div>
+            {/* Browse button — separate so it doesn't steal focus from drop zone */}
+            <button type="button" onClick={() => fileRef.current?.click()}
+              className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
+              📁 Browse for image file…
+            </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden"
               onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(f); }} />
           </div>
@@ -1801,26 +1825,21 @@ function ModelEditor({ marker, onSave, onClose }) {
     reader.readAsDataURL(file);
   };
 
-  const handlePaste = e => {
-    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-    if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
-  };
-
   const handleDrop = e => {
     e.preventDefault();
     const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
     if (file) loadImageFile(file);
   };
 
-  const handleFile = e => loadImageFile(e.target.files[0]);
-
-  const handleFile = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setPastedImg(ev.target.result);
-    reader.readAsDataURL(file);
-  };
+  // Document-level paste — catches Ctrl+V no matter what element is focused
+  useEffect(() => {
+    const onDocPaste = e => {
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+      if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
+    };
+    document.addEventListener('paste', onDocPaste);
+    return () => document.removeEventListener('paste', onDocPaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const preview = (() => {
     try { return parseVisualModel(val); } catch { return null; }
@@ -1850,14 +1869,21 @@ function ModelEditor({ marker, onSave, onClose }) {
                 <ErrorBoundary><div>{preview}</div></ErrorBoundary>
               </div>
             )}
+            {/* Paste / drag-drop zone */}
             <div ref={imgDropRef} tabIndex={0}
-              className="border-2 border-dashed border-gray-300 rounded p-4 text-center mb-3 cursor-pointer hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-              onClick={() => fileRef.current?.click()}>
-              <p className="text-sm text-gray-500">Click to upload · Paste (Ctrl+V) · or drag-and-drop</p>
-              <p className="text-xs text-gray-400 mt-0.5">(Click this box first, then Ctrl+V to paste)</p>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+              className="border-2 border-dashed border-gray-300 rounded p-4 text-center mb-2 cursor-default hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+              onClick={() => imgDropRef.current?.focus()}>
+              <p className="text-sm font-medium text-gray-600">Press Ctrl+V to paste an image</p>
+              <p className="text-xs text-gray-400 mt-0.5">or drag and drop an image here</p>
             </div>
+            {/* Browse button — separate so it doesn't steal focus */}
+            <button type="button" onClick={() => fileRef.current?.click()}
+              className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50 mb-3">
+              📁 Browse for image file…
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={e => loadImageFile(e.target.files[0])} />
           </>
         )}
 
