@@ -42,11 +42,15 @@ function ArrayViz({ rows, cols }) {
 
 function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = false,
   hopSize = null, hopStart = null, hops = null }) {
-  const mn = parseFloat(min), mx = parseFloat(max), st = parseFloat(step) || 1;
+  const mn = parseFloat(min) || 0, mx = parseFloat(max) || 10;
+  const st = Math.max(parseFloat(step) || 1, 0.0001); // guard against 0-step infinite loop
 
-  // Build tick positions
+  // Build tick positions — use 6 decimal places for decimal step accuracy
   const ticks = [];
-  for (let v = mn; v <= mx + 0.0001; v += st) ticks.push(parseFloat(v.toFixed(4)));
+  const maxTicks = 60; // cap to keep SVG manageable
+  for (let v = mn; v <= mx + st * 0.001 && ticks.length < maxTicks; v = parseFloat((v + st).toFixed(6))) {
+    ticks.push(parseFloat(v.toFixed(6)));
+  }
 
   const hasArcs = jumps === true || jumps === 'true' || jumps === 'yes';
   const W = 340, pad = 28, lineY = hasArcs ? 58 : 38;
@@ -89,12 +93,15 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
       {/* Ticks and labels */}
       {ticks.map((v, i) => {
         const x = toX(v);
-        const showLabel = showAll || v === mn || v === mx;
+        const isEnd = Math.abs(v - mn) < st * 0.01 || Math.abs(v - mx) < st * 0.01;
+        const showLabel = showAll || isEnd;
+        // Display: trim trailing zeros (e.g. 1.50 → 1.5, 2.00 → 2)
+        const label = parseFloat(v.toFixed(4));
         return (
           <g key={i}>
             <line x1={x} y1={lineY - 7} x2={x} y2={lineY + 7} stroke="#334155" strokeWidth={1.5} />
             {showLabel && (
-              <text x={x} y={lineY + 20} textAnchor="middle" fontSize={11} fill="#334155">{v}</text>
+              <text x={x} y={lineY + 20} textAnchor="middle" fontSize={11} fill="#334155">{label}</text>
             )}
           </g>
         );
@@ -107,7 +114,7 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
         const span = x2 - x1;
         const arcH = Math.min(32, Math.max(14, span * 0.45));
         const hopVal = parseFloat((v2 - v1).toFixed(4));
-        const label = hopVal > 0 ? `+${hopVal % 1 === 0 ? hopVal : hopVal}` : `${hopVal}`;
+        const label = hopVal > 0 ? `+${hopVal}` : `${hopVal}`;
         return (
           <g key={i}>
             <path d={`M${x1},${lineY} Q${midX},${lineY - arcH} ${x2},${lineY}`}
@@ -733,9 +740,12 @@ function parseVisualModel(marker) {
 
   if (m.startsWith('[ARRAY:')) return <ArrayViz rows={kv.rows} cols={kv.cols} />;
   if (m.startsWith('[NUM_LINE:')) {
+    // Use dedicated regex for hops= since it contains commas (breaks kv parser)
+    const hopsM = m.match(/\bhops=([\d.\-:,]+)/);
+    const hops = hopsM ? hopsM[1] : null;
     return <NumberLine min={kv.min} max={kv.max} step={kv.step}
       showAll={kv.show === 'all'} jumps={kv.jumps === 'yes'}
-      hopSize={kv.hop_size} hopStart={kv.hop_start} hops={kv.hops} />;
+      hopSize={kv.hop_size} hopStart={kv.hop_start} hops={hops} />;
   }
   if (m.startsWith('[GROUPS:')) return <Groups groups={kv.groups} items={kv.items} />;
   if (m.startsWith('[TENS_FRAME:')) return <TensFrame filled={kv.filled} total={kv.total} />;
@@ -961,9 +971,9 @@ function VisualParamForm({ type, params, onChange }) {
       return (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2 items-center">
-            {inp('Min', 'min', { type: 'number' })}
-            {inp('Max', 'max', { type: 'number' })}
-            {inp('Step', 'step', { type: 'number', min: 1 })}
+            {inp('Min', 'min', { type: 'number', step: 'any' })}
+            {inp('Max', 'max', { type: 'number', step: 'any' })}
+            {inp('Step', 'step', { type: 'number', min: 0.01, step: 'any', placeholder: '1' })}
             <label className="text-xs flex items-center gap-1">
               <input type="checkbox" checked={params.show === 'all'} onChange={e => set('show', e.target.checked ? 'all' : '')} />
               All labels
@@ -976,13 +986,13 @@ function VisualParamForm({ type, params, onChange }) {
             </label>
             {params.jumps === 'yes' && (
               <>
-                {inp('Hop size', 'hop_size', { type: 'number', min: 1, placeholder: '= 1 step' })}
-                {inp('Start at', 'hop_start', { type: 'number', placeholder: 'default: min' })}
+                {inp('Hop size', 'hop_size', { type: 'number', min: 0.01, step: 'any', placeholder: '= 1 step' })}
+                {inp('Start at', 'hop_start', { type: 'number', step: 'any', placeholder: 'default: min' })}
                 <label className="text-xs flex flex-col gap-0.5">
                   <span>Custom hops (from:to, ...)</span>
                   <input value={params.hops || ''} onChange={e => set('hops', e.target.value)}
-                    className="border rounded p-1 w-40 font-mono text-xs"
-                    placeholder="e.g. 0:5,5:12,12:20" />
+                    className="border rounded p-1 w-44 font-mono text-xs"
+                    placeholder="e.g. 0:0.5,0.5:1,1:1.5" />
                   <span className="text-slate-400 text-xs">Overrides hop size if filled</span>
                 </label>
               </>
@@ -990,7 +1000,7 @@ function VisualParamForm({ type, params, onChange }) {
           </div>
           {params.jumps === 'yes' && (
             <p className="text-xs text-slate-400">
-              Examples: hop size=5 → equal +5 arcs · custom 0:3,3:7 → arcs of different sizes
+              Supports decimals: step=0.25, hop size=0.5, custom 0:0.5,0.5:1
             </p>
           )}
         </div>
@@ -1313,32 +1323,32 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const [customImg, setCustomImg] = useState(question?._customImg || null);
   const fileRef = useRef();
   const qTextRef = useRef();
+  const dropZoneRef = useRef();
 
-  const handlePaste = e => {
-    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image'));
-    if (item) {
-      e.preventDefault();
-      const blob = item.getAsFile();
-      const reader = new FileReader();
-      reader.onload = ev => setCustomImg(ev.target.result);
-      reader.readAsDataURL(blob);
-    }
+  const loadImageFromItem = item => {
+    const blob = item.getAsFile();
+    if (!blob) return;
+    const reader = new FileReader();
+    reader.onload = ev => setCustomImg(ev.target.result);
+    reader.readAsDataURL(blob);
   };
 
-  // Document-level paste listener so the user doesn't have to focus the drop zone first
+  const handlePaste = e => {
+    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+    if (item) { e.preventDefault(); loadImageFromItem(item); }
+  };
+
+  const handleDrop = e => {
+    e.preventDefault();
+    const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
+    if (file) { const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(file); }
+  };
+
+  // Auto-focus the drop zone when Custom Image is selected so onPaste fires
   useEffect(() => {
-    if (visualType !== 'custom') return;
-    const onDocPaste = e => {
-      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-      if (!item) return;
-      e.preventDefault();
-      const blob = item.getAsFile();
-      const reader = new FileReader();
-      reader.onload = ev => setCustomImg(ev.target.result);
-      reader.readAsDataURL(blob);
-    };
-    document.addEventListener('paste', onDocPaste);
-    return () => document.removeEventListener('paste', onDocPaste);
+    if (visualType === 'custom') {
+      setTimeout(() => dropZoneRef.current?.focus(), 50);
+    }
   }, [visualType]);
 
   const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
@@ -1465,11 +1475,13 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         )}
 
         {visualType === 'custom' && (
-          <div className="border-2 border-dashed border-gray-300 rounded p-3 text-center cursor-pointer hover:border-blue-400"
-            onPaste={handlePaste} onClick={() => fileRef.current?.click()}>
+          <div ref={dropZoneRef} tabIndex={0}
+            className="border-2 border-dashed border-gray-300 rounded p-3 text-center cursor-pointer hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+            onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+            onClick={() => fileRef.current?.click()}>
             {customImg
               ? <img src={customImg} alt="custom" className="max-h-24 mx-auto" />
-              : <p className="text-xs text-gray-500">Paste (Ctrl+V) or click to upload an image</p>}
+              : <p className="text-xs text-gray-500">Click to upload · Paste (Ctrl+V) · or drag-and-drop an image</p>}
             <input ref={fileRef} type="file" accept="image/*" className="hidden"
               onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(f); }} />
           </div>
@@ -1673,30 +1685,27 @@ function ModelEditor({ marker, onSave, onClose }) {
   const [val, setVal] = useState(marker || '');
   const [pastedImg, setPastedImg] = useState(null);
   const fileRef = useRef();
+  const imgDropRef = useRef();
 
-  const captureImage = e => {
-    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
-    if (!item) return false;
-    e.preventDefault();
-    const blob = item.getAsFile();
+  const loadImageFile = file => {
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => setPastedImg(ev.target.result);
-    reader.readAsDataURL(blob);
-    return true;
+    reader.readAsDataURL(file);
   };
 
-  const handlePaste = e => captureImage(e);
+  const handlePaste = e => {
+    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+    if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
+  };
 
-  // Document-level listener so paste works even when textarea has focus
-  useEffect(() => {
-    const onDocPaste = e => {
-      // Only capture if an image is in the clipboard; don't steal text pastes
-      const hasImg = Array.from(e.clipboardData?.items || []).some(i => i.type.startsWith('image'));
-      if (hasImg) captureImage(e);
-    };
-    document.addEventListener('paste', onDocPaste);
-    return () => document.removeEventListener('paste', onDocPaste);
-  }, []);
+  const handleDrop = e => {
+    e.preventDefault();
+    const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith('image/'));
+    if (file) loadImageFile(file);
+  };
+
+  const handleFile = e => loadImageFile(e.target.files[0]);
 
   const handleFile = e => {
     const file = e.target.files[0];
@@ -1734,9 +1743,12 @@ function ModelEditor({ marker, onSave, onClose }) {
                 <ErrorBoundary><div>{preview}</div></ErrorBoundary>
               </div>
             )}
-            <div className="border-2 border-dashed border-gray-300 rounded p-4 text-center mb-3 cursor-pointer hover:border-blue-400"
-              onPaste={handlePaste} onClick={() => fileRef.current?.click()}>
-              <p className="text-sm text-gray-500">Paste or click to upload your own image</p>
+            <div ref={imgDropRef} tabIndex={0}
+              className="border-2 border-dashed border-gray-300 rounded p-4 text-center mb-3 cursor-pointer hover:border-blue-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+              onClick={() => fileRef.current?.click()}>
+              <p className="text-sm text-gray-500">Click to upload · Paste (Ctrl+V) · or drag-and-drop</p>
+              <p className="text-xs text-gray-400 mt-0.5">(Click this box first, then Ctrl+V to paste)</p>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
             </div>
           </>
@@ -1955,7 +1967,8 @@ function visualToHtml(marker) {
     const hasArcs = m.includes('jumps=yes');
     const hopSizeParam = gp('hop_size');
     const hopStartParam = gp('hop_start');
-    const hopsParam = gp('hops');
+    // Use dedicated regex for hops= since it contains commas (gp() stops at comma)
+    const hopsParam = (m.match(/\bhops=([\d.\-:,]+)/) || [])[1] || null;
 
     const ticks = [];
     for (let v = mn; v <= mx + 0.0001; v += st) ticks.push(parseFloat(v.toFixed(4)));
