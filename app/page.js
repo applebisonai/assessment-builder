@@ -550,74 +550,517 @@ function parseAssessment(text) {
   const lines = text.split('\n');
   const questions = [];
   let current = null;
-  let inAnswerKey = false;
   let inVersionB = false;
+  let inAnswerKey = false;
   const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
 
+  const flush = () => { if (current) { questions.push(current); current = null; } };
+
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
 
-    if (/^TEACHER ANSWER KEY/i.test(trimmed)) { inAnswerKey = true; continue; }
-    if (/^VERSION B/i.test(trimmed)) { inVersionB = true; continue; }
-
-    if (inAnswerKey || inVersionB) {
-      if (questions.length && !questions[questions.length - 1].answerKeyLine) {
-        // store in last section marker
-      }
-      questions.push({ id: `meta-${i}`, type: 'meta', text: trimmed, isVersionB: inVersionB, isAnswerKey: inAnswerKey });
+    // Version B boundary — must not match numbered questions like "1. Version B..."
+    if (/^-*\s*version\s*b\s*-*$/i.test(trimmed)) {
+      flush();
+      inVersionB = true;
+      questions.push({ id: `vb-${i}`, type: 'vb-divider' });
       continue;
     }
 
+    // Answer key boundary
+    if (/teacher\s+answer\s+key/i.test(trimmed)) {
+      flush();
+      inAnswerKey = true;
+      questions.push({ id: `ak-${i}`, type: 'ak-divider' });
+      continue;
+    }
+
+    // Answer key lines — store as simple rows
+    if (inAnswerKey) {
+      questions.push({ id: `ak-line-${i}`, type: 'answer-key', text: trimmed });
+      continue;
+    }
+
+    // Visual marker line
     if (MARKER_RE.test(trimmed)) {
-      // Look ahead: next non-empty line should be a question
-      if (current) questions.push(current);
-      current = { id: `q-${i}`, type: 'question', marker: trimmed, text: '', choices: [], lines: [] };
+      flush();
+      current = { id: `q-${i}`, type: 'question', marker: trimmed, text: '', choices: [], lines: [], vb: inVersionB };
       continue;
     }
 
-    // Question number pattern: "1." or "1)" or "Question 1"
+    // Question number: "1." or "1)"
     const qMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
     if (qMatch) {
       if (current && !current.qNum) {
+        // Marker was the line before — attach number to it
         current.qNum = qMatch[1];
         current.text = qMatch[2];
         continue;
       }
-      if (current) questions.push(current);
-      current = { id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null, text: qMatch[2], choices: [], lines: [] };
+      flush();
+      current = { id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null, text: qMatch[2], choices: [], lines: [], vb: inVersionB };
       continue;
     }
 
-    // MC choice: A) B) C) D)
-    const choiceMatch = trimmed.match(/^([A-D])[.)]\s+(.*)$/);
+    // MC choice A) B) C) D)
+    const choiceMatch = trimmed.match(/^([A-Da-d])[.)]\s+(.*)$/);
     if (choiceMatch && current) {
-      current.choices.push({ letter: choiceMatch[1], text: choiceMatch[2] });
+      current.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
       continue;
     }
 
-    // Standard tag: [3.OA.A.1]
-    if (/^\[\d+\.[A-Z]+\.[A-Z]+\.\d+\]/.test(trimmed) && current) {
+    // Standard tag [3.OA.A.1]
+    if (/^\[\d+\.[A-Z]/.test(trimmed) && current) {
       current.standard = trimmed;
       continue;
     }
 
-    // Section header (no number, all caps or ends with colon)
-    if (trimmed && !current && !qMatch) {
-      questions.push({ id: `h-${i}`, type: 'header', text: trimmed });
+    // Section header / direction line
+    if (!current) {
+      questions.push({ id: `h-${i}`, type: 'header', text: trimmed, vb: inVersionB });
       continue;
     }
 
-    // Continuation text
-    if (current) {
-      if (trimmed) current.lines.push(trimmed);
-    } else if (trimmed) {
-      questions.push({ id: `h-${i}`, type: 'header', text: trimmed });
-    }
+    // Continuation text on current question
+    current.lines.push(trimmed);
   }
 
-  if (current) questions.push(current);
+  flush();
   return questions;
+}
+
+// ─── Manual Builder Helpers ───────────────────────────────────────────────────
+const Q_TYPES = [
+  { id: 'mc', label: 'Multiple Choice' },
+  { id: 'fill', label: 'Fill-in-the-blank' },
+  { id: 'open', label: 'Open Response' },
+  { id: 'compute', label: 'Computation' },
+  { id: 'word', label: 'Word Problem' },
+];
+
+const VISUAL_TYPES_LIST = [
+  { id: 'none', label: 'None' },
+  { id: 'ARRAY', label: 'Array (dots)' },
+  { id: 'NUM_LINE', label: 'Number Line' },
+  { id: 'GROUPS', label: 'Groups / Ovals' },
+  { id: 'TENS_FRAME', label: 'Tens Frame' },
+  { id: 'NUM_BOND', label: 'Number Bond' },
+  { id: 'FRACTION', label: 'Fraction Bar' },
+  { id: 'FRAC_CIRCLE', label: 'Fraction Circle' },
+  { id: 'AREA_MODEL', label: 'Area Model' },
+  { id: 'BAR_MODEL', label: 'Bar Model' },
+  { id: 'DATA_TABLE', label: 'Data Table' },
+  { id: 'WORK_SPACE', label: 'Work Space (blank box)' },
+  { id: 'custom', label: 'Upload / Paste Image' },
+];
+
+function VisualParamForm({ type, params, onChange }) {
+  const set = (k, v) => onChange({ ...params, [k]: v });
+  const inp = (label, key, rest = {}) => (
+    <label className="text-xs flex items-center gap-1">
+      {label}
+      <input value={params[key] ?? ''} onChange={e => set(key, e.target.value)}
+        className="border rounded p-1 w-20 ml-1" {...rest} />
+    </label>
+  );
+  switch (type) {
+    case 'ARRAY':
+      return <div className="flex gap-2">{inp('Rows', 'rows', { type: 'number', min: 1, max: 12 })}{inp('Cols', 'cols', { type: 'number', min: 1, max: 12 })}</div>;
+    case 'NUM_LINE':
+      return (
+        <div className="flex flex-wrap gap-2">
+          {inp('Min', 'min', { type: 'number' })}{inp('Max', 'max', { type: 'number' })}{inp('Step', 'step', { type: 'number', min: 1 })}
+          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={params.jumps === 'yes'} onChange={e => set('jumps', e.target.checked ? 'yes' : '')} /> Hops</label>
+          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={params.show === 'all'} onChange={e => set('show', e.target.checked ? 'all' : '')} /> All labels</label>
+        </div>
+      );
+    case 'GROUPS':
+      return <div className="flex gap-2">{inp('Groups', 'groups', { type: 'number', min: 1, max: 8 })}{inp('Items each', 'items', { type: 'number', min: 1, max: 10 })}</div>;
+    case 'TENS_FRAME':
+      return (
+        <div className="flex gap-2">
+          {inp('Filled', 'filled', { type: 'number', min: 0, max: 10 })}
+          <label className="text-xs flex items-center gap-1">Total
+            <select value={params.total || 10} onChange={e => set('total', e.target.value)} className="border rounded p-1 ml-1">
+              <option value="10">10</option><option value="5">5</option>
+            </select>
+          </label>
+        </div>
+      );
+    case 'NUM_BOND':
+      return <div className="flex flex-wrap gap-2">{inp('Whole', 'whole')}{inp('Part 1', 'part1')}{inp('Part 2', 'part2')}</div>;
+    case 'FRACTION':
+    case 'FRAC_CIRCLE':
+      return <div className="flex gap-2">{inp('Numerator', 'n', { type: 'number', min: 0 })}{inp('Denominator', 'd', { type: 'number', min: 1 })}</div>;
+    case 'AREA_MODEL':
+      return (
+        <div className="space-y-1">
+          <label className="text-xs block">Column values (comma-sep) <input value={params.cols || ''} onChange={e => set('cols', e.target.value)} placeholder="e.g. 20,7" className="border rounded p-1 w-28 ml-1" /></label>
+          <label className="text-xs block">Row values (comma-sep) <input value={params.rows || ''} onChange={e => set('rows', e.target.value)} placeholder="e.g. 4" className="border rounded p-1 w-28 ml-1" /></label>
+          <label className="text-xs block">Cell values (optional) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 80,56" className="border rounded p-1 w-28 ml-1" /></label>
+        </div>
+      );
+    case 'BAR_MODEL':
+      return (
+        <div className="space-y-1">
+          <label className="text-xs block">Segment values (comma-sep) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 4,4,4,4" className="border rounded p-1 w-32 ml-1" /></label>
+          <label className="text-xs block">Label (optional) <input value={params.label || ''} onChange={e => set('label', e.target.value)} className="border rounded p-1 w-24 ml-1" /></label>
+        </div>
+      );
+    case 'DATA_TABLE':
+      return (
+        <div className="space-y-1">
+          <label className="text-xs block">Column headers (comma-sep) <input value={params.header || 'Category,Count'} onChange={e => set('header', e.target.value)} className="border rounded p-1 w-full mt-0.5" /></label>
+          <label className="text-xs block">Rows — one per line, values comma-sep
+            <textarea value={params.rowsText || ''} onChange={e => set('rowsText', e.target.value)}
+              className="border rounded p-1 w-full h-20 font-mono text-xs mt-0.5" placeholder={"Apples,5\nBananas,8"} />
+          </label>
+        </div>
+      );
+    default: return null;
+  }
+}
+
+function paramsToMarker(type, params) {
+  if (!type || type === 'none' || type === 'custom') return null;
+  if (type === 'WORK_SPACE') return '[WORK_SPACE]';
+  if (type === 'ARRAY') return `[ARRAY: rows=${params.rows || 3} cols=${params.cols || 4}]`;
+  if (type === 'NUM_LINE') {
+    let m = `[NUM_LINE: min=${params.min ?? 0} max=${params.max ?? 20} step=${params.step ?? 1}`;
+    if (params.jumps === 'yes') m += ' jumps=yes';
+    if (params.show === 'all') m += ' show=all';
+    return m + ']';
+  }
+  if (type === 'GROUPS') return `[GROUPS: groups=${params.groups || 3} items=${params.items || 4}]`;
+  if (type === 'TENS_FRAME') return `[TENS_FRAME: filled=${params.filled ?? 5} total=${params.total || 10}]`;
+  if (type === 'NUM_BOND') return `[NUM_BOND: whole=${params.whole || ''} part1=${params.part1 || ''} part2=${params.part2 || '?'}]`;
+  if (type === 'FRACTION') return `[FRACTION: ${params.n || 1}/${params.d || 4}]`;
+  if (type === 'FRAC_CIRCLE') return `[FRAC_CIRCLE: ${params.n || 1}/${params.d || 4}]`;
+  if (type === 'AREA_MODEL') {
+    let m = `[AREA_MODEL: cols=${params.cols || '20,7'} rows=${params.rows || '4'}`;
+    if (params.vals) m += ` vals=${params.vals}`;
+    return m + ']';
+  }
+  if (type === 'BAR_MODEL') {
+    let m = `[BAR_MODEL: ${params.vals || '5,3'}`;
+    if (params.label) m += ` | label=${params.label}`;
+    return m + ']';
+  }
+  if (type === 'DATA_TABLE') {
+    const rows = (params.rowsText || '').split('\n').filter(Boolean);
+    return `[DATA_TABLE: header=${params.header || 'Category,Count'} | ${rows.join(' | ')}]`;
+  }
+  return null;
+}
+
+// ─── Question Form (for Manual Builder) ──────────────────────────────────────
+function QuestionForm({ question, questionCount, onSave, onCancel }) {
+  const isEdit = !!question?.id;
+  const [qType, setQType] = useState(question?.qType || 'mc');
+  const [qText, setQText] = useState(question?.text || '');
+  const [choices, setChoices] = useState(question?.choices?.length ? question.choices : [{ letter: 'A', text: '' }, { letter: 'B', text: '' }, { letter: 'C', text: '' }, { letter: 'D', text: '' }]);
+  const [standard, setStandard] = useState(question?.standard || '');
+  const [visualType, setVisualType] = useState(question?._visualType || 'none');
+  const [visualParams, setVisualParams] = useState(question?._visualParams || {});
+  const [customImg, setCustomImg] = useState(question?._customImg || null);
+  const fileRef = useRef();
+
+  const handlePaste = e => {
+    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image'));
+    if (item) {
+      const blob = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = ev => setCustomImg(ev.target.result);
+      reader.readAsDataURL(blob);
+    }
+  };
+
+  const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
+  const previewQ = {
+    id: 'preview', type: 'question', qNum: String(questionCount),
+    text: qText || '(question text)',
+    choices: qType === 'mc' ? choices.filter(c => c.text) : [],
+    lines: [], marker, standard,
+  };
+
+  const handleSave = () => {
+    if (!qText.trim()) return;
+    onSave({
+      id: question?.id || `manual-${Date.now()}`,
+      type: 'question', qType,
+      qNum: question?.qNum || String(questionCount),
+      text: qText,
+      choices: qType === 'mc' ? choices.filter(c => c.text) : [],
+      lines: [], marker, standard,
+      _visualType: visualType, _visualParams: visualParams, _customImg: customImg,
+      vb: false,
+    });
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold text-sm text-gray-700">{isEdit ? 'Edit Question' : `Add Question ${questionCount}`}</h4>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+      </div>
+
+      {/* Type */}
+      <div>
+        <p className="text-xs text-gray-500 mb-1">Question Type</p>
+        <div className="flex flex-wrap gap-1">
+          {Q_TYPES.map(qt => (
+            <button key={qt.id} onClick={() => setQType(qt.id)}
+              className={`px-2 py-1 text-xs rounded border transition-colors ${qType === qt.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              {qt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Question text */}
+      <div>
+        <p className="text-xs text-gray-500 mb-1">Question Text</p>
+        <textarea value={qText} onChange={e => setQText(e.target.value)}
+          placeholder={qType === 'fill' ? 'Use ___ for blanks, e.g. "3 × ___ = 12"' : qType === 'compute' ? 'e.g. "432 ÷ 6 ="' : 'Type your question...'}
+          className="w-full border rounded p-2 text-sm h-20 resize-none" />
+      </div>
+
+      {/* MC choices */}
+      {qType === 'mc' && (
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Answer Choices</p>
+          <div className="space-y-1">
+            {choices.map((ch, ci) => (
+              <div key={ci} className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-600 w-4">{ch.letter})</span>
+                <input value={ch.text} onChange={e => {
+                  const nc = [...choices]; nc[ci] = { ...nc[ci], text: e.target.value }; setChoices(nc);
+                }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Standard */}
+      <div>
+        <p className="text-xs text-gray-500 mb-1">Standard (optional)</p>
+        <input value={standard} onChange={e => setStandard(e.target.value)}
+          placeholder="e.g. 3.OA.A.1" className="border rounded p-1 text-sm w-full" />
+      </div>
+
+      {/* Visual */}
+      <div>
+        <p className="text-xs text-gray-500 mb-1">Visual / Model</p>
+        <select value={visualType} onChange={e => { setVisualType(e.target.value); setVisualParams({}); setCustomImg(null); }}
+          className="border rounded p-1.5 text-sm w-full mb-2">
+          {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+        </select>
+
+        {visualType !== 'none' && visualType !== 'custom' && (
+          <div className="bg-gray-50 rounded p-2 space-y-2">
+            <VisualParamForm type={visualType} params={visualParams} onChange={setVisualParams} />
+            {marker && (
+              <div className="overflow-x-auto pt-1">
+                <ErrorBoundary><div>{parseVisualModel(marker)}</div></ErrorBoundary>
+              </div>
+            )}
+          </div>
+        )}
+
+        {visualType === 'custom' && (
+          <div className="border-2 border-dashed border-gray-300 rounded p-3 text-center cursor-pointer hover:border-blue-400"
+            onPaste={handlePaste} onClick={() => fileRef.current?.click()}>
+            {customImg
+              ? <img src={customImg} alt="custom" className="max-h-24 mx-auto" />
+              : <p className="text-xs text-gray-500">Paste (Ctrl+V) or click to upload an image</p>}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setCustomImg(ev.target.result); r.readAsDataURL(f); }} />
+          </div>
+        )}
+      </div>
+
+      {/* Preview */}
+      {qText && (
+        <div className="border rounded p-3 bg-gray-50">
+          <p className="text-xs text-gray-400 mb-1">Preview:</p>
+          <ErrorBoundary>
+            <AssessmentPreviewSingle q={previewQ} customImg={visualType === 'custom' ? customImg : null} />
+          </ErrorBoundary>
+        </div>
+      )}
+
+      <div className="flex gap-2 justify-end pt-1">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm border rounded border-gray-300 hover:bg-gray-50">Cancel</button>
+        <button onClick={handleSave} disabled={!qText.trim()}
+          className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+          {isEdit ? 'Update Question' : 'Add Question'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Single-question preview (used inside QuestionForm)
+function AssessmentPreviewSingle({ q, customImg }) {
+  const visualComponent = customImg
+    ? <img src={customImg} alt="custom" className="max-h-28 border rounded mb-1" />
+    : q.marker
+      ? (q.marker.startsWith('[IMAGE:')
+        ? <div className="border-2 border-dashed border-orange-300 rounded p-2 text-xs text-orange-600 bg-orange-50 mb-1">⚠ Image placeholder</div>
+        : <div className="mb-1"><ErrorBoundary>{parseVisualModel(q.marker)}</ErrorBoundary></div>)
+      : null;
+  return (
+    <div className="font-serif text-gray-900 text-sm">
+      {visualComponent}
+      <div className="flex gap-1">
+        {q.qNum && <span className="font-semibold shrink-0">{q.qNum}.</span>}
+        <div>
+          {q.text}
+          {q.choices.length > 0 && (
+            <div className="mt-1 ml-2 space-y-0.5">
+              {q.choices.map((ch, i) => <div key={i}><span className="font-medium">{ch.letter})</span> {ch.text}</div>)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Manual Builder ───────────────────────────────────────────────────────────
+function ManualBuilder({ onPrint, onCopyGdoc }) {
+  const [questions, setQuestions] = useState([]);
+  const [title, setTitle] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingQ, setEditingQ] = useState(null);
+  const [customVisuals, setCustomVisuals] = useState({});
+  const [editingVisual, setEditingVisual] = useState(null);
+
+  const handleSave = q => {
+    if (editingQ) {
+      setQuestions(prev => prev.map(pq => pq.id === editingQ.id ? q : pq));
+    } else {
+      const num = questions.filter(x => x.type === 'question').length + 1;
+      setQuestions(prev => [...prev, { ...q, qNum: String(num) }]);
+    }
+    setShowForm(false);
+    setEditingQ(null);
+  };
+
+  const deleteQ = id => setQuestions(prev => prev.filter(q => q.id !== id));
+  const moveQ = (id, dir) => {
+    setQuestions(prev => {
+      const idx = prev.findIndex(q => q.id === id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const swapIdx = idx + dir;
+      if (swapIdx < 0 || swapIdx >= next.length) return prev;
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next.map((q, i) => ({ ...q, qNum: q.type === 'question' ? String(i + 1) : q.qNum }));
+    });
+  };
+
+  const headerQ = title ? [{ id: 'title', type: 'header', text: title }] : [];
+  const allQs = [...headerQ, ...questions];
+  const qCount = questions.filter(q => q.type === 'question').length;
+
+  return (
+    <div className="flex gap-6">
+      {/* Left — question list */}
+      <div className="w-80 shrink-0 space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assessment Title</p>
+          <input value={title} onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. 3.OA.1 Multiplication Check-In"
+            className="w-full border rounded p-2 text-sm" />
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Questions ({qCount})</p>
+            <button onClick={() => { setEditingQ(null); setShowForm(!showForm); }}
+              className="text-xs bg-blue-600 text-white rounded px-2 py-1 hover:bg-blue-700">+ Add</button>
+          </div>
+
+          {questions.length === 0 && (
+            <p className="text-xs text-gray-400 text-center py-4">No questions yet — click Add to begin</p>
+          )}
+
+          <div className="space-y-1 max-h-80 overflow-y-auto">
+            {questions.map((q, idx) => q.type === 'question' && (
+              <div key={q.id} className="flex items-center gap-1 bg-gray-50 rounded p-1.5 group">
+                <span className="text-xs text-gray-400 w-5 shrink-0">{q.qNum}.</span>
+                <span className="flex-1 text-xs text-gray-700 truncate">{q.text}</span>
+                <div className="opacity-0 group-hover:opacity-100 flex gap-0.5">
+                  <button onClick={() => moveQ(q.id, -1)} className="text-gray-400 hover:text-gray-700 px-0.5">↑</button>
+                  <button onClick={() => moveQ(q.id, 1)} className="text-gray-400 hover:text-gray-700 px-0.5">↓</button>
+                  <button onClick={() => { setEditingQ(q); setShowForm(true); }} className="text-blue-500 hover:text-blue-700 px-0.5">✎</button>
+                  <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {showForm && (
+          <QuestionForm
+            question={editingQ}
+            questionCount={editingQ ? parseInt(editingQ.qNum) : qCount + 1}
+            onSave={handleSave}
+            onCancel={() => { setShowForm(false); setEditingQ(null); }}
+          />
+        )}
+
+        {qCount > 0 && (
+          <div className="space-y-2">
+            <button onClick={onPrint}
+              className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+              🖨 Print / Export PDF
+            </button>
+            <button onClick={() => onCopyGdoc(allQs)}
+              className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+              📋 Copy to Google Docs
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Right — preview */}
+      <div className="flex-1 min-w-0">
+        {allQs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-300">
+            <p className="text-4xl mb-3">✏️</p>
+            <p className="text-sm">Add questions to build your assessment</p>
+          </div>
+        ) : (
+          <div id="print-area" className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
+            <AssessmentPreview
+              questions={allQs}
+              customVisuals={customVisuals}
+              onEdit={(idx, marker) => setEditingVisual({ idx, marker })}
+              onQuestionEdit={(idx, uq) => setQuestions(prev => prev.map((q, i) => {
+                const qIdx = questions.indexOf(prev.filter(x => x.type === 'question')[i]);
+                return q.id === uq.id ? uq : q;
+              }))}
+            />
+          </div>
+        )}
+      </div>
+
+      {editingVisual && (
+        <ModelEditor
+          marker={editingVisual.marker}
+          onSave={({ marker, customImg }) => {
+            setCustomVisuals(prev => ({ ...prev, [editingVisual.idx]: { marker, customImg } }));
+            setEditingVisual(null);
+          }}
+          onClose={() => setEditingVisual(null)}
+        />
+      )}
+    </div>
+  );
 }
 
 // ─── Model Editor ─────────────────────────────────────────────────────────────
@@ -695,99 +1138,123 @@ function ModelEditor({ marker, onSave, onClose }) {
 function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [editText, setEditText] = useState('');
+  const [activeVersion, setActiveVersion] = useState('A');
+
+  const hasVersionB = questions.some(q => q.vb);
+  const hasAnswerKey = questions.some(q => q.type === 'answer-key');
+
+  const visibleQs = questions.filter(q => {
+    if (q.type === 'vb-divider' || q.type === 'ak-divider') return false;
+    if (activeVersion === 'key') return q.type === 'answer-key';
+    if (activeVersion === 'B') return !!q.vb && q.type !== 'answer-key';
+    return !q.vb && q.type !== 'answer-key'; // Version A
+  });
 
   const startEdit = (idx, text) => { setEditingIdx(idx); setEditText(text); };
-  const saveEdit = (idx, q) => {
-    onQuestionEdit(idx, { ...q, text: editText });
-    setEditingIdx(null);
-  };
+  const saveEdit = (idx, q) => { onQuestionEdit(idx, { ...q, text: editText }); setEditingIdx(null); };
+
+  // Map from visibleQs index to original questions index (for customVisuals keying)
+  const origIdxMap = visibleQs.map(vq => questions.indexOf(vq));
 
   return (
-    <div className="font-serif text-gray-900 max-w-2xl mx-auto space-y-4">
-      {questions.map((q, idx) => {
-        if (q.type === 'header') {
-          return (
-            <div key={q.id} className="text-center font-bold text-base mt-4 mb-1 text-gray-800">
-              {q.text}
-            </div>
-          );
-        }
-        if (q.type === 'meta') {
-          return (
-            <div key={q.id} className="text-sm text-gray-600 font-mono border-t pt-2 mt-4">
-              {q.text}
-            </div>
-          );
-        }
+    <div className="font-serif text-gray-900 max-w-2xl mx-auto">
+      {/* Version tabs */}
+      {(hasVersionB || hasAnswerKey) && (
+        <div className="flex gap-1 mb-4 no-print">
+          {['A', hasVersionB && 'B', hasAnswerKey && 'key'].filter(Boolean).map(v => (
+            <button key={v}
+              onClick={() => setActiveVersion(v)}
+              className={`px-3 py-1 text-xs rounded border transition-colors ${activeVersion === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              {v === 'key' ? 'Answer Key' : `Version ${v}`}
+            </button>
+          ))}
+        </div>
+      )}
 
-        const cv = customVisuals?.[idx];
-        const visualComponent = cv?.customImg
-          ? <img src={cv.customImg} alt="custom" className="max-h-32 border rounded" />
-          : q.marker
-            ? (q.marker.startsWith('[IMAGE:')
-              ? <div className="border-2 border-dashed border-orange-300 rounded p-3 text-xs text-orange-600 bg-orange-50">
-                  ⚠ Paste your own image here — click Edit Visual
+      <div className="space-y-4">
+        {visibleQs.map((q, vIdx) => {
+          const idx = origIdxMap[vIdx];
+
+          if (q.type === 'header') {
+            return (
+              <div key={q.id} className="text-center font-bold text-base mt-4 mb-1 text-gray-800">
+                {q.text}
+              </div>
+            );
+          }
+
+          if (q.type === 'answer-key') {
+            return (
+              <div key={q.id} className="text-sm text-gray-700 font-mono">
+                {q.text}
+              </div>
+            );
+          }
+
+          const cv = customVisuals?.[idx];
+          const markerToUse = cv?.marker || q.marker;
+          const visualComponent = cv?.customImg
+            ? <img src={cv.customImg} alt="custom" className="max-h-32 border rounded" />
+            : markerToUse
+              ? (markerToUse.startsWith('[IMAGE:')
+                ? <div className="border-2 border-dashed border-orange-300 rounded p-3 text-xs text-orange-600 bg-orange-50">
+                    ⚠ Paste your own image here — click Edit Visual
+                  </div>
+                : <ErrorBoundary>{parseVisualModel(markerToUse)}</ErrorBoundary>)
+              : null;
+
+          return (
+            <div key={q.id} className="group relative">
+              {visualComponent && (
+                <div className="mb-1 relative">
+                  {visualComponent}
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(idx, markerToUse)}
+                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-xs bg-white border border-gray-300 rounded px-2 py-0.5 shadow text-gray-600 hover:bg-gray-50 transition-opacity no-print">
+                      Edit Visual
+                    </button>
+                  )}
                 </div>
-              : <ErrorBoundary>{parseVisualModel(cv?.marker || q.marker)}</ErrorBoundary>)
-            : null;
-
-        return (
-          <div key={q.id} className="group relative">
-            {visualComponent && (
-              <div className="mb-1 relative">
-                {visualComponent}
-                <button
-                  onClick={() => onEdit(idx, cv?.marker || q.marker)}
-                  className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-xs bg-white border border-gray-300 rounded px-2 py-0.5 shadow text-gray-600 hover:bg-gray-50 transition-opacity">
-                  Edit Visual
-                </button>
-              </div>
-            )}
-
-            <div className="flex gap-1">
-              {q.qNum && (
-                <span className="font-semibold text-gray-700 shrink-0">{q.qNum}.</span>
               )}
-              <div className="flex-1">
-                {editingIdx === idx ? (
-                  <div className="flex gap-2 items-start">
-                    <textarea value={editText} onChange={e => setEditText(e.target.value)}
-                      className="flex-1 border rounded p-1 text-sm font-sans" rows={2} />
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => saveEdit(idx, q)}
-                        className="text-xs bg-green-600 text-white rounded px-2 py-1">✓</button>
-                      <button onClick={() => setEditingIdx(null)}
-                        className="text-xs border rounded px-2 py-1">✕</button>
-                    </div>
-                  </div>
-                ) : (
-                  <span
-                    className="cursor-pointer hover:bg-yellow-50 rounded px-0.5 transition-colors"
-                    onClick={() => startEdit(idx, q.text)}
-                    title="Click to edit">
-                    {q.text}
-                    {q.lines.map((l, li) => <span key={li}><br />{l}</span>)}
-                  </span>
-                )}
 
-                {q.choices.length > 0 && (
-                  <div className="mt-1 ml-2 space-y-0.5">
-                    {q.choices.map((ch, ci) => (
-                      <div key={ci} className="text-sm">
-                        <span className="font-medium">{ch.letter})</span> {ch.text}
+              <div className="flex gap-1">
+                {q.qNum && <span className="font-semibold text-gray-700 shrink-0">{q.qNum}.</span>}
+                <div className="flex-1">
+                  {editingIdx === idx ? (
+                    <div className="flex gap-2 items-start">
+                      <textarea value={editText} onChange={e => setEditText(e.target.value)}
+                        className="flex-1 border rounded p-1 text-sm font-sans" rows={2} />
+                      <div className="flex flex-col gap-1">
+                        <button onClick={() => saveEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-1">✓</button>
+                        <button onClick={() => setEditingIdx(null)} className="text-xs border rounded px-2 py-1">✕</button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  ) : (
+                    <span className="cursor-pointer hover:bg-yellow-50 rounded px-0.5 transition-colors"
+                      onClick={() => startEdit(idx, q.text)} title="Click to edit">
+                      {q.text}
+                      {q.lines?.map((l, li) => <span key={li}><br />{l}</span>)}
+                    </span>
+                  )}
 
-                {q.standard && (
-                  <div className="text-xs text-gray-400 mt-0.5">{q.standard}</div>
-                )}
+                  {q.choices?.length > 0 && (
+                    <div className="mt-1 ml-2 space-y-0.5">
+                      {q.choices.map((ch, ci) => (
+                        <div key={ci} className="text-sm">
+                          <span className="font-medium">{ch.letter})</span> {ch.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {q.standard && <div className="text-xs text-gray-400 mt-0.5">{q.standard}</div>}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -827,10 +1294,63 @@ const PRINT_STYLE = `
 }
 `;
 
+// ─── Google Docs copy helper ──────────────────────────────────────────────────
+function copyToGoogleDocs(questions) {
+  let html = '<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.6">';
+  questions.forEach(q => {
+    if (!q || !q.type) return;
+    if (q.type === 'header') {
+      html += `<p style="font-weight:bold;text-align:center;margin:12px 0">${q.text}</p>`;
+    } else if (q.type === 'vb-divider') {
+      html += `<hr/><p style="font-weight:bold;margin:12px 0">VERSION B</p>`;
+    } else if (q.type === 'ak-divider') {
+      html += `<hr/><p style="font-weight:bold;margin:12px 0">TEACHER ANSWER KEY</p>`;
+    } else if (q.type === 'answer-key') {
+      html += `<p style="font-family:monospace;font-size:11pt">${q.text}</p>`;
+    } else if (q.type === 'question') {
+      if (q.marker) {
+        if (q.marker.startsWith('[IMAGE:')) {
+          html += `<p style="border:1px dashed #ea580c;padding:4px 8px;color:#ea580c;font-size:10pt">[Paste your image here]</p>`;
+        } else if (q.marker.startsWith('[WORK_SPACE')) {
+          html += `<p style="border:1px dashed #94a3b8;height:72pt;margin:8px 0">&nbsp;</p>`;
+        } else {
+          html += `<p style="border:1px dashed #94a3b8;padding:4px 8px;color:#64748b;font-size:10pt">[${q.marker}]</p>`;
+        }
+      }
+      html += `<p style="margin:4px 0"><strong>${q.qNum ? q.qNum + '. ' : ''}</strong>${q.text}</p>`;
+      q.lines?.forEach(l => { html += `<p style="margin:2px 0 2px 16px">${l}</p>`; });
+      q.choices?.forEach(ch => { html += `<p style="margin:2px 0 2px 24px">${ch.letter}) ${ch.text}</p>`; });
+      if (q.standard) html += `<p style="color:#94a3b8;font-size:10pt">${q.standard}</p>`;
+    }
+  });
+  html += '</body></html>';
+
+  try {
+    const blob = new Blob([html], { type: 'text/html' });
+    const plain = new Blob([questions.filter(q => q.type === 'question').map(q =>
+      (q.qNum ? q.qNum + '. ' : '') + q.text + (q.choices?.length ? '\n' + q.choices.map(c => `  ${c.letter}) ${c.text}`).join('\n') : '')
+    ).join('\n\n')], { type: 'text/plain' });
+    const item = new ClipboardItem({ 'text/html': blob, 'text/plain': plain });
+    navigator.clipboard.write([item]).catch(() => navigator.clipboard.writeText(plain));
+  } catch {
+    navigator.clipboard.writeText(questions.filter(q => q.text).map(q => q.text).join('\n\n')).catch(() => {});
+  }
+  window.open('https://docs.google.com/document/create', '_blank');
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AssessmentBuilder() {
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [appMode, setAppMode] = useState('ai'); // 'ai' | 'manual'
+  const [toast, setToast] = useState('');
+
+  const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  const handleCopyGdoc = qs => {
+    copyToGoogleDocs(qs);
+    showToast('Copied! Paste into the Google Doc that just opened (Ctrl+V / Cmd+V)');
+  };
 
   // Input mode
   const [inputMode, setInputMode] = useState('file'); // file | paste | url | scratch
@@ -938,19 +1458,43 @@ export default function AssessmentBuilder() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Print styles injected via useEffect */}
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm rounded-lg px-4 py-2 shadow-lg no-print">
+          {toast}
+        </div>
+      )}
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between no-print">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Assessment Builder</h1>
-          <p className="text-sm text-gray-500">Upload a PDF → get a parallel form with updated visuals</p>
+      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between no-print">
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">Assessment Builder</h1>
+          </div>
+          {/* App mode toggle */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+            {[['ai', '✦ AI Generate'], ['manual', '✏ Manual Build']].map(([mode, label]) => (
+              <button key={mode} onClick={() => setAppMode(mode)}
+                className={`px-4 py-1.5 text-xs transition-colors ${appMode === mode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <button onClick={() => setShowSettings(true)}
           className="text-gray-500 hover:text-gray-800 text-xl" title="Settings">⚙</button>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-6 flex gap-6">
+      <div className="max-w-5xl mx-auto px-6 py-6">
+
+      {/* ── Manual Build mode ── */}
+      {appMode === 'manual' && (
+        <ManualBuilder onPrint={() => window.print()} onCopyGdoc={handleCopyGdoc} />
+      )}
+
+      {/* ── AI Generate mode ── */}
+      {appMode === 'ai' && (
+      <div className="flex gap-6">
 
         {/* Left panel — inputs */}
         <div className="w-80 shrink-0 space-y-4 no-print">
@@ -1079,6 +1623,10 @@ export default function AssessmentBuilder() {
                 className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                 🖨 Print / Export PDF
               </button>
+              <button onClick={() => handleCopyGdoc(questions)}
+                className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                📋 Copy to Google Docs
+              </button>
               <button
                 onClick={() => {
                   const blob = new Blob([rawText], { type: 'text/plain' });
@@ -1137,6 +1685,7 @@ export default function AssessmentBuilder() {
           )}
         </div>
       </div>
+      )}
 
       {/* Modals */}
       {showSettings && (
@@ -1149,6 +1698,7 @@ export default function AssessmentBuilder() {
           onClose={() => setEditingVisual(null)}
         />
       )}
+      </div>
     </div>
   );
 }
