@@ -1461,7 +1461,11 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                   <div className="flex-1">
                     <p className="text-gray-800 font-semibold text-base leading-relaxed">{q.text}</p>
                     {q.extra.length > 0 && (
-                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">{q.extra.join(' ')}</p>
+                      <div className="text-gray-600 text-sm mt-2 space-y-1.5">
+                        {q.extra.map((line, i) => (
+                          <p key={i} className="leading-relaxed">{line}</p>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
