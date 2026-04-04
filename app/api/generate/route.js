@@ -94,32 +94,42 @@ For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate li
   [FRACTION: 2 1/4]
   What is 1 2/4 + 2 1/4?
 
-CRITICAL — THE VISUAL AND THE QUESTION MUST MATCH EXACTLY:
-The question text and the visual marker must refer to the same numbers. A student should be able to look at the visual and answer the question using only what they see. If they don't match, the question is broken.
+CRITICAL — THE VISUAL TYPE AND VALUES MUST BOTH MATCH THE QUESTION:
+The question text must match the visual in TWO ways: (1) the TYPE of visual shown, and (2) the exact numbers used. A student should be able to look at the visual and answer the question using only what they see.
+
+RULE 1 — MATCH THE TYPE:
+- If the question says "number line" → use NUM_LINE (never ARRAY, never GROUPS)
+- If the question says "array" → use ARRAY (never NUM_LINE, never GROUPS)
+- If the question says "groups" or "groups of" → use GROUPS (never ARRAY)
+- If the question says "fraction bar" or "shaded" → use FRACTION
+- If the question says "place value chart" → use PV_CHART
+- If the question says "base-10 blocks" → use BASE10
+- NEVER show a number line for a question about arrays. NEVER show an array for a question about a number line.
+
+RULE 2 — MATCH THE VALUES:
+Every specific number the question asks about must appear in the visual marker spec.
 
 CORRECT examples:
+  [NUM_LINE: min=0 max=30 step=5 jumps=yes]
+  Use the number line to skip count by 5s. What number comes after 25?  ← number line for a number line question ✓
+
   [ARRAY: rows=4 cols=6]
-  What does the factor 4 tell you about this array?   ← 4 is a dimension of the array ✓
+  What does the factor 4 tell you about this array?  ← array for array question, 4 is in the spec ✓
 
   [GROUPS: groups=5 items=3]
-  There are 5 groups. How many items are in each group?  ← 5 matches groups= ✓
-
-  [FRACTION: 3/8]
-  What fraction of the bar is shaded?  ← 3/8 is what the bar shows ✓
+  There are 5 groups. How many items are in each group?  ← groups visual for groups question ✓
 
 WRONG examples (never do this):
+  [ARRAY: rows=3 cols=5]
+  Use the number line to find the missing number.  ← array shown but question asks for number line ✗
+
+  [NUM_LINE: min=0 max=20 step=4]
+  What does the factor 4 tell you about this array?  ← number line shown but question asks about an array ✗
+
   [ARRAY: rows=3 cols=4]
-  What does the factor 5 tell you about this array?  ← 5 doesn't appear in the array ✗
+  What does the factor 5 tell you about this array?  ← correct type but wrong values ✗
 
-  [GROUPS: groups=4 items=6]
-  How many are in 3 groups of 7?  ← question uses different numbers than the visual ✗
-
-RULES:
-- Write the question FIRST in your head, decide the exact numbers, THEN write the marker using those same numbers.
-- Every number the question asks about must appear in the visual marker.
-- If the question asks about a factor, that factor must be rows= or cols= in the ARRAY.
-- If the question asks about groups, that number must be groups= in GROUPS.
-- If a visual doesn't match the question, remove the visual entirely rather than show a misleading one.
+FINAL RULE: If you cannot find a visual that matches both the type AND the values in the question, do not include a visual at all. A missing visual is better than a wrong one.
 
 CRITICAL — WHEN TO USE VISUAL MODELS:
 - If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
