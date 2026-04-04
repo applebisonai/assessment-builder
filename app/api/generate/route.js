@@ -351,13 +351,20 @@ RULE 4 — COPY QUESTION FORMAT EXACTLY.
   Source: open response / show work        → Output: open response / show work
   Source: fill-in-the-blank               → Output: fill-in-the-blank (same blank positions)
 
-RULE 5 — MATCH VISUAL TYPES FROM SOURCE (TEXT OR MARKER).
+RULE 5 — MATCH VISUAL TYPES FROM SOURCE (TEXT OR MARKER). EVERY VISUAL MUST APPEAR.
 The source may be a plain-text PDF with no markers. In that case, READ the question text and
 TABLE/GRID STRUCTURE to decide whether a visual is needed.
 
+CRITICAL: If the source question has ANY visual, diagram, image, model, table, chart, or graphic
+that belongs to it, you MUST include a visual marker in the output — even if it does not perfectly
+match. NEVER silently drop a visual. The teacher will be shown a note and can replace it.
+
 If source HAS a visual marker already → copy it to the output with updated values.
-If source DESCRIBES a visual in text → add the appropriate marker to the output.
-If source has no visual and does not describe one → no marker.
+If source DESCRIBES or SHOWS a standard visual type → add the matching marker (see guide below).
+If source has a visual that is NOT a standard type (e.g. bar graph, photo, word-problem
+  illustration, coordinate plane, clock, unique diagram) → add [IMAGE:] as a placeholder.
+  The app will show the teacher a note to paste their own version of the visual.
+If source has no visual at all and does not describe one → no marker.
 
 Visual inference guide — add a marker whenever the source question:
 

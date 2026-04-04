@@ -879,6 +879,17 @@ function parseVisualModel(marker) {
         <img src={url} alt="Visual model" style={{maxWidth:'100%', borderRadius:'6px', display:'block'}}
           onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
         <span style={{display:'none'}} className="text-xs text-red-400 italic">Image could not be loaded.</span>
+        <div className="no-print mt-1 px-2 py-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded flex gap-1 items-start">
+          <span className="shrink-0">⚠️</span>
+          <span><strong>Teacher note:</strong> This visual was copied from the source and may not match this parallel version. Hover → use <strong>✏ Edit</strong> to paste your own image, or <strong>🔬 Recreate</strong> to auto-convert it to an editable vector model.</span>
+        </div>
+      </div>
+    );
+    // No URL — empty IMAGE placeholder (AI left a marker for a visual it can't reproduce)
+    return (
+      <div className="no-print my-2 bg-amber-50 border-2 border-dashed border-amber-300 rounded-lg p-4 text-center">
+        <p className="text-sm text-amber-700 font-medium">📎 Visual placeholder</p>
+        <p className="text-xs text-amber-600 mt-1">The source had a visual here that couldn&apos;t be auto-copied. Hover → <strong>✏ Edit</strong> to paste or upload your own image.</p>
       </div>
     );
   }
@@ -1268,6 +1279,7 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, onReplace, a
   });
   // IMAGE state
   const [imageUrl, setImageUrl] = useState(modelType === 'IMAGE' ? rawSpecInit : '');
+  const editorFileRef = useRef(null);
   // Recreate state (for IMAGE markers)
   const [analyzingModel, setAnalyzingModel] = useState(false);
   const [analyzeModelError, setAnalyzeModelError] = useState(null);
@@ -1446,12 +1458,27 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, onReplace, a
         </div>
       );
       case 'IMAGE': return (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-400">Paste image URL (right-click any image online → Copy image address):</p>
-          <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400"
-            placeholder="https://..."/>
-          {imageUrl && <img src={imageUrl} alt="" className="max-w-full rounded border border-gray-200" style={{maxHeight:'120px', objectFit:'contain'}}/>}
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-gray-600 mb-1.5">📋 Paste or upload your own image:</p>
+            <div
+              tabIndex={0}
+              onPaste={handleEditorPaste}
+              onClick={() => editorFileRef.current?.click()}
+              className="border-2 border-dashed border-indigo-200 rounded-lg p-3 text-center text-xs text-gray-400 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition focus:outline-none focus:border-indigo-400 select-none">
+              Click here → then <strong>Ctrl+V</strong> / <strong>⌘V</strong> to paste a screenshot or snipped image
+              <span className="block mt-0.5 text-indigo-400">or click to choose a file from your computer</span>
+            </div>
+            <input ref={editorFileRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { if (e.target.files[0]) handleEditorFile(e.target.files[0]); e.target.value=''; }}/>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-600 mb-1">Or paste an image URL:</p>
+            <input type="url" value={typeof imageUrl === 'string' && !imageUrl.startsWith('data:') ? imageUrl : ''} onChange={e => setImageUrl(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400"
+              placeholder="https://..."/>
+          </div>
+          {imageUrl && <img src={imageUrl} alt="" className="max-w-full rounded border border-gray-200" style={{maxHeight:'140px', objectFit:'contain'}}/>}
         </div>
       );
       case 'PV_CHART': return (
@@ -1476,6 +1503,19 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, onReplace, a
       <button onClick={onRemove} className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-1.5 py-0.5 bg-white">✕ Remove</button>
     </div>
   );
+
+  // Convert file → base64 data URL and set as imageUrl
+  const handleEditorFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => setImageUrl(e.target.result);
+    reader.readAsDataURL(file);
+  };
+  // Handle paste inside the editor paste zone
+  const handleEditorPaste = (e) => {
+    const file = e.clipboardData?.files?.[0];
+    if (file && file.type.startsWith('image/')) { e.preventDefault(); handleEditorFile(file); }
+  };
 
   // Recreate IMAGE as a native vector visual
   const handleRecreate = async () => {
