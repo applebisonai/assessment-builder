@@ -594,7 +594,7 @@ function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
 
 // ─── Visual Model Inline Editor ─────────────────────────────────────────────
 
-function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
+function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, invalid }) {
   // Parse model type and spec from marker
   const inner = marker.replace(/^\[|\]$/g, '').trim();
   const colonIdx = inner.indexOf(':');
@@ -633,51 +633,47 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
   // IMAGE state
   const [imageUrl, setImageUrl] = useState(modelType === 'IMAGE' ? rawSpecInit : '');
+  // Bank save state
+  const [bankName, setBankName] = useState('');
+  const [showBankSave, setShowBankSave] = useState(false);
 
   if (!modelType) return <>{children}</>;
 
   const inputCls = 'border border-gray-300 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:border-indigo-400';
   const labelCls = 'text-xs text-gray-500 flex items-center gap-1';
 
-  const handleSave = () => {
-    let newMarker = marker;
+  const computeNewMarker = () => {
     switch (modelType) {
       case 'FRACTION':
-        newMarker = (isMixed && whole > 0)
+        return (isMixed && whole > 0)
           ? `[FRACTION: ${whole} ${numer}/${denom}]`
           : `[FRACTION: ${numer}/${denom}]`;
-        break;
       case 'BASE10':
-        newMarker = `[BASE10: hundreds=${hundreds} tens=${tens} ones=${ones}]`;
-        break;
+        return `[BASE10: hundreds=${hundreds} tens=${tens} ones=${ones}]`;
       case 'NUM_LINE': {
         const jp = nlJumps ? ' jumps=yes' : '';
         const lp = nlLabel ? ` | label=${nlLabel}` : '';
-        newMarker = `[NUM_LINE: min=${nlMin} max=${nlMax} step=${nlStep}${jp}${lp}]`;
-        break;
+        return `[NUM_LINE: min=${nlMin} max=${nlMax} step=${nlStep}${jp}${lp}]`;
       }
       case 'PV_CHART':
-        newMarker = `[PV_CHART: ${pvNum}]`;
-        break;
+        return `[PV_CHART: ${pvNum}]`;
       case 'BAR_MODEL':
-        newMarker = `[BAR_MODEL: ${rawSpec}]`;
-        break;
+        return `[BAR_MODEL: ${rawSpec}]`;
       case 'TAPE':
-        newMarker = `[TAPE: ${rawSpec}]`;
-        break;
+        return `[TAPE: ${rawSpec}]`;
       case 'GROUPS':
-        newMarker = `[GROUPS: groups=${groupsCount} items=${itemsPerGroup}]`;
-        break;
+        return `[GROUPS: groups=${groupsCount} items=${itemsPerGroup}]`;
       case 'ARRAY':
-        newMarker = `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
-        break;
+        return `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
       case 'IMAGE':
-        newMarker = `[IMAGE: ${imageUrl}]`;
-        break;
+        return `[IMAGE: ${imageUrl}]`;
       default:
-        newMarker = `[${modelType}: ${rawSpec}]`;
+        return `[${modelType}: ${rawSpec}]`;
     }
-    onSave(marker, newMarker);
+  };
+
+  const handleSave = () => {
+    onSave(marker, computeNewMarker());
     setEditing(false);
   };
 
@@ -779,6 +775,31 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
             <button onClick={() => setEditing(false)} className="text-gray-500 text-xs px-2 py-1 rounded-lg hover:bg-gray-100 transition">Cancel</button>
             {onRemove && <button onClick={onRemove} className="ml-auto text-red-400 text-xs px-2 py-1 rounded-lg hover:bg-red-50 transition">Remove model</button>}
           </div>
+          {/* Save to Model Bank */}
+          {onSaveToBank && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              {!showBankSave ? (
+                <button onClick={() => setShowBankSave(true)} className="text-xs text-violet-500 hover:text-violet-700 font-medium">
+                  🏦 Save to Model Bank
+                </button>
+              ) : (
+                <div className="flex gap-1.5 items-center">
+                  <input type="text" value={bankName} onChange={e => setBankName(e.target.value)}
+                    placeholder="Name this model (e.g. 4×6 Array)..."
+                    className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-violet-400"
+                    onKeyDown={e => { if (e.key === 'Enter' && bankName.trim()) { onSaveToBank(computeNewMarker(), bankName.trim()); setBankName(''); setShowBankSave(false); }}}
+                    autoFocus/>
+                  <button
+                    onClick={() => { if (bankName.trim()) { onSaveToBank(computeNewMarker(), bankName.trim()); setBankName(''); setShowBankSave(false); }}}
+                    disabled={!bankName.trim()}
+                    className="bg-violet-600 text-white text-xs px-3 py-1 rounded-lg disabled:opacity-40 hover:bg-violet-700 transition font-semibold">
+                    Save
+                  </button>
+                  <button onClick={() => { setShowBankSave(false); setBankName(''); }} className="text-gray-400 text-xs px-1 hover:text-gray-600">✕</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -813,7 +834,105 @@ function AddImageButton({ onAdd }) {
   );
 }
 
-function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage, customTitle }) {
+// ─── Model Bank Panel ────────────────────────────────────────────────────────
+
+function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
+  const [filter, setFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+
+  const TYPE_FILTERS = ['ALL','ARRAY','GROUPS','NUM_LINE','FRACTION','BASE10','PV_CHART','BAR_MODEL','TAPE','IMAGE'];
+  const TYPE_FILTER_LABELS = {
+    ALL: 'All', ARRAY: 'Arrays', GROUPS: 'Groups', NUM_LINE: 'Number Lines',
+    FRACTION: 'Fractions', BASE10: 'Base-10', PV_CHART: 'Place Value',
+    BAR_MODEL: 'Bar Models', TAPE: 'Tape', IMAGE: 'Images',
+  };
+
+  const filtered = bank.filter(item => {
+    const matchesFilter = filter === 'ALL' || item.type === filter;
+    const matchesSearch = !search || item.name.toLowerCase().includes(search.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🏦</span>
+            <h2 className="text-lg font-bold text-gray-800">Model Bank</h2>
+            <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">{bank.length} saved</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">✕</button>
+        </div>
+
+        {/* Search + filter tabs */}
+        <div className="p-4 border-b border-gray-100 space-y-3">
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name..."
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"/>
+          <div className="flex gap-1.5 flex-wrap">
+            {TYPE_FILTERS.map(t => (
+              <button key={t} onClick={() => setFilter(t)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-full transition ${filter === t ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-violet-100 hover:text-violet-700'}`}>
+                {TYPE_FILTER_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Items grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <div className="text-5xl mb-3">📭</div>
+              <p className="font-medium text-gray-500">{bank.length === 0 ? 'Your model bank is empty' : 'No models match your filter'}</p>
+              <p className="text-sm mt-1">
+                {bank.length === 0
+                  ? 'Hover any model in the preview → click ✏ Edit → "Save to Model Bank"'
+                  : 'Try a different filter or search term.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {filtered.map(item => (
+                <div key={item.id} className="border border-gray-200 rounded-xl p-3 hover:border-violet-300 hover:bg-violet-50 transition">
+                  {/* Preview (scaled down) */}
+                  <div className="flex justify-center items-center min-h-[80px] overflow-hidden">
+                    <div style={{transform:'scale(0.65)', transformOrigin:'center', maxWidth:'140%', pointerEvents:'none'}}>
+                      {parseVisualModel(item.marker) || <span className="text-xs text-gray-300 italic">No preview</span>}
+                    </div>
+                  </div>
+                  {/* Name + type badge */}
+                  <p className="text-xs font-semibold text-gray-700 mt-2 text-center truncate" title={item.name}>{item.name}</p>
+                  <p className="text-xs text-violet-400 text-center font-medium">{item.type}</p>
+                  {/* Action buttons */}
+                  <div className="flex gap-1 mt-2.5">
+                    <button onClick={() => onInsert(item.marker)}
+                      className="flex-1 bg-violet-600 text-white text-xs py-1.5 rounded-lg hover:bg-violet-700 transition font-semibold">
+                      Insert
+                    </button>
+                    <button onClick={() => onDelete(item.id)}
+                      className="text-red-400 hover:text-red-600 text-xs px-2 rounded-lg hover:bg-red-50 transition" title="Remove from bank">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer hint */}
+        <div className="px-5 py-3 border-t border-gray-100 text-center text-xs text-gray-400">
+          To save a model: hover it in the preview → ✏ Edit → Save to Model Bank
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage, onBrowseBank, onSaveToBank, customTitle }) {
   const { title, subtitle, questions } = parseAssessment(text);
   const displayTitle = customTitle || title || `${subject} Assessment`;
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
@@ -919,7 +1038,8 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                           <ModelEditWrapper key={mi} marker={m}
                             invalid={isInvalid}
                             onSave={(oldM, newM) => onModelEdit(oldM, newM)}
-                            onRemove={() => onModelEdit(m, '')}>
+                            onRemove={() => onModelEdit(m, '')}
+                            onSaveToBank={onSaveToBank}>
                             {rendered ? <div>{rendered}</div> : null}
                           </ModelEditWrapper>
                         );
@@ -930,10 +1050,18 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                   </div>
                 )}
 
-                {/* Add Image button (edit mode only) */}
+                {/* Add Image + Browse Bank buttons (edit mode only) */}
                 {onAddImage && (
-                  <div className="ml-11 mb-3">
+                  <div className="ml-11 mb-1">
                     <AddImageButton onAdd={(url) => onAddImage(q.num, url)}/>
+                  </div>
+                )}
+                {onBrowseBank && (
+                  <div className="ml-11 mb-3 no-print">
+                    <button onClick={() => onBrowseBank(q.num)}
+                      className="text-xs text-violet-500 hover:text-violet-700 border border-dashed border-violet-200 rounded-lg px-3 py-1.5 w-full text-center hover:bg-violet-50 transition">
+                      🔍 Search for resource in the bank of models and visuals
+                    </button>
                   </div>
                 )}
 
@@ -1040,13 +1168,29 @@ export default function AssessmentBuilder() {
   const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'edit' | 'raw'
   const [copied, setCopied] = useState(false);
   const [editedSections, setEditedSections] = useState({});
+  // Model Bank state
+  const [modelBank, setModelBank] = useState([]);
+  const [showBank, setShowBank] = useState(false);
+  const [bankTarget, setBankTarget] = useState(null); // question num
   const fileInputRef = useRef(null);
   const previewRef = useRef(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('anthropic_api_key');
     if (saved) setApiKey(saved);
+    // Load model bank from localStorage
+    try {
+      const bankSaved = localStorage.getItem('assessBuilderBank');
+      if (bankSaved) setModelBank(JSON.parse(bankSaved));
+    } catch {}
   }, []);
+
+  // Persist model bank to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('assessBuilderBank', JSON.stringify(modelBank));
+    } catch {}
+  }, [modelBank]);
 
   const handleFileChange = (e) => {
     const f = e.target.files[0];
@@ -1156,6 +1300,37 @@ export default function AssessmentBuilder() {
     setEditedSections(prev => ({ ...prev, [outputTab]: lines.join('\n') }));
   };
 
+  const handleSaveToBank = (marker, name) => {
+    const inner = marker.replace(/^\[|\]$/g, '').trim();
+    const type = inner.split(':')[0].trim();
+    const newItem = { id: Date.now().toString() + Math.random().toString(36).slice(2), marker, name, type };
+    setModelBank(prev => [...prev, newItem]);
+  };
+
+  const handleBrowseBank = (questionNum) => {
+    setBankTarget(questionNum);
+    setShowBank(true);
+  };
+
+  const handleInsertFromBank = (marker) => {
+    if (bankTarget !== null) {
+      const lines = currentTabContent.split('\n');
+      const idx = lines.findIndex(l => /^\d+\./.test(l.trim()) && parseInt(l.trim()) === bankTarget);
+      if (idx >= 0) {
+        lines.splice(idx, 0, marker);
+      } else {
+        lines.push(marker);
+      }
+      setEditedSections(prev => ({ ...prev, [outputTab]: lines.join('\n') }));
+    }
+    setShowBank(false);
+    setBankTarget(null);
+  };
+
+  const handleDeleteFromBank = (id) => {
+    setModelBank(prev => prev.filter(item => item.id !== id));
+  };
+
   const copyToClipboard = async (t) => {
     try {
       // Copy rich HTML for Google Docs / Word, plus plain text fallback
@@ -1256,6 +1431,16 @@ export default function AssessmentBuilder() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Model Bank Panel */}
+      {showBank && (
+        <ModelBankPanel
+          bank={modelBank}
+          onInsert={handleInsertFromBank}
+          onDelete={handleDeleteFromBank}
+          onClose={() => { setShowBank(false); setBankTarget(null); }}
+        />
       )}
 
       {/* Header */}
@@ -1517,6 +1702,8 @@ export default function AssessmentBuilder() {
                       gradeLevel={gradeLevel}
                       onModelEdit={handleModelEdit}
                       onAddImage={handleAddImage}
+                      onBrowseBank={handleBrowseBank}
+                      onSaveToBank={handleSaveToBank}
                       customTitle={customTitle}
                     />
                   )}
