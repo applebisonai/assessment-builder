@@ -262,20 +262,28 @@ function EqualGroups({ groups=3, items=5 }) {
 }
 
 function ArrayModel({ rows=3, cols=4 }) {
-  const tileSize = 22, gap = 3, sp = tileSize + gap;
-  const svgW = cols * sp + gap + 2, svgH = rows * sp + gap + 2;
+  // Render as ONE unified rectangle divided by grid lines — matches how
+  // array models and area models appear in real math assessments.
+  const cellSize = Math.min(28, Math.max(16, Math.floor(360 / Math.max(cols, rows))));
+  const pad = 1;
+  const totalW = cols * cellSize + pad * 2;
+  const totalH = rows * cellSize + pad * 2;
+  const lines = [];
+  // Vertical interior grid lines
+  for (let c = 1; c < cols; c++) {
+    lines.push(<line key={`v${c}`} x1={pad + c * cellSize} y1={pad} x2={pad + c * cellSize} y2={pad + rows * cellSize} stroke="#4f46e5" strokeWidth="1" strokeDasharray="none"/>);
+  }
+  // Horizontal interior grid lines
+  for (let r = 1; r < rows; r++) {
+    lines.push(<line key={`h${r}`} x1={pad} y1={pad + r * cellSize} x2={pad + cols * cellSize} y2={pad + r * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
+  }
   return (
     <div className="my-3">
-      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
-        {Array.from({length: rows}).map((_, r) =>
-          Array.from({length: cols}).map((_, c) => (
-            <rect key={`${r}-${c}`}
-              x={1 + c * sp}
-              y={1 + r * sp}
-              width={tileSize} height={tileSize}
-              fill="#c7d2fe" stroke="#4f46e5" strokeWidth="1.5" rx="3"/>
-          ))
-        )}
+      <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
+        {/* Filled background rectangle */}
+        <rect x={pad} y={pad} width={cols * cellSize} height={rows * cellSize} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" rx="2"/>
+        {/* Interior grid lines */}
+        {lines}
       </svg>
     </div>
   );

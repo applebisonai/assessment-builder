@@ -71,81 +71,116 @@ Allowed types (use ONLY these — never invent new types):
   [PV_CHART: 342]                              place value chart
   [NUM_LINE: min=0 max=20 step=2]              number line
   [NUM_LINE: min=0 max=20 step=5 jumps=yes]   number line with hop arcs
-  [BAR_MODEL: 4,6 | label=Total]              bar model
+  [BAR_MODEL: 4,6 | label=Total]              bar model (equal or unequal segments)
   [TAPE: 4:A,6:B | brace=yes | total=10]      tape diagram
-  [GROUPS: groups=3 items=5]                   equal groups (circles with dots)
-  [ARRAY: rows=4 cols=6]                       rectangular array of tiles
+  [GROUPS: groups=3 items=5]                   equal groups (ovals with dots inside)
+  [ARRAY: rows=4 cols=6]                       rectangular array of square tiles
 
 ━━━ THE GOLDEN RULE ━━━
-The visual marker and the question text serve DIFFERENT jobs:
-  • The MARKER defines what the student sees (the exact numbers/dimensions).
-  • The QUESTION asks the student to reason about what they see.
-The question text must NEVER repeat the values already shown in the marker.
-The student should need to look at the visual to know those values.
+The visual marker defines what the student SEES. The question asks them to REASON about it.
+The question text must NEVER repeat the marker values — the student should need to look at the visual.
 
-HOW TO WRITE A QUESTION WITH A VISUAL — always in this order:
+HOW TO WRITE A QUESTION WITH A VISUAL (always this order):
   1. Decide the visual type and exact values → write the marker.
-  2. Write a question that refers to the visual vaguely: "this array", "the number line", "these groups", "the model shown" — NOT the specific dimensions.
+  2. Write a question that refers to the visual vaguely: "this array", "the number line",
+     "these groups", "the model shown" — NOT the specific dimensions.
   3. Ask the student to figure out something FROM the visual.
 
-CORRECT — the question does NOT reveal the marker values:
+CORRECT EXAMPLES:
   [ARRAY: rows=4 cols=7]
-  Write a multiplication equation for this array.
+  3. The array shows ___ × ___.
 
   [NUM_LINE: min=0 max=30 step=5 jumps=yes]
-  What number does the last jump land on?
+  4. Which equation matches this number line?
+  A) 5 × 5 = 25   B) 6 × 5 = 30   C) 5 × 6 = 25   D) 30 × 5 = 6
 
   [GROUPS: groups=3 items=6]
-  Write a multiplication equation to represent these equal groups.
+  5. Write a multiplication equation to represent these equal groups.
 
   [FRACTION: 3/8]
-  What fraction of the bar is shaded?
+  6. What fraction of the bar is shaded? ___
 
-WRONG — the question repeats or reveals the marker values:
+WRONG EXAMPLES (never do this):
   [ARRAY: rows=4 cols=7]
-  A 4-by-7 array is shown. What is 4 × 7?   ← restates dimensions, gives away answer ✗
-
-  [NUM_LINE: min=0 max=30 step=5 jumps=yes]
-  A number line counts by 5s to 30. What number comes after 25?  ← reveals all values ✗
+  3. A 4-by-7 array is shown. What is 4 × 7?   ← restates dimensions ✗
 
   [GROUPS: groups=3 items=6]
-  There are 3 groups of 6. What is 3 × 6?  ← restates both factors ✗
+  5. There are 3 groups of 6. What is 3 × 6?   ← gives away both factors ✗
+
+━━━ CRITICAL: WHEN NOT TO ADD A VISUAL MARKER ━━━
+
+🚫 NEVER place a visual marker before questions that ask the student to CREATE their own model:
+  • "Use a model to represent..."
+  • "Use a different model to represent..."
+  • "Draw a picture to show..."
+  • "Use any strategy to solve. Show your work."
+  • "Show your thinking."
+  These questions need BLANK WORK SPACE, not an AI-generated visual.
+  The whole point is that the STUDENT draws the model.
+
+🚫 NEVER add a visual marker to pure computation questions:
+  • "420 ÷ 7 ="
+  • "3 × 6 = ___"
+  • "9/4 + 5/4 ="
+  These just need work space to solve. No visual.
+
+✅ ONLY use a visual marker when the question asks students to READ or INTERPRET a given model:
+  • "The array shows ___ × ___."
+  • "Which equation matches this number line?" (with MC choices)
+  • "Which context could this model represent?" (with MC choices)
+  • "What fraction of the bar is shaded?"
+  • "Write the equation this bar model represents."
 
 MARKER TYPE MUST MATCH QUESTION WORDS:
   • Question says "array" → marker must be ARRAY
   • Question says "number line" → marker must be NUM_LINE
-  • Question says "groups" → marker must be GROUPS
+  • Question says "equal groups" → marker must be GROUPS
   • Question says "fraction bar" / "shaded" → marker must be FRACTION
   • NEVER show a number line for an array question or vice versa.
 
-If the marker type or values can't be made consistent with the question, omit the visual entirely.
-${isEarlyGrades ? 'Include a visual on every question.' : ''}
-${isMidGrades ? 'Include visuals on questions about fractions, multiplication, arrays, number lines, and place value.' : ''}
-${isUpperGrades ? 'Include visuals where a diagram genuinely helps clarify the problem.' : ''}
+If you cannot make the marker type and values exactly consistent with the question, omit the visual entirely rather than show a misleading one.
+${isEarlyGrades ? 'Include a visual on most questions where a model is provided to the student.' : ''}
+${isMidGrades ? 'Include visuals on questions where a model is provided to the student (fractions, arrays, number lines, bar models). Skip visuals on word problems and "show your work" questions.' : ''}
+${isUpperGrades ? 'Include visuals only where a diagram genuinely helps clarify the problem structure.' : ''}
 ` : '';
 
     const systemPrompt = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
 
 FORMAT RULES (CRITICAL — follow exactly):
 1. Start with the assessment title on line 1${customTitle ? ` — use exactly this title: "${customTitle}"` : ' (e.g. "3.NBT.1 Place Value Check-In")'}
-2. Optionally add a brief subtitle on line 2
-3. Number each question: "1. Question text here"
+2. Optionally add a brief subtitle or directions line on line 2 (e.g. "Directions: Show your work.")
+3. Number each main question: "1. Question text here"
 4. For MULTIPLE CHOICE questions, list 4 options:
    A) option text
    B) option text
    C) option text
    D) option text
-5. For OPEN RESPONSE questions, just write the question — no choices.
-6. Add the standard tag on its own line after the question: [3.NBT.A.1]
-7. Do NOT use asterisks, markdown, bold, or special formatting.
-8. Keep language ${isEarlyGrades ? 'very simple and concrete — short sentences, familiar vocabulary' : isMidGrades ? 'clear and grade-appropriate' : 'precise and academic'}.
+5. For OPEN RESPONSE questions, just write the question — no choices needed.
+6. For FILL-IN-THE-BLANK questions, use ___ for each blank in the question text:
+   Example: "The array shows ___ × ___."
+   Example: "___ × ___ = ___"
+7. For COMPUTATION questions (just an equation to solve), write it plainly:
+   Example: "1.  420 ÷ 7 ="
+   Example: "3 × 6 = ___"
+8. For MULTI-PART questions, use sub-labels:
+   Example:
+   5. Solve the word problem. Show your work.
+   a) How many total?
+   b) Write an equation to represent the problem.
+9. For SECTION HEADERS or direction lines (not numbered questions), write them on their own line:
+   Example: "Part A: Word Problems"
+   Example: "Use any strategy to solve. Show your work."
+   Example: "Solve the equations below."
+10. Add the standard tag on its own line after the question: [3.NBT.A.1]
+11. Do NOT use asterisks, markdown, bold, or special formatting.
+12. Keep language ${isEarlyGrades ? 'very simple and concrete — short sentences, familiar vocabulary' : isMidGrades ? 'clear and grade-appropriate' : 'precise and academic'}.
 ${visualModelGuide}
 
 QUESTION QUALITY GUIDELINES:
 - Write exactly ${questionCount} questions for Version A
-- Mix question types: ${isEarlyGrades ? 'mostly open response, some MC' : 'mix of MC and open response'}
+- Mix question types naturally: fill-in-the-blank, MC, open response, computation, word problems
 - Questions should progress from basic recall → application → reasoning
-- ${isEarlyGrades ? 'Use simple story contexts and avoid abstract notation' : 'Use real-world contexts when possible'}
+- ${isEarlyGrades ? 'Use simple story contexts, picture-based questions, and short fill-in-the-blank' : 'Use real-world contexts and mix of question formats'}
 - ${standard ? 'Focus specifically on standard: ' + standard : 'Cover the key concepts from the uploaded content'}
 - Each question tests ONE clear skill
 
@@ -153,8 +188,9 @@ ${includeVersionB ? `After all Version A questions, write "VERSION B" on its own
 
 ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own line, then list:
 - For MC: "1. C — explanation of why"
-- For open response: "2. [Sample answer] — scoring note"
-- Include brief notes on common misconceptions to watch for` : ''}`;
+- For fill-in-the-blank: "2. 4 × 7 = 28"
+- For open response: "3. [Sample answer] — scoring note"
+- Include notes on common misconceptions to watch for` : ''}`;
 
     let userContent;
 
@@ -163,25 +199,68 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
       userContent = [
         {
           type: 'text',
-          text: `Create a ${gradeDisplay} ${subject} assessment based on the source document attached.
+          text: `Create a parallel ${gradeDisplay} ${subject} assessment based on the source document attached.
 
-YOUR ONLY JOB: Produce a parallel version — same question types, same skills, same wording structure — but with different numbers. Mirror the source as closely as possible. Do not rewrite questions from scratch.
+YOUR ONLY JOB: Mirror the source as closely as possible — same question types, same skill sequence, same wording structure — but with different numbers and contexts. Do NOT rewrite from scratch.
 
-For each question:
-1. Keep the exact same format (MC or open response), same skill, same sentence structure.
-2. Change ONLY the specific numbers or values to fresh ones of similar difficulty.
-3. Do NOT try to recreate any images, diagrams, graphs, or visual models from the source. Leave those out entirely — the teacher will add visuals manually.
-4. If a question clearly refers to a simple auto-generated model (array or number line), you may include one marker, following the rules below. For anything else (tables, graphs, pictures, complex diagrams), skip it.
+━━━ WHAT TO PRESERVE FROM THE SOURCE ━━━
 
-VISUAL MARKERS — only if truly needed and only these types:
-  [ARRAY: rows=R cols=C]   — equal grid of tiles. rows and cols must both be whole numbers ≥ 2.
-  [NUM_LINE: min=0 max=M step=S jumps=yes]  — number line with hop arcs.
-  [FRACTION: N/D]   — fraction bar.
+1. QUESTION FORMAT: Keep the exact format of each question.
+   • If source has fill-in-the-blank ("The array shows ___ × ___"), keep the blanks.
+   • If source has computation ("420 ÷ 7 ="), keep that format — just change the numbers.
+   • If source has MC with 4 options, keep MC. If open response, keep open response.
+   • If source has sub-parts (a, b, c), keep the sub-parts.
 
-Rules for any marker you include:
-— Write the marker on its own line BEFORE the question number.
-— The question text must NOT state the dimensions. Say "this array" or "the number line", not "a 4 by 6 array".
-— If you are not 100% certain the marker matches the question, leave it out.
+2. SECTION HEADERS AND DIRECTIONS: Preserve direction lines and section headers.
+   • If source has "Part A: Word Problems" → keep that section header.
+   • If source has "Use any strategy to solve. Show your work." → keep that direction.
+   • If source has "Solve the equations below." → keep that direction.
+
+3. QUESTION STRUCTURE: Keep the same cognitive demand.
+   • Interpretation question ("What does this model show?") → keep interpretation question.
+   • Word problem → keep word problem (just change names, numbers, context).
+   • Computation problem → keep computation (just change the numbers).
+   • Conceptual question ("What does the factor ___ tell you?") → keep that question type.
+
+━━━ THE MOST IMPORTANT RULE ABOUT VISUALS ━━━
+
+🚫 NEVER add a visual marker to questions where the STUDENT creates the model:
+   • "Use a model to represent..." → NO marker (student draws it)
+   • "Use a different model to..." → NO marker (student draws it)
+   • "Use any strategy. Show your work." → NO marker
+   • "Draw a picture to show..." → NO marker
+   These MUST have blank work space. The teacher uses the Add Image button separately.
+
+🚫 NEVER add a visual marker to pure computation questions:
+   • "420 ÷ 7 =" → NO marker (just change to a new computation problem)
+   • "3 × 6 = ___" → NO marker
+
+✅ ONLY add a visual marker when the SOURCE shows a pre-drawn model that students read/interpret:
+   • Source shows an array → students fill in "___ × ___" → use [ARRAY: rows=R cols=C]
+   • Source shows a number line → students pick which equation matches → use [NUM_LINE: ...]
+   • Source shows equal groups → students pick which context it represents → use [GROUPS: ...]
+   • Source shows a bar model with equal segments → use [BAR_MODEL: ...]
+   • Source shows a fraction bar → use [FRACTION: N/D]
+   For anything else (photos of objects, tables, graphs, complex diagrams), SKIP IT entirely.
+
+━━━ VISUAL MARKER RULES (when you do use one) ━━━
+  [ARRAY: rows=R cols=C]               rectangular array of tiles
+  [NUM_LINE: min=0 max=M step=S jumps=yes]  number line with hop arcs
+  [GROUPS: groups=G items=I]           equal groups (ovals with dots)
+  [FRACTION: N/D]                      fraction bar
+  [BAR_MODEL: 4,4,4,4,4,4]           equal segment bar model
+  [BASE10: hundreds=H tens=T ones=O]  base-10 blocks
+
+Rules:
+  • Write the marker on its own line BEFORE the question number.
+  • Question text must NOT state the marker dimensions. Say "this array" or "the model", not "a 4×6 array".
+  • If you are not 100% certain the marker matches the question exactly, leave it out.
+
+━━━ WHAT NOT TO DO ━━━
+  ✗ Don't add visuals to word problems or "show your work" questions
+  ✗ Don't change the question type (MC → open, computation → word problem)
+  ✗ Don't skip questions that require photos or complex diagrams — just omit the visual and keep the text
+  ✗ Don't restate marker values in the question text
 
 ${standard ? 'Align to standard: ' + standard : ''}`
         },
