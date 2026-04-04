@@ -262,17 +262,18 @@ function EqualGroups({ groups=3, items=5 }) {
 }
 
 function ArrayModel({ rows=3, cols=4 }) {
-  const dotR = 8, gap = 5, dotSp = dotR * 2 + gap;
-  const svgW = cols * dotSp + 20, svgH = rows * dotSp + 16;
+  const tileSize = 22, gap = 3, sp = tileSize + gap;
+  const svgW = cols * sp + gap + 2, svgH = rows * sp + gap + 2;
   return (
     <div className="my-3">
       <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
         {Array.from({length: rows}).map((_, r) =>
           Array.from({length: cols}).map((_, c) => (
-            <circle key={`${r}-${c}`}
-              cx={10 + c * dotSp + dotR}
-              cy={8 + r * dotSp + dotR}
-              r={dotR} fill="#6366f1" opacity="0.72" stroke="#4f46e5" strokeWidth="1"/>
+            <rect key={`${r}-${c}`}
+              x={1 + c * sp}
+              y={1 + r * sp}
+              width={tileSize} height={tileSize}
+              fill="#c7d2fe" stroke="#4f46e5" strokeWidth="1.5" rx="3"/>
           ))
         )}
       </svg>
