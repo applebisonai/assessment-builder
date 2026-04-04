@@ -596,15 +596,17 @@ function parseAssessment(text) {
         // Marker was the line before — attach number to it
         current.qNum = qMatch[1];
         current.text = qMatch[2];
+        if (/select all|choose all/i.test(qMatch[2])) current.qType = 'multiselect';
         continue;
       }
       flush();
-      current = { id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null, text: qMatch[2], choices: [], lines: [], vb: inVersionB };
+      const isMulti = /select all|choose all/i.test(qMatch[2]);
+      current = { id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null, text: qMatch[2], choices: [], lines: [], vb: inVersionB, qType: isMulti ? 'multiselect' : 'mc' };
       continue;
     }
 
-    // MC choice A) B) C) D)
-    const choiceMatch = trimmed.match(/^([A-Da-d])[.)]\s+(.*)$/);
+    // MC / multi-select choice: A) B) C) D) E) F)...
+    const choiceMatch = trimmed.match(/^([A-Fa-f])[.)]\s+(.*)$/);
     if (choiceMatch && current) {
       current.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
       continue;
@@ -633,11 +635,15 @@ function parseAssessment(text) {
 // ─── Manual Builder Helpers ───────────────────────────────────────────────────
 const Q_TYPES = [
   { id: 'mc', label: 'Multiple Choice' },
+  { id: 'multiselect', label: 'Select All That Apply' },
   { id: 'fill', label: 'Fill-in-the-blank' },
   { id: 'open', label: 'Open Response' },
   { id: 'compute', label: 'Computation' },
   { id: 'word', label: 'Word Problem' },
 ];
+
+const LETTERS = 'ABCDEFGHIJ'.split('');
+const defaultChoices = () => LETTERS.slice(0, 4).map(l => ({ letter: l, text: '' }));
 
 const VISUAL_TYPES_LIST = [
   { id: 'none', label: 'None' },
@@ -759,7 +765,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const isEdit = !!question?.id;
   const [qType, setQType] = useState(question?.qType || 'mc');
   const [qText, setQText] = useState(question?.text || '');
-  const [choices, setChoices] = useState(question?.choices?.length ? question.choices : [{ letter: 'A', text: '' }, { letter: 'B', text: '' }, { letter: 'C', text: '' }, { letter: 'D', text: '' }]);
+  const [choices, setChoices] = useState(question?.choices?.length ? question.choices : defaultChoices());
   const [standard, setStandard] = useState(question?.standard || '');
   const [visualType, setVisualType] = useState(question?._visualType || 'none');
   const [visualParams, setVisualParams] = useState(question?._visualParams || {});
@@ -777,10 +783,21 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   };
 
   const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
+  const hasChoices = qType === 'mc' || qType === 'multiselect';
+  const addChoice = () => {
+    if (choices.length >= 8) return;
+    setChoices(prev => [...prev, { letter: LETTERS[prev.length], text: '' }]);
+  };
+  const removeChoice = idx => {
+    if (choices.length <= 2) return;
+    setChoices(prev => prev.filter((_, i) => i !== idx).map((c, i) => ({ ...c, letter: LETTERS[i] })));
+  };
+
   const previewQ = {
     id: 'preview', type: 'question', qNum: String(questionCount),
+    qType,
     text: qText || '(question text)',
-    choices: qType === 'mc' ? choices.filter(c => c.text) : [],
+    choices: hasChoices ? choices.filter(c => c.text) : [],
     lines: [], marker, standard,
   };
 
@@ -790,8 +807,8 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
       id: question?.id || `manual-${Date.now()}`,
       type: 'question', qType,
       qNum: question?.qNum || String(questionCount),
-      text: qText,
-      choices: qType === 'mc' ? choices.filter(c => c.text) : [],
+      text: qType === 'multiselect' && !/select all|choose all/i.test(qText) ? qText + ' (Select all that apply.)' : qText,
+      choices: hasChoices ? choices.filter(c => c.text) : [],
       lines: [], marker, standard,
       _visualType: visualType, _visualParams: visualParams, _customImg: customImg,
       vb: false,
@@ -826,20 +843,38 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
           className="w-full border rounded p-2 text-sm h-20 resize-none" />
       </div>
 
-      {/* MC choices */}
-      {qType === 'mc' && (
+      {/* Choices (MC or Multi-select) */}
+      {hasChoices && (
         <div>
-          <p className="text-xs text-gray-500 mb-1">Answer Choices</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">
+              {qType === 'multiselect' ? 'Answer Choices (checkboxes — multiple correct)' : 'Answer Choices'}
+            </p>
+            <button onClick={addChoice} disabled={choices.length >= 8}
+              className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-300 font-medium">
+              + Add Choice
+            </button>
+          </div>
           <div className="space-y-1">
             {choices.map((ch, ci) => (
               <div key={ci} className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-600 w-4">{ch.letter})</span>
+                {qType === 'multiselect'
+                  ? <span className="text-xs shrink-0 w-5 h-4 border border-gray-400 rounded-sm inline-block" title="checkbox" />
+                  : <span className="text-xs shrink-0 w-4 h-4 border border-gray-400 rounded-full inline-block" title="bubble" />}
+                <span className="text-xs font-semibold text-gray-600 w-4 shrink-0">{ch.letter})</span>
                 <input value={ch.text} onChange={e => {
                   const nc = [...choices]; nc[ci] = { ...nc[ci], text: e.target.value }; setChoices(nc);
                 }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
+                {choices.length > 2 && (
+                  <button onClick={() => removeChoice(ci)}
+                    className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">✕</button>
+                )}
               </div>
             ))}
           </div>
+          {qType === 'multiselect' && (
+            <p className="text-xs text-gray-400 mt-1">Tip: students check all correct answers — consider making 2–3 choices correct.</p>
+          )}
         </div>
       )}
 
@@ -918,11 +953,21 @@ function AssessmentPreviewSingle({ q, customImg }) {
         {q.qNum && <span className="font-semibold shrink-0">{q.qNum}.</span>}
         <div>
           {q.text}
-          {q.choices.length > 0 && (
-            <div className="mt-1 ml-2 space-y-0.5">
-              {q.choices.map((ch, i) => <div key={i}><span className="font-medium">{ch.letter})</span> {ch.text}</div>)}
-            </div>
-          )}
+          {q.choices.length > 0 && (() => {
+            const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
+            return (
+              <div className="mt-1 ml-2 space-y-0.5">
+                {q.choices.map((ch, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    {isMultiselect
+                      ? <span className="mt-0.5 shrink-0 w-3 h-3 border border-gray-500 rounded-sm inline-block" />
+                      : <span className="mt-0.5 shrink-0 w-3 h-3 border border-gray-500 rounded-full inline-block" />}
+                    <span><span className="font-medium">{ch.letter})</span> {ch.text}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -1238,15 +1283,21 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
                     </span>
                   )}
 
-                  {q.choices?.length > 0 && (
-                    <div className="mt-1 ml-2 space-y-0.5">
-                      {q.choices.map((ch, ci) => (
-                        <div key={ci} className="text-sm">
-                          <span className="font-medium">{ch.letter})</span> {ch.text}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {q.choices?.length > 0 && (() => {
+                    const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
+                    return (
+                      <div className="mt-1 ml-2 space-y-0.5">
+                        {q.choices.map((ch, ci) => (
+                          <div key={ci} className="text-sm flex items-start gap-1.5">
+                            {isMultiselect
+                              ? <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-sm inline-block" />
+                              : <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-full inline-block" />}
+                            <span><span className="font-medium">{ch.letter})</span> {ch.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {q.standard && <div className="text-xs text-gray-400 mt-0.5">{q.standard}</div>}
                 </div>
