@@ -64,7 +64,7 @@ export async function POST(request) {
     // Grade-appropriate visual model guidance
     const visualModelGuide = subject === 'Math' ? `
 
-VISUAL MODELS — Include these markers INLINE in questions where a visual would help:
+VISUAL MODELS — place these markers on their OWN LINE immediately before the question they belong to:
 
 For NUMBER SENSE / PLACE VALUE questions:
   [BASE10: hundreds=1 tens=2 ones=3]   ← shows base-10 blocks
@@ -86,17 +86,12 @@ For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate li
   [FRACTION: 2 1/4]
   What is 1 2/4 + 2 1/4?
 
-WHEN TO USE VISUAL MODELS:
-${isEarlyGrades ? `- Use visuals on MOST questions for K-2 (counting, adding, comparing, place value)
-- Show base-10 blocks for 2-digit numbers
-- Use number lines for counting on/back
-- Use bar models for simple addition/subtraction stories` : ''}
-${isMidGrades ? `- Use visuals on 30-50% of questions for grades 3-5
-- Place value charts for multi-digit numbers
-- Tape/bar diagrams for multiplication, fractions, ratios
-- Number lines for fractions and decimals` : ''}
-${isUpperGrades ? `- Use visuals selectively for grades 6+ (geometry, ratios, graphs)
-- Focus visuals on problems where a diagram is essential to understand` : ''}
+CRITICAL — WHEN TO USE VISUAL MODELS:
+- If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
+- Do NOT skip visuals for questions about fractions, place value, number lines, or part-whole relationships if those visuals appear in the source.
+${isEarlyGrades ? `- K-2: include a visual on EVERY question` : ''}
+${isMidGrades ? `- Grades 3-5: include a visual on every question involving fractions, place value, number lines, or part-whole relationships` : ''}
+${isUpperGrades ? `- Grades 6+: include visuals wherever a diagram clarifies the problem` : ''}
 ` : '';
 
     const systemPrompt = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
@@ -134,13 +129,20 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
     let userContent;
 
     if (fileContent) {
+      const isImageFile = ['image/png','image/jpeg','image/gif','image/webp'].includes(fileMediaType);
       userContent = [
         {
           type: 'text',
-          text: `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the content in this file. Use the content to determine what concepts to assess.`
+          text: `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the content in this file.
+
+STEP 1 — Carefully examine every visual in the document: fraction strips, number lines, base-10 blocks, bar models, place value charts, tape diagrams, and any other math representations.
+
+STEP 2 — For every question you write that tests a concept shown visually in the document, place the matching visual model marker on its own line immediately before that question. Use the exact same representation type as the source (e.g. if the source shows fraction strips for a fraction question, use [FRACTION:]; if it shows base-10 blocks for a place value question, use [BASE10:]).
+
+STEP 3 — Do not skip visuals. If the source document is heavy with visuals, your assessment should match that density.`
         },
         {
-          type: 'document',
+          type: isImageFile ? 'image' : 'document',
           source: {
             type: 'base64',
             media_type: fileMediaType,
