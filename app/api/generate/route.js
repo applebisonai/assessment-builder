@@ -165,26 +165,23 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
           type: 'text',
           text: `Create a ${gradeDisplay} ${subject} assessment based on the source document attached.
 
-YOUR JOB: Produce a parallel version of this assessment — same question types, same skills, same structure — but with different numbers. Do not rewrite the questions from scratch. Mirror the source closely.
+YOUR ONLY JOB: Produce a parallel version — same question types, same skills, same wording structure — but with different numbers. Mirror the source as closely as possible. Do not rewrite questions from scratch.
 
-For each question in the source:
-1. Keep the same question format (MC or open response), same skill, same wording structure.
-2. Change ONLY the specific numbers/values to fresh ones.
-3. If the source question has a visual model (array, number line, groups, fraction bar, etc.), your version needs a matching visual of the same TYPE with the new numbers.
+For each question:
+1. Keep the exact same format (MC or open response), same skill, same sentence structure.
+2. Change ONLY the specific numbers or values to fresh ones of similar difficulty.
+3. Do NOT try to recreate any images, diagrams, graphs, or visual models from the source. Leave those out entirely — the teacher will add visuals manually.
+4. If a question clearly refers to a simple auto-generated model (array or number line), you may include one marker, following the rules below. For anything else (tables, graphs, pictures, complex diagrams), skip it.
 
-HOW TO ADD A VISUAL:
-— Write the marker FIRST on its own line before the question number, using the new values you chose.
-— Then write the question text referring to it vaguely: "this array", "the number line shown", "these groups" — NOT the specific dimensions.
-— Arrays MUST have equal rows and equal columns (e.g. rows=4 cols=6 means exactly 4 rows of 6 tiles).
-— The student must look at the visual to get the values. Never restate the marker's numbers in the question text.
+VISUAL MARKERS — only if truly needed and only these types:
+  [ARRAY: rows=R cols=C]   — equal grid of tiles. rows and cols must both be whole numbers ≥ 2.
+  [NUM_LINE: min=0 max=M step=S jumps=yes]  — number line with hop arcs.
+  [FRACTION: N/D]   — fraction bar.
 
-EXAMPLE — source has a 3×5 array question, you produce:
-  [ARRAY: rows=4 cols=6]
-  What multiplication equation does this array show?
-
-EXAMPLE — source has a number line counting by 2s, you produce:
-  [NUM_LINE: min=0 max=40 step=4 jumps=yes]
-  What number does the last jump land on?
+Rules for any marker you include:
+— Write the marker on its own line BEFORE the question number.
+— The question text must NOT state the dimensions. Say "this array" or "the number line", not "a 4 by 6 array".
+— If you are not 100% certain the marker matches the question, leave it out.
 
 ${standard ? 'Align to standard: ' + standard : ''}`
         },

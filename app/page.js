@@ -356,6 +356,16 @@ function parseVisualModel(marker) {
     const m = rest.match(/(\d+)\/(\d+)/);
     if (m) return <FractionBar numerator={parseInt(m[1])} denominator={parseInt(m[2])}/>;
   }
+  if (inner.startsWith('IMAGE:')) {
+    const url = inner.slice('IMAGE:'.length).trim();
+    if (url) return (
+      <div className="my-2">
+        <img src={url} alt="Visual model" style={{maxWidth:'100%', borderRadius:'6px', display:'block'}}
+          onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}/>
+        <span style={{display:'none'}} className="text-xs text-red-400 italic">Image could not be loaded.</span>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -511,6 +521,11 @@ function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
     if (q.models.length > 0) {
       block += `<div style="margin:6px 0 6px 36px;padding:8px 12px;background:#f8faff;border:1px solid #e0e7ff;border-radius:6px;">`;
       for (const m of q.models) {
+        const imgM = m.match(/\[IMAGE:\s*(.+?)\]/);
+        if (imgM) {
+          block += `<div style="margin:6px 0;"><img src="${escapeHtml(imgM[1].trim())}" alt="Visual model" style="max-width:100%;border-radius:4px;"/></div>`;
+          continue;
+        }
         const fm = m.match(/\[FRACTION:\s*(.+?)\]/);
         if (fm) {
           const spec = fm[1].trim();
@@ -616,6 +631,8 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   const [arrCols, setArrCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
   // NUM_LINE jumps
   const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
+  // IMAGE state
+  const [imageUrl, setImageUrl] = useState(modelType === 'IMAGE' ? rawSpecInit : '');
 
   if (!modelType) return <>{children}</>;
 
@@ -654,6 +671,9 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
       case 'ARRAY':
         newMarker = `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
         break;
+      case 'IMAGE':
+        newMarker = `[IMAGE: ${imageUrl}]`;
+        break;
       default:
         newMarker = `[${modelType}: ${rawSpec}]`;
     }
@@ -664,7 +684,7 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   const TYPE_LABELS = {
     FRACTION: 'Fraction', BASE10: 'Base-10 Blocks', NUM_LINE: 'Number Line',
     PV_CHART: 'Place Value Chart', BAR_MODEL: 'Bar Model', TAPE: 'Tape Diagram',
-    GROUPS: 'Equal Groups', ARRAY: 'Array',
+    GROUPS: 'Equal Groups', ARRAY: 'Array', IMAGE: 'Image',
   };
 
   const renderEditor = () => {
@@ -707,6 +727,15 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
         <div className="flex items-center gap-4 flex-wrap">
           <label className={labelCls}>Rows <input type="number" min="1" max="12" value={arrRows} onChange={e => setArrRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
           <label className={labelCls}>Columns <input type="number" min="1" max="12" value={arrCols} onChange={e => setArrCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+        </div>
+      );
+      case 'IMAGE': return (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400">Paste image URL (right-click any image online → Copy image address):</p>
+          <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)}
+            className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400"
+            placeholder="https://..."/>
+          {imageUrl && <img src={imageUrl} alt="" className="max-w-full rounded border border-gray-200" style={{maxHeight:'120px', objectFit:'contain'}}/>}
         </div>
       );
       case 'PV_CHART': return (
@@ -756,7 +785,35 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   );
 }
 
-function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, customTitle }) {
+function AddImageButton({ onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      className="text-xs text-indigo-400 hover:text-indigo-600 border border-dashed border-indigo-200 rounded-lg px-3 py-1.5 mt-2 no-print w-full text-center hover:bg-indigo-50 transition">
+      + Add image to this question
+    </button>
+  );
+  return (
+    <div className="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg no-print space-y-2">
+      <p className="text-xs text-indigo-700 font-medium">Paste image URL</p>
+      <p className="text-xs text-gray-500">Right-click any image online → "Copy image address", then paste here.</p>
+      <div className="flex gap-1">
+        <input type="url" value={url} onChange={e => setUrl(e.target.value)}
+          placeholder="https://..."
+          className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-400 bg-white"/>
+        <button onClick={() => { if (url.trim()) { onAdd(url.trim()); setUrl(''); setOpen(false); }}}
+          disabled={!url.trim()}
+          className="bg-indigo-600 text-white text-xs px-3 py-1 rounded-lg disabled:opacity-40 hover:bg-indigo-700 transition">Add</button>
+        <button onClick={() => { setOpen(false); setUrl(''); }}
+          className="text-gray-400 text-xs px-2 hover:text-gray-600">✕</button>
+      </div>
+      {url && <img src={url} alt="" className="max-w-full rounded border border-gray-200 mt-1" style={{maxHeight:'100px', objectFit:'contain'}} onError={e => e.target.style.display='none'}/>}
+    </div>
+  );
+}
+
+function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage, customTitle }) {
   const { title, subtitle, questions } = parseAssessment(text);
   const displayTitle = customTitle || title || `${subject} Assessment`;
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
@@ -870,6 +927,13 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, customTitle
                       // In print/read-only mode: skip invalid models entirely
                       return rendered ? <div key={mi}>{rendered}</div> : null;
                     })}
+                  </div>
+                )}
+
+                {/* Add Image button (edit mode only) */}
+                {onAddImage && (
+                  <div className="ml-11 mb-3">
+                    <AddImageButton onAdd={(url) => onAddImage(q.num, url)}/>
                   </div>
                 )}
 
@@ -1076,6 +1140,20 @@ export default function AssessmentBuilder() {
       ? currentTabContent.replace(new RegExp(`\\n?${escaped}`, 'g'), '')
       : currentTabContent.replace(oldMarker, newMarker);
     setEditedSections(prev => ({ ...prev, [outputTab]: updated }));
+  };
+
+  const handleAddImage = (questionNum, imageUrl) => {
+    const marker = `[IMAGE: ${imageUrl}]`;
+    const lines = currentTabContent.split('\n');
+    // Find the line starting this question number
+    const idx = lines.findIndex(l => /^\d+\./.test(l.trim()) && parseInt(l.trim()) === questionNum);
+    if (idx >= 0) {
+      lines.splice(idx, 0, marker);
+    } else {
+      // Fallback: append at end
+      lines.push(marker);
+    }
+    setEditedSections(prev => ({ ...prev, [outputTab]: lines.join('\n') }));
   };
 
   const copyToClipboard = async (t) => {
@@ -1438,6 +1516,7 @@ export default function AssessmentBuilder() {
                       subject={subject}
                       gradeLevel={gradeLevel}
                       onModelEdit={handleModelEdit}
+                      onAddImage={handleAddImage}
                       customTitle={customTitle}
                     />
                   )}
