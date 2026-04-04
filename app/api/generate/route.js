@@ -21,6 +21,11 @@ function fixMarkerTypeMismatches(text) {
     { pattern: /\b(record.{0,20}grid|fill.{0,10}bubbles?)\b/i,        allowed: ['GRID_RESPONSE'] },
     { pattern: /\b(shaded|pattern).{0,30}(chart|hundreds.{0,10}chart)\b/i, allowed: ['NUM_CHART'] },
     { pattern: /\b(yes\s+or\s+no)\b/i,                                allowed: ['YES_NO_TABLE'] },
+    // Explanation / reasoning questions — no pre-drawn visual ever appropriate
+    { pattern: /\b(commutative|associative|distributive)\s+property\b/i, allowed: [] },
+    { pattern: /\bexplain\s+(how|why|what|the|your|this)\b/i,         allowed: [] },
+    // Fact-family questions — student WRITES all four equations; no model shown
+    { pattern: /\bfact\s+famil(y|ies)\b/i,                            allowed: [] },
   ];
 
   const lines = text.split('\n');
@@ -373,8 +378,11 @@ Visual inference guide — add a marker whenever the source question:
                                                           → [GRID_RESPONSE: cols=4]
   Has a data table in the source (rows of categories + numbers, e.g. insect counts, survey results)
                                                           → [DATA_TABLE: header=Col1,Col2 | row1val1,row1val2 | ...]
-  Has a Yes/No decision table (rows of equations, student picks Yes or No for each)
+  Has a Yes/No or True/False decision table (rows of equations or statements,
+  student circles/marks Yes or No or True/False for each row)
                                                           → [YES_NO_TABLE: equation1 | equation2 | ...]
+  IMPORTANT: If the source shows a table of equations where the student marks Yes or No
+  (e.g. "42 ÷ __ = 7 → Yes / No"), you MUST use [YES_NO_TABLE:...] — not a DATA_TABLE.
   Shows equal groups of objects used as a model (e.g. Maya's plates model)
                                                           → [GROUPS: groups=G items=I]
 
@@ -390,12 +398,17 @@ RULE 5b — QUESTION TEXT MUST REFERENCE THE VISUAL TYPE.
   WRONG: [NUM_LINE: ...] before "What is 6 × 5?" — question never mentions a number line ✗
   CORRECT: [NUM_LINE: ...] before "Which equation matches this number line?" ✓
 
-RULE 6 — NEVER ADD VISUALS TO "SHOW YOUR WORK" OR PURE COMPUTATION QUESTIONS.
+RULE 6 — NEVER ADD VISUALS TO "SHOW YOUR WORK", EXPLANATION, OR PROPERTY QUESTIONS.
   NO visual marker for these:
   • "Use a model to represent..." — student draws it, don't show one
   • "Use any strategy. Show your work." — blank work space only
   • "420 ÷ 7 =" — pure computation, no model needed
   • "Explain how you would..." — open response, no model needed
+  • "Explain how the Commutative Property of Multiplication works." — property explanation, no visual
+  • "Explain why the order of factors does not change the product." — explanation only
+  • "Write the fact family for ___ × ___ = ___." — student creates all four equations; no model
+  • "Complete the fact family." — student writes equations; no model needed
+  • Any question that asks the student to EXPLAIN a math property or relationship
 
 RULE 7 — VISUAL MARKER FORMAT.
 Place the marker on its own line immediately BEFORE the question number.
