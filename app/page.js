@@ -896,6 +896,83 @@ function parseVisualModel(marker) {
   return null;
 }
 
+// ─── PDF page renderer ──────────────────────────────────────────────────────
+// Lazy-loads PDF.js from CDN, renders every page of the uploaded PDF to a
+// JPEG data-URL and returns them as an array.  Returns [] on any failure.
+async function renderPdfPages(file) {
+  try {
+    // Ensure PDF.js script is loaded (idempotent)
+    if (!window.pdfjsLib) {
+      await new Promise((resolve, reject) => {
+        const existing = document.getElementById('__pdfjs__');
+        if (existing) { resolve(); return; }
+        const s = document.createElement('script');
+        s.id = '__pdfjs__';
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    const images = [];
+    for (let i = 1; i <= Math.min(pdf.numPages, 6); i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.85));
+    }
+    return images;
+  } catch { return []; }
+}
+
+// Crop a rectangular region from a base64 image.
+// Coordinates (top/left/width/height) are 0-1 fractions of the page dimensions.
+// Returns a JPEG data-URL, or null on failure.
+function cropImageRegion(pageBase64, { top, left, width, height }) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const sx = Math.round(left * img.naturalWidth);
+      const sy = Math.round(top * img.naturalHeight);
+      const sw = Math.round(width * img.naturalWidth);
+      const sh = Math.round(height * img.naturalHeight);
+      if (sw <= 4 || sh <= 4) { resolve(null); return; }
+      const c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      resolve(c.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => resolve(null);
+    img.src = pageBase64;
+  });
+}
+
+// Insert a visual marker immediately before the line that starts with qNum.
+// If a marker already exists for that question, it is replaced.
+function insertMarkerBeforeQuestion(text, qNum, marker) {
+  const lines = text.split('\n');
+  const out = [];
+  const qRe = new RegExp(`^\\(?0*${qNum}[.)\\s]`);
+  let inserted = false;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (!inserted && qRe.test(t)) {
+      // Remove any existing [IMAGE:] placeholder already on the preceding line
+      if (out.length > 0 && out[out.length - 1].trim().startsWith('[IMAGE:')) out.pop();
+      out.push(marker);
+      inserted = true;
+    }
+    out.push(lines[i]);
+  }
+  return out.join('\n');
+}
+
 // ─── Assessment Parser ──────────────────────────────────────────────────────
 
 // Strip markdown formatting that AI models sometimes add despite instructions
@@ -2900,6 +2977,8 @@ function AssessmentBuilderInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [inputMode, setInputMode] = useState('file');
   const [file, setFile] = useState(null);
+  const [sourcePdfPages, setSourcePdfPages] = useState([]); // base64 JPEG renders of source PDF pages
+  const [pdfRenderStatus, setPdfRenderStatus] = useState(''); // '' | 'rendering' | 'ready' | 'error'
   const [url, setUrl] = useState('');
   const [pastedText, setPastedText] = useState('');
   const [scratchTopic, setScratchTopic] = useState('');
@@ -2968,10 +3047,27 @@ function AssessmentBuilderInner() {
     } catch {}
   }, [modelBank]);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const f = e.target.files[0];
-    if (f && f.size <= 20 * 1024 * 1024) setFile(f);
-    else if (f) setError('File must be under 20MB');
+    if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { setError('File must be under 20MB'); return; }
+    setFile(f);
+    setSourcePdfPages([]);
+    // Render PDF/image pages so visuals can be auto-cropped after generation
+    if (f.type === 'application/pdf') {
+      setPdfRenderStatus('rendering');
+      try {
+        const pages = await renderPdfPages(f);
+        setSourcePdfPages(pages);
+        setPdfRenderStatus(pages.length > 0 ? 'ready' : 'error');
+      } catch { setPdfRenderStatus('error'); }
+    } else if (f.type.startsWith('image/')) {
+      setPdfRenderStatus('rendering');
+      const reader = new FileReader();
+      reader.onload = ev => { setSourcePdfPages([ev.target.result]); setPdfRenderStatus('ready'); };
+      reader.onerror = () => setPdfRenderStatus('error');
+      reader.readAsDataURL(f);
+    }
   };
 
   const handleGenerate = async () => {
@@ -2991,12 +3087,30 @@ function AssessmentBuilderInner() {
         fd.append('questionCount', questionCount);
         fd.append('customTitle', customTitle);
         fd.append('apiKey', apiKey);
+        // Send rendered page images so server can locate visual bounding boxes
+        if (sourcePdfPages.length > 0) {
+          fd.append('pageImagesJson', JSON.stringify(sourcePdfPages));
+        }
         setLoadingStep('Generating assessment...');
         const res = await fetch('/api/generate', { method: 'POST', body: fd });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        setOutput(data.result);
-        autoSaveMarkersToBank(data.result);
+
+        // Auto-crop visuals from source pages and insert them as IMAGE markers
+        let resultText = data.result;
+        if (data.cropInstructions?.length > 0 && sourcePdfPages.length > 0) {
+          setLoadingStep('Copying visuals from source...');
+          for (const crop of data.cropInstructions) {
+            const pageImg = sourcePdfPages[(crop.page || 1) - 1];
+            if (!pageImg) continue;
+            try {
+              const cropped = await cropImageRegion(pageImg, crop);
+              if (cropped) resultText = insertMarkerBeforeQuestion(resultText, crop.q, `[IMAGE: ${cropped}]`);
+            } catch { /* skip failed crop */ }
+          }
+        }
+        setOutput(resultText);
+        autoSaveMarkersToBank(resultText);
       } else {
         setLoadingStep('Generating assessment...');
         const res = await fetch('/api/generate', {
@@ -3048,6 +3162,8 @@ function AssessmentBuilderInner() {
   const handleNewAssessment = () => {
     setOutput('');
     setFile(null);
+    setSourcePdfPages([]);
+    setPdfRenderStatus('');
     setEditedSections({});
     setCustomTitle('');
     setOutputTab('versionA');
@@ -3440,6 +3556,17 @@ function AssessmentBuilderInner() {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-green-700 truncate">{file.name}</div>
                           <div className="text-xs text-green-600 mt-0.5">{(file.size / 1024).toFixed(0)} KB</div>
+                          {pdfRenderStatus === 'rendering' && (
+                            <div className="text-xs text-indigo-500 mt-1 flex items-center gap-1">
+                              <span className="animate-spin inline-block">⟳</span> Preparing visual extraction...
+                            </div>
+                          )}
+                          {pdfRenderStatus === 'ready' && (
+                            <div className="text-xs text-emerald-600 mt-1">✓ {sourcePdfPages.length} page{sourcePdfPages.length !== 1 ? 's' : ''} ready — visuals will be auto-copied</div>
+                          )}
+                          {pdfRenderStatus === 'error' && (
+                            <div className="text-xs text-amber-600 mt-1">⚠ Could not pre-render pages — you can paste visuals manually after generation</div>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2 mt-3">
@@ -3450,7 +3577,7 @@ function AssessmentBuilderInner() {
                           ↑ Replace File
                         </button>
                         <button
-                          onClick={() => setFile(null)}
+                          onClick={() => { setFile(null); setSourcePdfPages([]); setPdfRenderStatus(''); }}
                           className="text-xs font-semibold border border-gray-200 text-gray-500 bg-white hover:bg-gray-50 rounded-lg px-3 py-2 transition"
                         >
                           ✕ Remove

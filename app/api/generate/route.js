@@ -76,6 +76,7 @@ export async function POST(request) {
     let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url, pastedText, scratchTopic, scratchInstructions, apiKey;
     let fileContent = null;
     let fileMediaType = null;
+    let pageImages = []; // base64 JPEG renders of source PDF pages (from client-side PDF.js)
 
     const contentType = request.headers.get('content-type') || '';
 
@@ -91,6 +92,12 @@ export async function POST(request) {
       apiKey = formData.get('apiKey') || '';
       url = '';
       pastedText = '';
+
+      // Page images sent by client for visual bounding-box extraction
+      try {
+        const pij = formData.get('pageImagesJson');
+        if (pij) pageImages = JSON.parse(pij);
+      } catch {}
 
       const file = formData.get('file');
       if (file) {
@@ -351,96 +358,17 @@ RULE 4 — COPY QUESTION FORMAT EXACTLY.
   Source: open response / show work        → Output: open response / show work
   Source: fill-in-the-blank               → Output: fill-in-the-blank (same blank positions)
 
-RULE 5 — MATCH VISUAL TYPES FROM SOURCE (TEXT OR MARKER). EVERY VISUAL MUST APPEAR.
-The source may be a plain-text PDF with no markers. In that case, READ the question text and
-TABLE/GRID STRUCTURE to decide whether a visual is needed.
+RULE 5 — DO NOT OUTPUT ANY VISUAL MARKERS.
+The app automatically extracts and copies every visual from the source PDF.
+DO NOT output [ARRAY:], [NUM_LINE:], [GROUPS:], [IMAGE:], [TENS_FRAME:], or ANY other marker.
+Your job is to output ONLY the parallel question text, answer choices, sub-parts, and standard tags.
+Leave the space before each question number empty — visuals will be inserted automatically.
 
-CRITICAL: If the source question has ANY visual, diagram, image, model, table, chart, or graphic
-that belongs to it, you MUST include a visual marker in the output — even if it does not perfectly
-match. NEVER silently drop a visual. The teacher will be shown a note and can replace it.
+RULE 6 — NEVER ALTER THE FORMAT OR STRUCTURE OF QUESTIONS.
+Keep every blank (___), every sub-part (a/b/c), every section header, every answer format
+exactly as in the source. Change ONLY numbers, names, and minor contexts.
 
-If source HAS a visual marker already → copy it to the output with updated values.
-If source DESCRIBES or SHOWS a standard visual type → add the matching marker (see guide below).
-If source has a visual that is NOT a standard type (e.g. bar graph, photo, word-problem
-  illustration, coordinate plane, clock, unique diagram) → add [IMAGE:] as a placeholder.
-  The app will show the teacher a note to paste their own version of the visual.
-If source has no visual at all and does not describe one → no marker.
-
-Visual inference guide — add a marker whenever the source question:
-
-  Mentions "the array", "an array", "this array"         → [ARRAY: rows=R cols=C]  (match the new multiplication fact)
-  Mentions "the number line", "a number line"             → [NUM_LINE: min=0 max=M step=S]
-  Mentions "equal groups", "groups of ___"               → [GROUPS: groups=G items=I]
-  Mentions "number bond"                                  → [NUM_BOND: whole=W part1=P1 part2=P2]
-  Mentions "tens frame", "five frame"                     → [TENS_FRAME: filled=F total=10]
-  Mentions "area model", "box method"                     → [AREA_MODEL: collabels=... | rowlabels=...]
-  Mentions "fraction bar"                                 → [FRACTION: N/D]
-  Mentions "fraction circle"                              → [FRAC_CIRCLE: N/D]
-  Mentions "function table", "input/output table"         → [FUNC_TABLE: pairs=... | rule=...]
-  Mentions "place value chart"                            → [PV_CHART: number]
-  Mentions "base-10 blocks"                              → [BASE10: hundreds=H tens=T ones=O]
-  Mentions "the chart below", "shaded part of the chart", "hundreds chart", "number chart"
-                                                          → [NUM_CHART: start=S end=E cols=10 shaded=n1,n2,n3,...]
-  Says "record your answer on the grid" / "fill in the bubbles"
-                                                          → [GRID_RESPONSE: cols=4]
-  Has a data table in the source (rows of categories + numbers, e.g. insect counts, survey results)
-                                                          → [DATA_TABLE: header=Col1,Col2 | row1val1,row1val2 | ...]
-  Has a Yes/No or True/False decision table (rows of equations or statements,
-  student circles/marks Yes or No or True/False for each row)
-                                                          → [YES_NO_TABLE: equation1 | equation2 | ...]
-  IMPORTANT: If the source shows a table of equations where the student marks Yes or No
-  (e.g. "42 ÷ __ = 7 → Yes / No"), you MUST use [YES_NO_TABLE:...] — not a DATA_TABLE.
-  Shows equal groups of objects used as a model (e.g. Maya's plates model)
-                                                          → [GROUPS: groups=G items=I]
-
-RULE 5a — ARRAY DIMENSIONS MUST MATCH THE MULTIPLICATION FACT IN THE QUESTION.
-  Read the swapped question to find the multiplication fact, then set rows × cols accordingly.
-  If new question involves 4 × 6 → [ARRAY: rows=4 cols=6]. Verify: 4 × 6 = 24 dots. ✓
-  If new question involves 3 × 8 → [ARRAY: rows=3 cols=8]. Verify: 3 × 8 = 24 dots. ✓
-  rows × cols MUST equal the product in the question. Double-check before writing the marker.
-
-RULE 5b — QUESTION TEXT MUST REFERENCE THE VISUAL TYPE.
-  If you place a [NUM_LINE:] marker, the question MUST say "this number line" or "the number line shown."
-  If you place an [ARRAY:] marker, the question MUST say "this array" or "the array shown."
-  WRONG: [NUM_LINE: ...] before "What is 6 × 5?" — question never mentions a number line ✗
-  CORRECT: [NUM_LINE: ...] before "Which equation matches this number line?" ✓
-
-RULE 6 — NEVER ADD VISUALS TO "SHOW YOUR WORK", EXPLANATION, OR PROPERTY QUESTIONS.
-  NO visual marker for these:
-  • "Use a model to represent..." — student draws it, don't show one
-  • "Use any strategy. Show your work." — blank work space only
-  • "420 ÷ 7 =" — pure computation, no model needed
-  • "Explain how you would..." — open response, no model needed
-  • "Explain how the Commutative Property of Multiplication works." — property explanation, no visual
-  • "Explain why the order of factors does not change the product." — explanation only
-  • "Write the fact family for ___ × ___ = ___." — student creates all four equations; no model
-  • "Complete the fact family." — student writes equations; no model needed
-  • Any question that asks the student to EXPLAIN a math property or relationship
-
-RULE 7 — VISUAL MARKER FORMAT.
-Place the marker on its own line immediately BEFORE the question number.
-Question text must NOT restate the marker values — say "this array", "the model shown".
-Available markers:
-  [ARRAY: rows=R cols=C]
-  [AREA_MODEL: collabels=20,3 | rowlabels=4]
-  [NUM_LINE: min=0 max=M step=S]
-  [NUM_LINE: min=0 max=M step=S jumps=yes]
-  [GROUPS: groups=G items=I]
-  [FRACTION: N/D]
-  [FRAC_CIRCLE: N/D]
-  [BAR_MODEL: v1,v2,v3]
-  [TAPE: v1:label,v2:label | brace=yes | total=X]
-  [BASE10: hundreds=H tens=T ones=O]
-  [PV_CHART: number]
-  [NUM_BOND: whole=W part1=P1 part2=P2]
-  [TENS_FRAME: filled=F total=10]
-  [FUNC_TABLE: pairs=1:3,2:6,3:? | rule=×3]
-  [GRID_RESPONSE: cols=4]
-  [NUM_CHART: start=1 end=40 cols=10 shaded=3,9,15,21,27,33,39]
-  [DATA_TABLE: header=Col1,Col2 | Row1val1,Row1val2 | Row2val1,Row2val2]
-  [YES_NO_TABLE: equation1 | equation2 | equation3]
-
-RULE 8 — OUTPUT FORMAT.
+RULE 7 — OUTPUT FORMAT.
   Line 1: Assessment title${customTitle ? ` — use exactly: "${customTitle}"` : ' (same as source or close parallel)'}
   Line 2: Directions/subtitle (same as source)
   Then: questions numbered exactly as in source
@@ -481,7 +409,38 @@ ${standard ? `\nAlign to standard: ${standard}` : ''}`;
 
     const rawResult = response.content[0].text;
     const result = fixMarkerTypeMismatches(rawResult);
-    return Response.json({ result });
+
+    // ── Bounding-box extraction: identify visual regions in source PDF pages ──
+    // If the client sent rendered page images, ask Claude to locate each
+    // question's visual (as 0-1 coordinate fractions) so the client can crop
+    // and embed them automatically.
+    let cropInstructions = [];
+    if (pageImages.length > 0) {
+      try {
+        const boxContent = [];
+        for (let i = 0; i < Math.min(pageImages.length, 5); i++) {
+          // Strip "data:image/jpeg;base64," prefix
+          const raw = pageImages[i].replace(/^data:[^;]+;base64,/, '');
+          boxContent.push({
+            type: 'text',
+            text: `PAGE ${i + 1} of ${pageImages.length}: Identify every visual model, diagram, table, chart, number line, array, grid, tens frame, or graphic that belongs to a specific question on this page. For EACH such visual, output one JSON object: {"q": <question number>, "page": ${i + 1}, "top": <0-1>, "left": <0-1>, "width": <0-1>, "height": <0-1>}. Use fractional coordinates of the full page image (0,0 = top-left corner; 1,1 = bottom-right corner). Add a small margin (0.01) around the visual so it is not clipped. Exclude: blank answer lines, work space boxes, question text, answer choices that are pure text. Only include actual visual models/diagrams the student must interpret.`
+          });
+          boxContent.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: raw } });
+        }
+        boxContent.push({ type: 'text', text: 'Return ONLY a single valid JSON array of all identified visuals across all pages. If no visuals are found, return []. Do not include any other text.' });
+
+        const boxResp = await client.messages.create({
+          model: 'claude-opus-4-5',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: boxContent }]
+        });
+        const boxText = boxResp.content[0].text.trim();
+        const jsonMatch = boxText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) cropInstructions = JSON.parse(jsonMatch[0]);
+      } catch { /* bounding-box extraction is best-effort */ }
+    }
+
+    return Response.json({ result, cropInstructions });
 
   } catch (error) {
     console.error('Assessment generation error:', error);
