@@ -163,13 +163,30 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
       userContent = [
         {
           type: 'text',
-          text: `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the content in this file.
+          text: `Create a ${gradeDisplay} ${subject} assessment based on the source document attached.
 
-Examine every visual in the document (arrays, number lines, fraction bars, base-10 blocks, groups, etc.). For each question involving a visual:
-1. Write the marker FIRST with the correct type and values.
-2. Then write the question text — refer to it as "this array", "the number line", "these groups", etc. Do NOT restate the dimensions or values in the question text.
+YOUR JOB: Produce a parallel version of this assessment — same question types, same skills, same structure — but with different numbers. Do not rewrite the questions from scratch. Mirror the source closely.
 
-The student must look at the visual to get the numbers. The question text alone should not give the answer away.`
+For each question in the source:
+1. Keep the same question format (MC or open response), same skill, same wording structure.
+2. Change ONLY the specific numbers/values to fresh ones.
+3. If the source question has a visual model (array, number line, groups, fraction bar, etc.), your version needs a matching visual of the same TYPE with the new numbers.
+
+HOW TO ADD A VISUAL:
+— Write the marker FIRST on its own line before the question number, using the new values you chose.
+— Then write the question text referring to it vaguely: "this array", "the number line shown", "these groups" — NOT the specific dimensions.
+— Arrays MUST have equal rows and equal columns (e.g. rows=4 cols=6 means exactly 4 rows of 6 tiles).
+— The student must look at the visual to get the values. Never restate the marker's numbers in the question text.
+
+EXAMPLE — source has a 3×5 array question, you produce:
+  [ARRAY: rows=4 cols=6]
+  What multiplication equation does this array show?
+
+EXAMPLE — source has a number line counting by 2s, you produce:
+  [NUM_LINE: min=0 max=40 step=4 jumps=yes]
+  What number does the last jump land on?
+
+${standard ? 'Align to standard: ' + standard : ''}`
         },
         {
           type: isImageFile ? 'image' : 'document',
