@@ -94,13 +94,32 @@ For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate li
   [FRACTION: 2 1/4]
   What is 1 2/4 + 2 1/4?
 
-CRITICAL — USE EXACT VALUES FROM EACH QUESTION IN EVERY MARKER:
-- The visual must show the EXACT numbers used in that specific question — not a generic example.
-- If the question asks about 3/4, write [FRACTION: 3/4] — NOT [FRACTION: 1/2].
-- If the question asks about the number 342, write [BASE10: hundreds=3 tens=4 ones=2] — NOT [BASE10: hundreds=1 tens=2 ones=3].
-- If the question asks "What is 2/5 + 1/5?", place [FRACTION: 2/5] and [FRACTION: 1/5] before that question.
-- If a number line question counts by 5s from 0 to 50, write [NUM_LINE: min=0 max=50 step=5] — not arbitrary values.
-- Always derive the marker spec directly from the numbers in the question. The visual is a representation of THAT question's specific content.
+CRITICAL — THE VISUAL AND THE QUESTION MUST MATCH EXACTLY:
+The question text and the visual marker must refer to the same numbers. A student should be able to look at the visual and answer the question using only what they see. If they don't match, the question is broken.
+
+CORRECT examples:
+  [ARRAY: rows=4 cols=6]
+  What does the factor 4 tell you about this array?   ← 4 is a dimension of the array ✓
+
+  [GROUPS: groups=5 items=3]
+  There are 5 groups. How many items are in each group?  ← 5 matches groups= ✓
+
+  [FRACTION: 3/8]
+  What fraction of the bar is shaded?  ← 3/8 is what the bar shows ✓
+
+WRONG examples (never do this):
+  [ARRAY: rows=3 cols=4]
+  What does the factor 5 tell you about this array?  ← 5 doesn't appear in the array ✗
+
+  [GROUPS: groups=4 items=6]
+  How many are in 3 groups of 7?  ← question uses different numbers than the visual ✗
+
+RULES:
+- Write the question FIRST in your head, decide the exact numbers, THEN write the marker using those same numbers.
+- Every number the question asks about must appear in the visual marker.
+- If the question asks about a factor, that factor must be rows= or cols= in the ARRAY.
+- If the question asks about groups, that number must be groups= in GROUPS.
+- If a visual doesn't match the question, remove the visual entirely rather than show a misleading one.
 
 CRITICAL — WHEN TO USE VISUAL MODELS:
 - If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
