@@ -709,6 +709,7 @@ function parseAssessment(text) {
   const lines = cleaned.split('\n');
   const questions = [];
   let currentQ = null;
+  let lastQNum = 0; // tracks last confirmed question number for sequential-format matching
   let titleLine = '';
   let subtitleLine = '';
   let headerParsed = false;
@@ -729,7 +730,8 @@ function parseAssessment(text) {
       // Only treat it as question text if it's not itself a new question number or choice
       const isNewQ = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/) ||
                      trimmed.match(/^(\d+)\s*[—–]\s*(.+)/) ||
-                     trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i);
+                     trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i) ||
+                     trimmed.match(/^(\d+)\s+([A-Za-z].+)/);
       const isChoice = trimmed.match(/^([A-Ja-j])[\.\)]\s*(.+)/);
       if (!isNewQ && !isChoice) {
         if (currentQ) questions.push(currentQ);
@@ -743,6 +745,7 @@ function parseAssessment(text) {
           standard: '',
           type: 'open'
         };
+        lastQNum = pendingQNum;
         pendingModels = [];
         pendingQNum = null;
         continue;
@@ -752,7 +755,7 @@ function parseAssessment(text) {
 
     // Extract title from first non-empty lines
     // Guard matches all question-number formats so they aren't swallowed as title/subtitle.
-    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/) && !trimmed.match(/^\d+\s*[—–]/) && !trimmed.match(/^\(\d+\)/) && !trimmed.match(/^Q\.?\s*\d+/i) && !trimmed.match(/^Question\s+\d+/i)) {
+    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/) && !trimmed.match(/^\d+\s*[—–]/) && !trimmed.match(/^\(\d+\)/) && !trimmed.match(/^Q\.?\s*\d+/i) && !trimmed.match(/^Question\s+\d+/i) && !(trimmed.match(/^\d+\s+[A-Za-z]/) && (lastQNum === 0 || parseInt((trimmed.match(/^(\d+)/)||[])[1]) === lastQNum + 1))) {
       if (!titleLine) { titleLine = trimmed; continue; }
       if (!subtitleLine && !trimmed.match(/^(version|TEACHER|ANSWER)/i)) { subtitleLine = trimmed; continue; }
     }
@@ -770,12 +773,15 @@ function parseAssessment(text) {
     //   "1. text"  "1) text"  "1: text"  "1.text" (no space)
     //   "(1) text"  "Q1. text"  "Q. 1. text"  "Question 1. text"
     //   "1 — text"  "1 – text"  (em/en dash)
+    //   "1 text"  (plain space, no separator — checked last to avoid false positives)
     const qMatch =
       trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/) ||
       trimmed.match(/^(\d+)\s*[—–]\s*(.+)/) ||
       trimmed.match(/^\((\d+)\)\s*(.+)/) ||
       trimmed.match(/^Q\.?\s*(\d+)[\.\)\:]?\s*(.+)/i) ||
-      trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i);
+      trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i) ||
+      // Plain "N text" only when N is the expected next question (avoids "30 students" false positives)
+      ((() => { const m = trimmed.match(/^(\d+)\s+([A-Za-z].+)/); return (m && (lastQNum === 0 || parseInt(m[1]) === lastQNum + 1)) ? m : null; })());
     if (qMatch && parseInt(qMatch[1]) > 0 && parseInt(qMatch[1]) < 200) {
       if (currentQ) questions.push(currentQ);
       headerParsed = true;
@@ -793,6 +799,7 @@ function parseAssessment(text) {
         standard: '',
         type: 'open'
       };
+      lastQNum = parseInt(qMatch[1]); // track for sequential plain-space matching
       pendingModels = []; // reset — they've been claimed by this question
       continue;
     }
