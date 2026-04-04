@@ -1440,7 +1440,7 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
           const accent = accentColors[idx % accentColors.length];
 
           return (
-            <div key={idx} className={`question-card bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden border-l-4 ${accent}`}>
+            <div key={idx} className={`question-card bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden border-l-4 ${accent} mt-6`}>
               {/* Question top bar */}
               <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                 <span className={`text-xs font-semibold ${config.labelColor}`}>{config.label}</span>
