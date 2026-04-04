@@ -310,36 +310,57 @@ function FractionCircle({ n, d }) {
 }
 
 function AreaModel({ cols, rows: rowsStr, vals }) {
-  const colVals = (cols || '20,7').split(',').map(s => s.trim());
-  const rowVals = (rowsStr || '4').split(',').map(s => s.trim());
+  const colVals = (cols || '20,3').split(',').map(s => s.trim());
+  const rowVals = (rowsStr || '10,4').split(',').map(s => s.trim());
   const cellVals = vals ? vals.split(',').map(s => s.trim()) : [];
-  const cellW = 72, cellH = 48, labelW = 40, labelH = 30;
-  const W = labelW + colVals.length * cellW + 2;
-  const H = labelH + rowVals.length * cellH + 2;
+
+  // Proportional sizing: scale cell widths/heights to value, capped so total stays compact
+  const colNums = colVals.map(v => Math.max(parseFloat(v) || 1, 1));
+  const rowNums = rowVals.map(v => Math.max(parseFloat(v) || 1, 1));
+  const maxCol = Math.max(...colNums);
+  const maxRow = Math.max(...rowNums);
+  const labelW = 38, labelH = 28;
+  const maxColW = Math.min(110, Math.floor(260 / colVals.length));
+  const minColW = 36;
+  const maxRowH = Math.min(60, Math.floor(160 / rowVals.length));
+  const minRowH = 28;
+  const colWidths = colNums.map(v => Math.max(minColW, Math.round((v / maxCol) * maxColW)));
+  const rowHeights = rowNums.map(v => Math.max(minRowH, Math.round((v / maxRow) * maxRowH)));
+  const totalW = labelW + colWidths.reduce((a, b) => a + b, 0) + 2;
+  const totalH = labelH + rowHeights.reduce((a, b) => a + b, 0) + 2;
+
+  // Compute x offsets for columns, y offsets for rows
+  const colX = colWidths.reduce((acc, w, i) => { acc.push((acc[i] || 0) + (i > 0 ? colWidths[i - 1] : 0)); return acc; }, []);
+  const rowY = rowHeights.reduce((acc, h, i) => { acc.push((acc[i] || 0) + (i > 0 ? rowHeights[i - 1] : 0)); return acc; }, []);
+
+  const colors = ['#fed7aa', '#fce7f3', '#bbf7d0', '#bfdbfe', '#fef08a', '#d9f99d'];
   return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
+    <svg width={totalW} height={totalH} style={{ display: 'block' }}>
+      {/* Column labels */}
       {colVals.map((cv, ci) => (
-        <text key={ci} x={labelW + ci * cellW + cellW / 2} y={labelH - 8}
-          textAnchor="middle" fontSize={13} fontWeight="600" fill="#334155">{cv}</text>
+        <text key={ci} x={labelW + colX[ci] + colWidths[ci] / 2} y={labelH - 6}
+          textAnchor="middle" fontSize={12} fontWeight="700" fill="#334155">{cv}</text>
       ))}
+      {/* Row labels */}
       {rowVals.map((rv, ri) => (
-        <text key={ri} x={labelW - 8} y={labelH + ri * cellH + cellH / 2 + 5}
-          textAnchor="end" fontSize={13} fontWeight="600" fill="#334155">{rv}</text>
+        <text key={ri} x={labelW - 6} y={labelH + rowY[ri] + rowHeights[ri] / 2 + 4}
+          textAnchor="end" fontSize={12} fontWeight="700" fill="#334155">{rv}</text>
       ))}
+      {/* Cells */}
       {rowVals.map((_, ri) =>
         colVals.map((_, ci) => {
           const idx = ri * colVals.length + ci;
           const cellVal = cellVals[idx];
-          const colors = ['#fed7aa', '#fce7f3', '#bbf7d0', '#bfdbfe', '#fef08a'];
           const fill = cellVal ? colors[ci % colors.length] : 'white';
+          const cw = colWidths[ci], ch = rowHeights[ri];
+          const cx = labelW + colX[ci], cy = labelH + rowY[ri];
           return (
             <g key={`${ri}-${ci}`}>
-              <rect x={labelW + ci * cellW} y={labelH + ri * cellH}
-                width={cellW} height={cellH}
+              <rect x={cx} y={cy} width={cw} height={ch}
                 fill={fill} stroke="#334155" strokeWidth={1.5} />
               {cellVal && (
-                <text x={labelW + ci * cellW + cellW / 2} y={labelH + ri * cellH + cellH / 2 + 5}
-                  textAnchor="middle" fontSize={14} fontWeight="600" fill="#334155">{cellVal}</text>
+                <text x={cx + cw / 2} y={cy + ch / 2 + 5}
+                  textAnchor="middle" fontSize={Math.min(14, ch * 0.4)} fontWeight="600" fill="#334155">{cellVal}</text>
               )}
             </g>
           );
@@ -358,32 +379,103 @@ function WorkSpace({ height = 80 }) {
   );
 }
 
-function Base10({ hundreds = 0, tens = 0, ones = 0 }) {
-  const H = parseInt(hundreds) || 0;
-  const T = parseInt(tens) || 0;
-  const O = parseInt(ones) || 0;
-  const blockSz = 30, unitSz = 8, gap = 6, pad = 10;
+// Student response boxes for mixed numbers and fractions
+function MixedNumBox({ whole = '', n = '', d = '' }) {
+  const boxW = 42, boxH = 44, fracW = 38, fracH = 34, gap = 10, pad = 8;
+  const totalW = pad + boxW + gap + fracW + pad;
+  const totalH = pad + Math.max(boxH, fracH * 2 + 10) + pad;
+  const wholeX = pad, wholeY = (totalH - boxH) / 2;
+  const fracX = pad + boxW + gap;
+  const numY = (totalH - fracH * 2 - 8) / 2;
+  const denY = numY + fracH + 8;
+  const lineY = numY + fracH + 4;
+  return (
+    <svg width={totalW} height={totalH} style={{ display: 'block' }}>
+      {/* Whole number box */}
+      <rect x={wholeX} y={wholeY} width={boxW} height={boxH}
+        fill="white" stroke="#334155" strokeWidth={2} rx={2} />
+      {whole ? <text x={wholeX + boxW / 2} y={wholeY + boxH / 2 + 6}
+        textAnchor="middle" fontSize={18} fontWeight="700" fill="#334155">{whole}</text> : null}
+      {/* Fraction bar */}
+      <line x1={fracX - 2} y1={lineY} x2={fracX + fracW + 2} y2={lineY}
+        stroke="#334155" strokeWidth={2} />
+      {/* Numerator box */}
+      <rect x={fracX} y={numY} width={fracW} height={fracH}
+        fill="white" stroke="#334155" strokeWidth={2} rx={2} />
+      {n ? <text x={fracX + fracW / 2} y={numY + fracH / 2 + 5}
+        textAnchor="middle" fontSize={14} fontWeight="700" fill="#334155">{n}</text> : null}
+      {/* Denominator box */}
+      <rect x={fracX} y={denY} width={fracW} height={fracH}
+        fill="white" stroke="#334155" strokeWidth={2} rx={2} />
+      {d ? <text x={fracX + fracW / 2} y={denY + fracH / 2 + 5}
+        textAnchor="middle" fontSize={14} fontWeight="700" fill="#334155">{d}</text> : null}
+    </svg>
+  );
+}
+
+function FractionBox({ n = '', d = '' }) {
+  const fracW = 44, fracH = 36, pad = 8;
+  const totalW = fracW + pad * 2;
+  const totalH = fracH * 2 + 12 + pad * 2;
+  const fracX = pad;
+  const numY = pad;
+  const lineY = numY + fracH + 3;
+  const denY = lineY + 5;
+  return (
+    <svg width={totalW} height={totalH} style={{ display: 'block' }}>
+      <line x1={fracX - 2} y1={lineY} x2={fracX + fracW + 2} y2={lineY}
+        stroke="#334155" strokeWidth={2} />
+      <rect x={fracX} y={numY} width={fracW} height={fracH}
+        fill="white" stroke="#334155" strokeWidth={2} rx={2} />
+      {n ? <text x={fracX + fracW / 2} y={numY + fracH / 2 + 5}
+        textAnchor="middle" fontSize={14} fontWeight="700" fill="#334155">{n}</text> : null}
+      <rect x={fracX} y={denY} width={fracW} height={fracH}
+        fill="white" stroke="#334155" strokeWidth={2} rx={2} />
+      {d ? <text x={fracX + fracW / 2} y={denY + fracH / 2 + 5}
+        textAnchor="middle" fontSize={14} fontWeight="700" fill="#334155">{d}</text> : null}
+    </svg>
+  );
+}
+
+function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
+  const TH = Math.min(parseInt(thousands) || 0, 9);
+  const H = Math.min(parseInt(hundreds) || 0, 9);
+  const T = Math.min(parseInt(tens) || 0, 9);
+  const O = Math.min(parseInt(ones) || 0, 9);
+  const gap = 8, pad = 10;
   let x = pad;
   const items = [];
-  for (let i = 0; i < Math.min(H, 9); i++) {
+  // Thousands: 10×10 large square (each 4px unit → 40px block)
+  for (let i = 0; i < TH; i++) {
+    const bx = x, by = pad;
+    for (let r = 0; r < 10; r++)
+      for (let c = 0; c < 10; c++)
+        items.push(<rect key={`th${i}${r}${c}`} x={bx + c * 4} y={by + r * 4} width={3.5} height={3.5} fill="#7c3aed" />);
+    x += 42 + gap;
+  }
+  // Hundreds: 10×10 small square (each 3px unit → 30px block)
+  for (let i = 0; i < H; i++) {
     const bx = x, by = pad;
     for (let r = 0; r < 10; r++)
       for (let c = 0; c < 10; c++)
         items.push(<rect key={`h${i}${r}${c}`} x={bx + c * 3} y={by + r * 3} width={2.5} height={2.5} fill="#334155" />);
-    x += blockSz + gap;
+    x += 32 + gap;
   }
-  for (let i = 0; i < Math.min(T, 9); i++) {
+  // Tens: vertical rod (10 units tall, 1 wide)
+  for (let i = 0; i < T; i++) {
     for (let r = 0; r < 10; r++)
       items.push(<rect key={`t${i}${r}`} x={x} y={pad + r * 3} width={8} height={2.5} fill="#334155" />);
     x += 12 + gap;
   }
-  for (let i = 0; i < Math.min(O, 9); i++) {
-    items.push(<rect key={`o${i}`} x={x} y={pad + 2} width={unitSz} height={unitSz} fill="#334155" />);
-    x += unitSz + gap;
+  // Ones: single small square
+  for (let i = 0; i < O; i++) {
+    items.push(<rect key={`o${i}`} x={x} y={pad + 4} width={8} height={8} fill="#334155" />);
+    x += 10 + gap;
   }
   const totalW = Math.max(x + pad, 60);
+  const totalH = Math.max(TH > 0 ? 52 : H > 0 ? 42 : 32, 32);
   return (
-    <svg width={totalW} height={50} style={{ display: 'block' }}>
+    <svg width={totalW} height={totalH} style={{ display: 'block' }}>
       {items}
     </svg>
   );
@@ -633,7 +725,7 @@ function parseVisualModel(marker) {
     return <WorkSpace height={kv.height || 80} />;
   }
   if (m.startsWith('[BASE10:')) {
-    return <Base10 hundreds={kv.hundreds} tens={kv.tens} ones={kv.ones} />;
+    return <Base10 thousands={kv.thousands} hundreds={kv.hundreds} tens={kv.tens} ones={kv.ones} />;
   }
   if (m.startsWith('[PV_CHART:')) {
     const num = kvPart.trim();
@@ -675,6 +767,12 @@ function parseVisualModel(marker) {
   if (m.startsWith('[NUM_CHART:')) {
     return <NumberChart start={kv.start} end={kv.end} cols={kv.cols} shaded={kv.shaded} />;
   }
+  if (m.startsWith('[MIXED_NUM_BOX:') || m === '[MIXED_NUM_BOX]') {
+    return <MixedNumBox whole={kv.whole || ''} n={kv.n || ''} d={kv.d || ''} />;
+  }
+  if (m.startsWith('[FRACTION_BOX:') || m === '[FRACTION_BOX]') {
+    return <FractionBox n={kv.n || ''} d={kv.d || ''} />;
+  }
   if (m.startsWith('[IMAGE:')) {
     return null; // handled separately as paste zone
   }
@@ -689,7 +787,7 @@ function parseAssessment(text) {
   let current = null;
   let inVersionB = false;
   let inAnswerKey = false;
-  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
+  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
 
   const flush = () => { if (current) { questions.push(current); current = null; } };
 
@@ -793,6 +891,8 @@ const VISUAL_TYPES_LIST = [
   { id: 'FRAC_CIRCLE', label: 'Fraction Circle (proper / improper)' },
   { id: 'MIXED_NUM', label: 'Mixed Number Bar' },
   { id: 'MIXED_CIRCLE', label: 'Mixed Number Circle' },
+  { id: 'MIXED_NUM_BOX', label: 'Mixed Number Response Box' },
+  { id: 'FRACTION_BOX', label: 'Fraction Response Box' },
   { id: 'AREA_MODEL', label: 'Area Model (multi-digit)' },
   { id: 'BASE10', label: 'Place Value Blocks' },
   { id: 'BAR_MODEL', label: 'Bar Model' },
@@ -874,12 +974,77 @@ function VisualParamForm({ type, params, onChange }) {
           <p className="text-xs text-slate-400">Tip: if numerator &gt; denominator, renders as improper fraction (multiple bars/circles)</p>
         </div>
       );
+    case 'MIXED_NUM_BOX':
+      return (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">Pre-fill values (leave blank for empty student boxes)</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Whole # (opt)</span>
+              <input type="text" value={params.whole ?? ''}
+                onChange={e => set('whole', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="e.g. 2" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Numerator (opt)</span>
+              <input type="text" value={params.n ?? ''}
+                onChange={e => set('n', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="blank" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Denominator (opt)</span>
+              <input type="text" value={params.d ?? ''}
+                onChange={e => set('d', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="blank" />
+            </div>
+          </div>
+        </div>
+      );
+    case 'FRACTION_BOX':
+      return (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">Pre-fill values (leave blank for empty student boxes)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Numerator (opt)</span>
+              <input type="text" value={params.n ?? ''}
+                onChange={e => set('n', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="blank" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Denominator (opt)</span>
+              <input type="text" value={params.d ?? ''}
+                onChange={e => set('d', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="blank" />
+            </div>
+          </div>
+        </div>
+      );
     case 'MIXED_NUM':
     case 'MIXED_CIRCLE':
       return (
-        <div className="space-y-1">
-          <div className="flex gap-2">{inp('Whole #', 'whole', { type: 'number', min: 0 })}{inp('Numerator', 'n', { type: 'number', min: 0 })}{inp('Denominator', 'd', { type: 'number', min: 1 })}</div>
-          <p className="text-xs text-slate-400">e.g. Whole=2, N=1, D=3 → 2 and 1/3</p>
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Whole #</span>
+              <input type="number" min={0} value={params.whole ?? ''}
+                onChange={e => set('whole', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="e.g. 2" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Numerator</span>
+              <input type="number" min={0} value={params.n ?? ''}
+                onChange={e => set('n', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="e.g. 1" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Denominator</span>
+              <input type="number" min={1} value={params.d ?? ''}
+                onChange={e => set('d', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="e.g. 3" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Example: Whole=2, N=1, D=3 → shows 2 and 1/3</p>
         </div>
       );
     case 'AREA_MODEL':
@@ -893,13 +1058,34 @@ function VisualParamForm({ type, params, onChange }) {
       );
     case 'BASE10':
       return (
-        <div className="space-y-1">
-          <div className="flex gap-2">
-            {inp('Hundreds', 'hundreds', { type: 'number', min: 0, max: 9 })}
-            {inp('Tens', 'tens', { type: 'number', min: 0, max: 9 })}
-            {inp('Ones', 'ones', { type: 'number', min: 0, max: 9 })}
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Thousands</span>
+              <input type="number" min={0} max={9} value={params.thousands ?? ''}
+                onChange={e => set('thousands', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="0–9" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Hundreds</span>
+              <input type="number" min={0} max={9} value={params.hundreds ?? ''}
+                onChange={e => set('hundreds', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="0–9" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Tens</span>
+              <input type="number" min={0} max={9} value={params.tens ?? ''}
+                onChange={e => set('tens', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="0–9" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-gray-500 font-medium">Ones</span>
+              <input type="number" min={0} max={9} value={params.ones ?? ''}
+                onChange={e => set('ones', e.target.value)}
+                className="border rounded p-1 w-full text-sm" placeholder="0–9" />
+            </div>
           </div>
-          <p className="text-xs text-slate-400">Shows flat squares (100s), rods (10s), and unit cubes (1s)</p>
+          <p className="text-xs text-slate-400">Purple cubes=1000s · dark squares=100s · rods=10s · cubes=1s (max 9 of each)</p>
         </div>
       );
     case 'BAR_MODEL':
@@ -948,7 +1134,20 @@ function paramsToMarker(type, params) {
   if (type === 'FRAC_CIRCLE') return `[FRAC_CIRCLE: ${params.n || 1}/${params.d || 4}]`;
   if (type === 'MIXED_NUM') return `[MIXED_NUM: whole=${params.whole || 1} n=${params.n || 1} d=${params.d || 3}]`;
   if (type === 'MIXED_CIRCLE') return `[MIXED_CIRCLE: whole=${params.whole || 1} n=${params.n || 1} d=${params.d || 3}]`;
-  if (type === 'BASE10') return `[BASE10: hundreds=${params.hundreds || 0} tens=${params.tens || 0} ones=${params.ones || 0}]`;
+  if (type === 'MIXED_NUM_BOX') {
+    const parts = [];
+    if (params.whole) parts.push(`whole=${params.whole}`);
+    if (params.n) parts.push(`n=${params.n}`);
+    if (params.d) parts.push(`d=${params.d}`);
+    return parts.length ? `[MIXED_NUM_BOX: ${parts.join(' ')}]` : '[MIXED_NUM_BOX]';
+  }
+  if (type === 'FRACTION_BOX') {
+    const parts = [];
+    if (params.n) parts.push(`n=${params.n}`);
+    if (params.d) parts.push(`d=${params.d}`);
+    return parts.length ? `[FRACTION_BOX: ${parts.join(' ')}]` : '[FRACTION_BOX]';
+  }
+  if (type === 'BASE10') return `[BASE10: thousands=${params.thousands || 0} hundreds=${params.hundreds || 0} tens=${params.tens || 0} ones=${params.ones || 0}]`;
   if (type === 'AREA_MODEL') {
     let m = `[AREA_MODEL: cols=${params.cols || '20,7'} rows=${params.rows || '10,4'}`;
     if (params.vals) m += ` vals=${params.vals}`;
@@ -1073,12 +1272,29 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const handlePaste = e => {
     const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image'));
     if (item) {
+      e.preventDefault();
       const blob = item.getAsFile();
       const reader = new FileReader();
       reader.onload = ev => setCustomImg(ev.target.result);
       reader.readAsDataURL(blob);
     }
   };
+
+  // Document-level paste listener so the user doesn't have to focus the drop zone first
+  useEffect(() => {
+    if (visualType !== 'custom') return;
+    const onDocPaste = e => {
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+      if (!item) return;
+      e.preventDefault();
+      const blob = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = ev => setCustomImg(ev.target.result);
+      reader.readAsDataURL(blob);
+    };
+    document.addEventListener('paste', onDocPaste);
+    return () => document.removeEventListener('paste', onDocPaste);
+  }, [visualType]);
 
   const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
   const hasChoices = qType === 'mc' || qType === 'multiselect';
@@ -1549,6 +1765,12 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
 
           return (
             <div key={q.id} className="group relative">
+              {/* Standard tag — top-right corner */}
+              {q.standard && (
+                <div className="absolute top-0 right-0 text-xs text-blue-500 font-medium bg-white/90 px-1.5 py-0.5 rounded-bl border border-blue-200 no-print-border leading-tight">
+                  {q.standard}
+                </div>
+              )}
               {visualComponent && (
                 <div className="mb-1 relative">
                   {visualComponent}
@@ -1598,7 +1820,6 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
                     );
                   })()}
 
-                  {q.standard && <div className="text-xs text-gray-400 mt-0.5">{q.standard}</div>}
                 </div>
               </div>
             </div>
@@ -1732,11 +1953,12 @@ function visualToHtml(marker) {
   if (m.startsWith('GROUPS:')) {
     const G = Math.min(parseInt(gp('groups')) || 3, 8);
     const I = Math.min(parseInt(gp('items')) || 3, 8);
-    const dots = Array(I).fill('●').join(' ');
+    const dots = Array(I).fill('●').join('  ');
     let t = `<table style="${tbl}border:none"><tbody><tr>`;
     for (let g = 0; g < G; g++) {
-      t += `<td style="border:2px solid #333;border-radius:40px;padding:6px 10px;text-align:center;font-size:11pt">${dots}</td>`;
-      if (g < G - 1) t += '<td style="border:none;width:10px"></td>';
+      // Use dashed border instead of border-radius (Google Docs ignores border-radius)
+      t += `<td style="border:2px dashed #333;padding:8px 12px;text-align:center;font-size:12pt;min-width:40px">${dots}</td>`;
+      if (g < G - 1) t += '<td style="border:none;width:12px">&nbsp;</td>';
     }
     return t + '</tr></tbody></table>';
   }
@@ -1765,11 +1987,12 @@ function visualToHtml(marker) {
     const whole = gp('whole') ?? '?';
     const p1 = gp('part1') ?? '?';
     const p2 = gp('part2') ?? '?';
-    const circle = (v) => `<td style="border:2px solid #333;border-radius:50%;width:40px;height:40px;text-align:center;vertical-align:middle;font-size:13pt;font-weight:bold">${v}</td>`;
+    // Use rounded border (not 50% — GDocs ignores border-radius) + bold value
+    const circle = (v) => `<td style="border:2px solid #333;width:42px;height:42px;text-align:center;vertical-align:middle;font-size:13pt;font-weight:bold;padding:4px">${v}</td>`;
     return `<table style="${tbl}border:none;text-align:center"><tbody>
-      <tr><td style="border:none;width:55px"></td>${circle(whole)}<td style="border:none;width:55px"></td></tr>
-      <tr><td style="border:none;border-top:2px solid #333;border-right:2px solid #333;height:22px"></td><td style="border:none"></td><td style="border:none;border-top:2px solid #333;border-left:2px solid #333;height:22px"></td></tr>
-      <tr>${circle(p1)}<td style="border:none;width:55px"></td>${circle(p2)}</tr>
+      <tr><td style="border:none;width:50px">&nbsp;</td>${circle(whole)}<td style="border:none;width:50px">&nbsp;</td></tr>
+      <tr><td style="border:none;border-top:2px solid #333;border-right:2px solid #333;height:20px">&nbsp;</td><td style="border:none">&nbsp;</td><td style="border:none;border-top:2px solid #333;border-left:2px solid #333;height:20px">&nbsp;</td></tr>
+      <tr>${circle(p1)}<td style="border:none;width:50px">&nbsp;</td>${circle(p2)}</tr>
     </tbody></table>`;
   }
 
@@ -1804,6 +2027,7 @@ function visualToHtml(marker) {
   }
 
   // ── FRACTION CIRCLE (proper + improper) ──
+  // Google Docs ignores border-radius, so use a pie-sector table approach
   if (m.startsWith('FRAC_CIRCLE:') || m.startsWith('MIXED_CIRCLE:')) {
     let n, d;
     if (m.startsWith('MIXED_CIRCLE:')) {
@@ -1818,49 +2042,124 @@ function visualToHtml(marker) {
     const wholeCount = Math.floor(n / d);
     const remainder = n % d;
     const hasPartial = remainder > 0 || wholeCount === 0;
-    const totalCircles = wholeCount + (hasPartial ? 1 : 0);
-    // Represent circles as simple labeled pies using unicode pie symbol
-    let t = `<table style="${tbl}border:none;"><tbody><tr>`;
-    for (let bi = 0; bi < wholeCount; bi++)
-      t += `<td style="border:none;text-align:center;padding:0 6px"><div style="border:2px solid #333;border-radius:50%;width:52px;height:52px;background:#93c5fd;line-height:52px;text-align:center;font-size:9pt"></div><div style="font-size:9pt;color:#666;margin-top:2px">1 whole</div></td>`;
-    if (hasPartial) {
-      t += `<td style="border:none;text-align:center;padding:0 6px"><div style="border:2px solid #333;border-radius:50%;width:52px;height:52px;background:linear-gradient(to right,#93c5fd 50%,#fff 50%);line-height:52px;text-align:center;font-size:9pt">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</div><div style="font-size:9pt;color:#666;margin-top:2px">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</div></td>`;
-    }
-    return t + '</tr></tbody></table>';
+
+    // Build a circle as a grid of D sectors (shown as a row of shaded/unshaded cells)
+    const makeCircleRow = (filledN, total, label) => {
+      let row = `<table style="border-collapse:collapse;display:inline-table;margin:0 6px;vertical-align:top"><tbody>`;
+      // Top label
+      row += `<tr><td colspan="${total}" style="border:none;text-align:center;font-size:9pt;color:#555;padding:0 0 2px">${label}</td></tr>`;
+      // Sector row
+      row += '<tr>';
+      for (let i = 0; i < total; i++)
+        row += `<td style="${cell}width:${Math.min(24, Math.floor(120/total))}px;height:28px;background:${i < filledN ? '#93c5fd' : '#fff'}"></td>`;
+      row += '</tr>';
+      // Bottom fraction label
+      row += `<tr><td colspan="${total}" style="border:none;text-align:center;font-size:9pt;color:#555;padding:2px 0">${label}</td></tr>`;
+      return row + '</tbody></table>';
+    };
+
+    let t = `<p style="margin:4px 0">`;
+    for (let bi = 0; bi < wholeCount; bi++) t += makeCircleRow(d, d, '1 whole');
+    if (hasPartial) t += makeCircleRow(remainder, d, `${n <= d ? n : remainder}/${d}`);
+    return t + '</p>';
   }
 
   // ── AREA MODEL ──
   if (m.startsWith('AREA_MODEL:')) {
     const colsRaw = (m.match(/cols=([\d,]+)/) || [])[1] || '10,10';
-    const colVals = colsRaw.split(',');
-    const rowsN = parseInt(gp('rows') ?? '1');
+    const rowsRaw = (m.match(/rows=([\d,]+)/) || [])[1] || '1';  // allow comma-sep rows
+    const colVals = colsRaw.split(',').map(s => s.trim());
+    const rowVals = rowsRaw.split(',').map(s => s.trim());
     const valsRaw = (m.match(/vals=([\d,]+)/) || [])[1];
     const vals = valsRaw ? valsRaw.split(',') : null;
+
+    // Proportional widths: scale to value, cap so total stays compact
+    const colNums = colVals.map(v => Math.max(parseFloat(v) || 1, 1));
+    const rowNums = rowVals.map(v => Math.max(parseFloat(v) || 1, 1));
+    const maxCol = Math.max(...colNums), maxRow = Math.max(...rowNums);
+    const maxCW = Math.min(100, Math.floor(240 / colVals.length));
+    const minCW = 38;
+    const maxRH = Math.min(56, Math.floor(150 / rowVals.length));
+    const minRH = 28;
+    const colW = colNums.map(v => Math.max(minCW, Math.round((v / maxCol) * maxCW)));
+    const rowH = rowNums.map(v => Math.max(minRH, Math.round((v / maxRow) * maxRH)));
+
     let t = `<table style="${tbl}"><tbody>`;
-    t += '<tr><td style="border:none;width:20px"></td>' +
-      colVals.map(cv => `<td style="${cell}font-weight:bold;background:#f1f5f9;min-width:44px;padding:4px 8px">${cv}</td>`).join('') + '</tr>';
-    for (let r = 0; r < rowsN; r++) {
-      t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 8px">${r + 1}</td>`;
+    // Column header row
+    t += '<tr><td style="border:none;width:38px">&nbsp;</td>' +
+      colVals.map((cv, ci) => `<td style="${cell}font-weight:bold;background:#f1f5f9;text-align:center;padding:4px 6px;width:${colW[ci]}px">${cv}</td>`).join('') + '</tr>';
+    // Data rows with row labels
+    rowVals.forEach((rv, ri) => {
+      t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;text-align:center;padding:4px 6px;height:${rowH[ri]}px">${rv}</td>`;
       colVals.forEach((_, ci) => {
-        const idx = r * colVals.length + ci;
+        const idx = ri * colVals.length + ci;
         const v = vals ? (vals[idx] ?? '') : '';
-        t += `<td style="${cell}min-width:44px;height:36px;padding:6px 12px">${v}</td>`;
+        t += `<td style="${cell}text-align:center;padding:4px;height:${rowH[ri]}px;width:${colW[ci]}px">${v}</td>`;
       });
       t += '</tr>';
-    }
+    });
     return t + '</tbody></table>';
   }
 
   // ── BASE-10 BLOCKS ──
   if (m.startsWith('BASE10:')) {
-    const H = parseInt(gp('hundreds') ?? '0');
-    const T = parseInt(gp('tens') ?? '0');
-    const O = parseInt(gp('ones') ?? '0');
-    let parts = [];
-    if (H) parts.push(`Hundreds: ${Array(H).fill('▪▪▪▪▪▪▪▪▪▪').join(' ')}`);
-    if (T) parts.push(`Tens: ${Array(T).fill('▪▪▪▪▪▪▪▪▪▪').join(' ')}`);
-    if (O) parts.push(`Ones: ${Array(O).fill('▪').join(' ')}`);
-    return `<p style="margin:8px 0;font-size:11pt">${parts.join(' &nbsp;&nbsp; ')}</p>`;
+    const TH = Math.min(parseInt(gp('thousands') ?? '0'), 9);
+    const H = Math.min(parseInt(gp('hundreds') ?? '0'), 9);
+    const T = Math.min(parseInt(gp('tens') ?? '0'), 9);
+    const O = Math.min(parseInt(gp('ones') ?? '0'), 9);
+    // Render as labeled groups of symbols (works reliably in Google Docs)
+    let t = `<table style="${tbl}border:none"><tbody><tr>`;
+    if (TH) {
+      // Thousands: 4×4 grid symbol ▦ repeated TH times
+      t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Thousands (×${TH})</div>
+        <table style="border-collapse:collapse;display:inline-table"><tbody>`;
+      for (let i = 0; i < TH; i++) {
+        t += `<tr><td style="border:1px solid #7c3aed;padding:1px;margin:1px;vertical-align:top">`;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++)
+            t += `<span style="display:inline-block;width:5px;height:5px;background:#7c3aed;margin:0.5px"></span>`;
+          if (r < 3) t += '<br/>';
+        }
+        t += '</td>';
+        if ((i + 1) % 3 === 0) t += '</tr><tr>';
+      }
+      t += '</tr></tbody></table></td>';
+    }
+    if (H) {
+      t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Hundreds (×${H})</div>
+        <table style="border-collapse:collapse;display:inline-table"><tbody>`;
+      for (let i = 0; i < H; i++) {
+        t += `<tr><td style="border:1px solid #334155;padding:1px;vertical-align:top">`;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++)
+            t += `<span style="display:inline-block;width:4px;height:4px;background:#334155;margin:0.5px"></span>`;
+          if (r < 3) t += '<br/>';
+        }
+        t += '</td>';
+        if ((i + 1) % 3 === 0) t += '</tr><tr>';
+      }
+      t += '</tr></tbody></table></td>';
+    }
+    if (T) {
+      t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Tens (×${T})</div>`;
+      for (let i = 0; i < T; i++) {
+        t += `<span style="display:inline-block;border:1px solid #334155;width:8px;padding:1px;margin:1px;vertical-align:top">`;
+        for (let r = 0; r < 5; r++) t += `<span style="display:block;width:6px;height:4px;background:#334155;margin-bottom:1px"></span>`;
+        t += '</span>';
+      }
+      t += '</td>';
+    }
+    if (O) {
+      t += `<td style="border:none;vertical-align:top">
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Ones (×${O})</div>`;
+      for (let i = 0; i < O; i++)
+        t += `<span style="display:inline-block;width:12px;height:12px;border:1px solid #334155;background:#334155;margin:1px"></span>`;
+      t += '</td>';
+    }
+    return t + '</tr></tbody></table>';
   }
 
   // ── PLACE VALUE CHART ──
@@ -1986,6 +2285,37 @@ function visualToHtml(marker) {
     return `<table style="${tbl}width:100%"><tbody><tr><td style="border:1px dashed #94a3b8;height:80pt;width:100%">&nbsp;</td></tr></tbody></table>`;
   }
 
+  // ── MIXED_NUM_BOX ── (student response boxes: whole | N/D)
+  if (m.startsWith('MIXED_NUM_BOX')) {
+    const whole = (m.match(/whole=([^\s\]]+)/) || [])[1] || '';
+    const n = (m.match(/\bn=([^\s\]]+)/) || [])[1] || '';
+    const d = (m.match(/\bd=([^\s\]]+)/) || [])[1] || '';
+    return `<table style="${tbl}border:none;vertical-align:middle"><tbody><tr>
+      <td style="border:2px solid #333;width:44px;height:46px;text-align:center;vertical-align:middle;font-size:14pt;padding:4px">${whole}</td>
+      <td style="border:none;width:10px">&nbsp;</td>
+      <td style="border:none;padding:0"><table style="border-collapse:collapse">
+        <tbody>
+          <tr><td style="border:2px solid #333;width:38px;height:22px;text-align:center;font-size:11pt;border-bottom:1px solid #333">${n}</td></tr>
+          <tr><td style="border:2px solid #333;width:38px;height:22px;text-align:center;font-size:11pt;border-top:1px solid #333">${d}</td></tr>
+        </tbody>
+      </table></td>
+    </tr></tbody></table>`;
+  }
+
+  // ── FRACTION_BOX ── (student response boxes: N/D)
+  if (m.startsWith('FRACTION_BOX')) {
+    const n = (m.match(/\bn=([^\s\]]+)/) || [])[1] || '';
+    const d = (m.match(/\bd=([^\s\]]+)/) || [])[1] || '';
+    return `<table style="${tbl}border:none"><tbody><tr><td style="border:none;padding:0">
+      <table style="border-collapse:collapse">
+        <tbody>
+          <tr><td style="border:2px solid #333;width:42px;height:22px;text-align:center;font-size:11pt;border-bottom:1px solid #333">${n}</td></tr>
+          <tr><td style="border:2px solid #333;width:42px;height:22px;text-align:center;font-size:11pt;border-top:1px solid #333">${d}</td></tr>
+        </tbody>
+      </table>
+    </td></tr></tbody></table>`;
+  }
+
   // ── IMAGE placeholder ──
   if (m.startsWith('IMAGE:')) {
     const desc = m.replace('IMAGE:', '').trim();
@@ -2030,9 +2360,10 @@ function copyToGoogleDocs(questions) {
         html += visualToHtml(q.marker);
       }
 
-      // Question text
+      // Question text (with standard tag floated right)
       const numStr = q.qNum ? `<strong>${q.qNum}.</strong> ` : '';
-      html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
+      const stdSpan = q.standard ? `<span style="float:right;font-size:9pt;color:#3b82f6;font-style:italic">${q.standard}</span>` : '';
+      html += `<p style="margin:2px 0 4px 0">${stdSpan}${numStr}${q.text || ''}</p>`;
 
       // Sub-lines (multi-part question continuation lines)
       q.lines?.forEach(l => {
@@ -2048,10 +2379,6 @@ function copyToGoogleDocs(questions) {
         });
       }
 
-      // Standard tag
-      if (q.standard) {
-        html += `<p style="color:#888;font-size:9pt;margin:1px 0">${q.standard}</p>`;
-      }
     }
   });
 
