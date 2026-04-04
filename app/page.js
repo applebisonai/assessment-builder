@@ -722,9 +722,8 @@ function parseAssessment(text) {
     }
 
     // Extract title from first non-empty lines
-    // Guard must include all separators that qMatch uses (. ) :) so question
-    // numbers don't get consumed as title/subtitle.
-    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/)) {
+    // Guard matches all question-number formats so they aren't swallowed as title/subtitle.
+    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/) && !trimmed.match(/^\(\d+\)/) && !trimmed.match(/^Q\.?\s*\d+/i) && !trimmed.match(/^Question\s+\d+/i)) {
       if (!titleLine) { titleLine = trimmed; continue; }
       if (!subtitleLine && !trimmed.match(/^(version|TEACHER|ANSWER)/i)) { subtitleLine = trimmed; continue; }
     }
@@ -738,9 +737,14 @@ function parseAssessment(text) {
     }
 
     // New question — attach any queued markers, then start fresh.
-    // \s* allows zero spaces between "1." and the text (some AI outputs omit the space).
-    // Also accept "1:" as a separator for wider compatibility.
-    const qMatch = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/);
+    // Handles many real-world formats:
+    //   "1. text"  "1) text"  "1: text"  "1.text" (no space)
+    //   "(1) text"  "Q1. text"  "Q. 1. text"  "Question 1. text"
+    const qMatch =
+      trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/) ||
+      trimmed.match(/^\((\d+)\)\s*(.+)/) ||
+      trimmed.match(/^Q\.?\s*(\d+)[\.\)\:]?\s*(.+)/i) ||
+      trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i);
     if (qMatch && parseInt(qMatch[1]) > 0 && parseInt(qMatch[1]) < 200) {
       if (currentQ) questions.push(currentQ);
       headerParsed = true;
@@ -1596,12 +1600,20 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
 
         {/* Empty state */}
         {questions.length === 0 && text && text.trim().length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-amber-200 bg-amber-50 p-8 text-center">
-            <div className="text-4xl mb-3">⚠️</div>
-            <p className="text-gray-700 font-semibold mb-1">Questions couldn't be parsed from this output.</p>
-            <p className="text-sm text-gray-500 mb-4">Switch to <strong>📄 Text</strong> view to see the raw output, or <strong>✏️ Raw Edit</strong> to correct the formatting.</p>
-            <div className="bg-white border border-gray-200 rounded-xl p-4 text-left max-h-48 overflow-y-auto">
-              <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">{text.slice(0, 600)}{text.length > 600 ? '\n...' : ''}</pre>
+          <div className="bg-white rounded-2xl shadow-sm border border-amber-200 bg-amber-50 p-6">
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">⚠️</div>
+              <p className="text-gray-700 font-semibold mb-1">Questions couldn't be parsed from this output.</p>
+              <p className="text-sm text-gray-500">The AI generated a response, but the question numbering format wasn't recognized. Switch to <strong>✏️ Raw Edit</strong> view to fix the formatting manually, or copy the raw text below and share it so we can improve the parser.</p>
+            </div>
+            <div className="flex justify-end mb-2">
+              <button onClick={() => navigator.clipboard?.writeText(text)}
+                className="text-xs border border-amber-300 text-amber-700 bg-white rounded-lg px-3 py-1.5 hover:bg-amber-50 transition font-medium">
+                📋 Copy raw output
+              </button>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 text-left max-h-64 overflow-y-auto">
+              <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">{text}</pre>
             </div>
           </div>
         )}
