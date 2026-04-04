@@ -673,6 +673,19 @@ function YesNoTable({ rows }) {
   );
 }
 
+// ─── Visual Analyzer — sends an image to the /api/analyze-visual endpoint
+// and returns an array of marker strings (or null if unrecognized).
+async function analyzeVisualImage(imageData, apiKey) {
+  const res = await fetch('/api/analyze-visual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageData, apiKey }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.markers || null;
+}
+
 // ─── Visual Model Parser ────────────────────────────────────────────────────
 
 function parseVisualModel(marker) {
@@ -1183,7 +1196,7 @@ function generateGoogleDocsHTML(text, subject, gradeLevel, customTitle) {
 
 // ─── Visual Model Inline Editor ─────────────────────────────────────────────
 
-function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, invalid }) {
+function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, onReplace, apiKey, children, invalid }) {
   // Parse model type and spec from marker
   const inner = marker.replace(/^\[|\]$/g, '').trim();
   const colonIdx = inner.indexOf(':');
@@ -1252,6 +1265,9 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
   });
   // IMAGE state
   const [imageUrl, setImageUrl] = useState(modelType === 'IMAGE' ? rawSpecInit : '');
+  // Recreate state (for IMAGE markers)
+  const [analyzingModel, setAnalyzingModel] = useState(false);
+  const [analyzeModelError, setAnalyzeModelError] = useState(null);
   // Bank save state
   const [bankName, setBankName] = useState('');
   const [showBankSave, setShowBankSave] = useState(false);
@@ -1458,14 +1474,45 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
     </div>
   );
 
+  // Recreate IMAGE as a native vector visual
+  const handleRecreate = async () => {
+    if (!onReplace || !apiKey) return;
+    const imageData = rawSpecInit; // the data URL or URL from [IMAGE: ...]
+    setAnalyzingModel(true);
+    setAnalyzeModelError(null);
+    try {
+      const markers = await analyzeVisualImage(imageData, apiKey);
+      if (!markers) {
+        setAnalyzeModelError('Could not identify visual type. Try a clearer crop.');
+      } else {
+        onReplace(markers);
+      }
+    } catch (err) {
+      setAnalyzeModelError(err.message || 'Analysis failed.');
+    } finally {
+      setAnalyzingModel(false);
+    }
+  };
+
   return (
     <div className="relative group/model">
       {children}
       {!editing && (
-        <button onClick={() => setEditing(true)}
-          className="absolute top-1 right-1 opacity-0 group-hover/model:opacity-100 bg-white border border-indigo-200 text-indigo-500 hover:bg-indigo-50 rounded px-1.5 py-0.5 text-xs transition-opacity shadow-sm no-print">
-          ✏ Edit
-        </button>
+        <div className="absolute top-1 right-1 opacity-0 group-hover/model:opacity-100 flex gap-1 transition-opacity no-print">
+          {modelType === 'IMAGE' && onReplace && (
+            <button onClick={handleRecreate} disabled={analyzingModel}
+              className="bg-emerald-500 text-white hover:bg-emerald-600 rounded px-1.5 py-0.5 text-xs shadow-sm disabled:opacity-60">
+              {analyzingModel ? '⏳' : '🔬 Recreate'}
+            </button>
+          )}
+          <button onClick={() => setEditing(true)}
+            className="bg-white border border-indigo-200 text-indigo-500 hover:bg-indigo-50 rounded px-1.5 py-0.5 text-xs shadow-sm">
+            ✏ Edit
+          </button>
+        </div>
+      )}
+      {analyzeModelError && !editing && (
+        <p className="text-xs text-amber-600 mt-1 no-print">{analyzeModelError}</p>
       )}
       {editing && (
         <div className="mt-2 p-3 bg-white border border-indigo-200 rounded-lg shadow-sm no-print">
@@ -1655,7 +1702,7 @@ function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
   );
 }
 
-function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage, onBrowseBank, onSaveToBank, customTitle }) {
+function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage, onBrowseBank, onSaveToBank, customTitle, apiKey }) {
   const { title, subtitle, questions } = parseAssessment(text);
   const displayTitle = customTitle || title || `${subject} Assessment`;
   const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
@@ -1766,7 +1813,12 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                             invalid={isInvalid}
                             onSave={(oldM, newM) => onModelEdit(oldM, newM)}
                             onRemove={() => onModelEdit(m, '')}
-                            onSaveToBank={onSaveToBank}>
+                            onSaveToBank={onSaveToBank}
+                            apiKey={apiKey}
+                            onReplace={(newMarkers) => {
+                              // Replace this one IMAGE marker with one or more new markers
+                              newMarkers.forEach((nm, ni) => onModelEdit(ni === 0 ? m : '', nm));
+                            }}>
                             {rendered ? <div>{rendered}</div> : null}
                           </ModelEditWrapper>
                         );
@@ -2027,10 +2079,12 @@ const VISUAL_LIBRARY = [
 ];
 
 // ─── BuilderQuestionCard: single editable question card for Manual Builder ───
-function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank }) {
+function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank, apiKey }) {
   const [showInsertPanel, setShowInsertPanel] = useState(false);
   const [editingModelIdx, setEditingModelIdx] = useState(null);
   const [editMarkerText, setEditMarkerText] = useState('');
+  const [analyzingIdx, setAnalyzingIdx] = useState(null); // index of IMAGE marker being analyzed
+  const [analyzeError, setAnalyzeError] = useState(null);
   const imageInputRef = useRef(null);
   const pasteZoneRef = useRef(null);
   const letters = 'ABCDEFGHIJ';
@@ -2098,6 +2152,31 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
     const updated = (q.models||[]).map((m, i) => i === idx ? editMarkerText.trim() : m);
     onUpdate({ models: updated });
     setEditingModelIdx(null);
+  };
+
+  // Send an IMAGE marker to Claude vision to recreate it as a native vector model
+  const recreateVisual = async (mi) => {
+    const m = (q.models||[])[mi];
+    if (!m || !m.startsWith('[IMAGE:')) return;
+    const imageData = m.slice('[IMAGE:'.length, -1).trim();
+    if (!apiKey) { setAnalyzeError('Add your Anthropic API key in Settings first.'); return; }
+    setAnalyzingIdx(mi);
+    setAnalyzeError(null);
+    try {
+      const markers = await analyzeVisualImage(imageData, apiKey);
+      if (!markers) {
+        setAnalyzeError('Could not identify a known visual type. The image stays as-is.');
+      } else {
+        // Replace the IMAGE marker at position mi with the new marker(s)
+        const current = [...(q.models||[])];
+        current.splice(mi, 1, ...markers);
+        onUpdate({ models: current });
+      }
+    } catch (err) {
+      setAnalyzeError(err.message || 'Analysis failed.');
+    } finally {
+      setAnalyzingIdx(null);
+    }
   };
 
   // Separate IMAGE markers from other visual markers for display
@@ -2248,8 +2327,17 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
                           {rendered
                             ? <div className="overflow-x-auto">{rendered}</div>
                             : <div className="text-xs text-gray-400 italic font-mono px-1">{m}</div>}
-                          {/* Edit + Remove buttons — visible on hover */}
+                          {/* Edit + Recreate + Remove buttons — visible on hover */}
                           <div className="absolute top-0 right-0 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                            {m.startsWith('[IMAGE:') && (
+                              <button
+                                onClick={() => recreateVisual(mi)}
+                                disabled={analyzingIdx === mi}
+                                className="h-5 px-1.5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[9px] shadow hover:bg-emerald-600 disabled:opacity-60 whitespace-nowrap"
+                                title="Analyze image and recreate as a scalable vector visual">
+                                {analyzingIdx === mi ? '⏳' : '🔬 Recreate'}
+                              </button>
+                            )}
                             <button
                               onClick={() => { setEditingModelIdx(mi); setEditMarkerText(m); }}
                               className="w-5 h-5 bg-indigo-500 text-white rounded-full flex items-center justify-center text-[9px] shadow hover:bg-indigo-600"
@@ -2264,6 +2352,13 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {analyzeError && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                ⚠️ {analyzeError}
+                <button onClick={() => setAnalyzeError(null)} className="ml-auto text-amber-500 hover:text-amber-700">✕</button>
               </div>
             )}
 
@@ -2501,7 +2596,7 @@ function ManualBuilder({ modelBank, onBack, gradeLevel, setGradeLevel, subject, 
                   onDelete={() => deleteQ(q.id)}
                   onMoveUp={() => moveQ(q.id, -1)} onMoveDown={() => moveQ(q.id, 1)}
                   isFirst={i===0} isLast={i===questions.length-1}
-                  modelBank={modelBank} />
+                  modelBank={modelBank} apiKey={apiKey} />
               ))}
 
               <div className="relative">
@@ -3509,6 +3604,7 @@ function AssessmentBuilderInner() {
                       onBrowseBank={handleBrowseBank}
                       onSaveToBank={handleSaveToBank}
                       customTitle={customTitle}
+                      apiKey={apiKey}
                     />
                   )}
                   </div>

@@ -3,6 +3,7 @@ export async function POST(request) {
     const { url } = await request.json();
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const html = await res.text();
+    // Basic HTML stripping
     const text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
