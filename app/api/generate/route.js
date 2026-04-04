@@ -75,7 +75,8 @@ Allowed types (use ONLY these — never invent new types):
   [BAR_MODEL: 4,6 | label=Total]              bar model (equal or unequal segments)
   [TAPE: 4:A,6:B | brace=yes | total=10]      tape diagram
   [GROUPS: groups=3 items=5]                   equal groups (ovals with dots inside)
-  [ARRAY: rows=4 cols=6]                       rectangular array of square tiles
+  [ARRAY: rows=4 cols=6]                       dot array — discrete dots in a grid; every row has the same count, every column has the same count
+  [AREA_MODEL: rows=3 cols=4]                  filled rectangle divided by grid lines (for area, partial products)
   [NUM_BOND: whole=10 part1=4 part2=6]         number bond (part-part-whole diagram)
   [NUM_BOND: whole=10 part1=4 part2=6 parts=hidden]  number bond with missing parts
   [TENS_FRAME: filled=7 total=10]              tens frame (2×5 grid with counters)
@@ -150,7 +151,8 @@ WRONG EXAMPLES (never do this):
   • "Write the equation this bar model represents."
 
 MARKER TYPE MUST MATCH QUESTION WORDS:
-  • Question says "array" → marker must be ARRAY
+  • Question says "array" or "rows and columns" of objects → marker must be ARRAY (discrete dots)
+  • Question says "area model" or shows a filled rectangle (multiplication/area) → marker must be AREA_MODEL
   • Question says "number line" → marker must be NUM_LINE
   • Question says "equal groups" → marker must be GROUPS
   • Question says "fraction bar" / "fraction strip" / "shaded bar" → marker must be FRACTION
@@ -258,7 +260,8 @@ YOUR ONLY JOB: Mirror the source as closely as possible — same question types,
    • "3 × 6 = ___" → NO marker
 
 ✅ ONLY add a visual marker when the SOURCE shows a pre-drawn model that students read/interpret:
-   • Source shows an array → students fill in "___ × ___" → use [ARRAY: rows=R cols=C]
+   • Source shows a dot array (discrete items in rows/columns) → use [ARRAY: rows=R cols=C]
+   • Source shows a filled rectangle model (area, partial products) → use [AREA_MODEL: rows=R cols=C]
    • Source shows a number line → students pick which equation matches → use [NUM_LINE: ...]
    • Source shows equal groups → students pick which context it represents → use [GROUPS: ...]
    • Source shows a bar model with equal segments → use [BAR_MODEL: ...]
@@ -270,7 +273,8 @@ YOUR ONLY JOB: Mirror the source as closely as possible — same question types,
    For anything else (photos of objects, complex diagrams), SKIP IT entirely.
 
 ━━━ VISUAL MARKER RULES (when you do use one) ━━━
-  [ARRAY: rows=R cols=C]               rectangular array of tiles
+  [ARRAY: rows=R cols=C]               dot array — individual circles, equal items per row and per column
+  [AREA_MODEL: rows=R cols=C]          filled rectangle (area/multiplication model)
   [NUM_LINE: min=0 max=M step=S jumps=yes]  number line with hop arcs
   [GROUPS: groups=G items=I]           equal groups (ovals with dots)
   [FRACTION: N/D]                      fraction bar

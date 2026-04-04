@@ -262,27 +262,57 @@ function EqualGroups({ groups=3, items=5 }) {
 }
 
 function ArrayModel({ rows=3, cols=4 }) {
-  // Render as ONE unified rectangle divided by grid lines — matches how
-  // array models and area models appear in real math assessments.
-  const cellSize = Math.min(28, Math.max(16, Math.floor(360 / Math.max(cols, rows))));
-  const pad = 1;
+  // A true array: one discrete circle per cell, equal items in every row,
+  // equal items in every column — NO filled rectangle, just individual dots.
+  const cellSize = Math.min(36, Math.max(20, Math.floor(400 / Math.max(cols, rows))));
+  const dotR = Math.floor(cellSize * 0.32);
+  const pad = 8;
   const totalW = cols * cellSize + pad * 2;
   const totalH = rows * cellSize + pad * 2;
-  const lines = [];
-  // Vertical interior grid lines
-  for (let c = 1; c < cols; c++) {
-    lines.push(<line key={`v${c}`} x1={pad + c * cellSize} y1={pad} x2={pad + c * cellSize} y2={pad + rows * cellSize} stroke="#4f46e5" strokeWidth="1" strokeDasharray="none"/>);
-  }
-  // Horizontal interior grid lines
-  for (let r = 1; r < rows; r++) {
-    lines.push(<line key={`h${r}`} x1={pad} y1={pad + r * cellSize} x2={pad + cols * cellSize} y2={pad + r * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
+  const dots = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = pad + c * cellSize + cellSize / 2;
+      const cy = pad + r * cellSize + cellSize / 2;
+      dots.push(
+        <circle key={`${r}-${c}`} cx={cx} cy={cy} r={dotR}
+          fill="#4f46e5" opacity="0.85"/>
+      );
+    }
   }
   return (
     <div className="my-3">
       <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
-        {/* Filled background rectangle */}
-        <rect x={pad} y={pad} width={cols * cellSize} height={rows * cellSize} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" rx="2"/>
-        {/* Interior grid lines */}
+        {dots}
+      </svg>
+    </div>
+  );
+}
+
+function AreaModel({ rows=3, cols=4, rowLabel='', colLabel='' }) {
+  // Area / rectangle model: a solid filled rectangle divided by grid lines.
+  // Different from ArrayModel (discrete dots). Used for area, multiplication
+  // partial products, and fraction × fraction problems.
+  const cellSize = Math.min(32, Math.max(18, Math.floor(360 / Math.max(cols, rows))));
+  const pad = 2;
+  const labelOffset = (rowLabel || colLabel) ? 18 : 0;
+  const totalW = cols * cellSize + pad * 2 + labelOffset;
+  const totalH = rows * cellSize + pad * 2 + labelOffset;
+  const ox = labelOffset; // x-offset for the rectangle (room for row label)
+  const oy = labelOffset; // y-offset for the rectangle (room for col label)
+  const lines = [];
+  for (let c = 1; c < cols; c++) {
+    lines.push(<line key={`v${c}`} x1={ox + pad + c * cellSize} y1={oy + pad} x2={ox + pad + c * cellSize} y2={oy + pad + rows * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
+  }
+  for (let r = 1; r < rows; r++) {
+    lines.push(<line key={`h${r}`} x1={ox + pad} y1={oy + pad + r * cellSize} x2={ox + pad + cols * cellSize} y2={oy + pad + r * cellSize} stroke="#4f46e5" strokeWidth="1"/>);
+  }
+  return (
+    <div className="my-3">
+      <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
+        {colLabel && <text x={ox + pad + (cols * cellSize) / 2} y={labelOffset - 4} textAnchor="middle" fill="#374151" fontSize="11" fontWeight="600">{colLabel}</text>}
+        {rowLabel && <text x={labelOffset - 4} y={oy + pad + (rows * cellSize) / 2 + 4} textAnchor="middle" fill="#374151" fontSize="11" fontWeight="600" transform={`rotate(-90, ${labelOffset-4}, ${oy + pad + (rows*cellSize)/2})`}>{rowLabel}</text>}
+        <rect x={ox + pad} y={oy + pad} width={cols * cellSize} height={rows * cellSize} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" rx="2"/>
         {lines}
       </svg>
     </div>
@@ -477,6 +507,14 @@ function parseVisualModel(marker) {
     const r = parseInt(rest.match(/rows=(\d+)/)?.[1] || '3');
     const c = parseInt(rest.match(/cols=(\d+)/)?.[1] || '4');
     return <ArrayModel rows={Math.min(r, 12)} cols={Math.min(c, 12)}/>;
+  }
+  if (inner.startsWith('AREA_MODEL:')) {
+    const rest = inner.slice('AREA_MODEL:'.length).trim();
+    const r = parseInt(rest.match(/rows=(\d+)/)?.[1] || '3');
+    const c = parseInt(rest.match(/cols=(\d+)/)?.[1] || '4');
+    const rl = rest.match(/rowlabel=([^|]+)/)?.[1]?.trim() || '';
+    const cl = rest.match(/collabel=([^|]+)/)?.[1]?.trim() || '';
+    return <AreaModel rows={Math.min(r, 12)} cols={Math.min(c, 12)} rowLabel={rl} colLabel={cl}/>;
   }
   if (inner.startsWith('PV_CHART:')) {
     const rest = inner.slice('PV_CHART:'.length).trim();
@@ -802,6 +840,11 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
   // ARRAY state
   const [arrRows, setArrRows] = useState(parseInt(rawSpecInit.match(/rows=(\d+)/)?.[1] || '3'));
   const [arrCols, setArrCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
+  // AREA_MODEL state
+  const [areaRows, setAreaRows] = useState(parseInt(rawSpecInit.match(/rows=(\d+)/)?.[1] || '3'));
+  const [areaCols, setAreaCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
+  const [areaRowLabel, setAreaRowLabel] = useState(rawSpecInit.match(/rowlabel=([^|]+)/)?.[1]?.trim() || '');
+  const [areaColLabel, setAreaColLabel] = useState(rawSpecInit.match(/collabel=([^|]+)/)?.[1]?.trim() || '');
   // NUM_LINE jumps
   const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
   // NUMBER BOND state
@@ -858,6 +901,11 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
         return `[GROUPS: groups=${groupsCount} items=${itemsPerGroup}]`;
       case 'ARRAY':
         return `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
+      case 'AREA_MODEL': {
+        const rlPart = areaRowLabel ? ` | rowlabel=${areaRowLabel}` : '';
+        const clPart = areaColLabel ? ` | collabel=${areaColLabel}` : '';
+        return `[AREA_MODEL: rows=${areaRows} cols=${areaCols}${rlPart}${clPart}]`;
+      }
       case 'IMAGE':
         return `[IMAGE: ${imageUrl}]`;
       case 'NUM_BOND':
@@ -885,7 +933,7 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
   const TYPE_LABELS = {
     FRACTION: 'Fraction', BASE10: 'Base-10 Blocks', NUM_LINE: 'Number Line',
     PV_CHART: 'Place Value Chart', BAR_MODEL: 'Bar Model', TAPE: 'Tape Diagram',
-    GROUPS: 'Equal Groups', ARRAY: 'Array', IMAGE: 'Image',
+    GROUPS: 'Equal Groups', ARRAY: 'Array', AREA_MODEL: 'Area Model', IMAGE: 'Image',
     NUM_BOND: 'Number Bond', TENS_FRAME: 'Tens Frame', FRAC_CIRCLE: 'Fraction Circle',
     FUNC_TABLE: 'Function Table',
   };
@@ -927,9 +975,23 @@ function ModelEditWrapper({ marker, onSave, onRemove, onSaveToBank, children, in
         </div>
       );
       case 'ARRAY': return (
-        <div className="flex items-center gap-4 flex-wrap">
-          <label className={labelCls}>Rows <input type="number" min="1" max="12" value={arrRows} onChange={e => setArrRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
-          <label className={labelCls}>Columns <input type="number" min="1" max="12" value={arrCols} onChange={e => setArrCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+        <div className="space-y-1">
+          <p className="text-xs text-gray-400">Array = individual dots in a grid. Every row has the same number; every column has the same number.</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className={labelCls}>Rows <input type="number" min="1" max="12" value={arrRows} onChange={e => setArrRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+            <label className={labelCls}>Columns <input type="number" min="1" max="12" value={arrCols} onChange={e => setArrCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+          </div>
+        </div>
+      );
+      case 'AREA_MODEL': return (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-400">Area model = filled rectangle with grid lines (for area, partial products, fractions). Use Array for discrete dot arrays.</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className={labelCls}>Rows <input type="number" min="1" max="12" value={areaRows} onChange={e => setAreaRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+            <label className={labelCls}>Columns <input type="number" min="1" max="12" value={areaCols} onChange={e => setAreaCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+            <label className={labelCls}>Row label <input type="text" value={areaRowLabel} onChange={e => setAreaRowLabel(e.target.value)} className={`${inputCls} w-20 text-left`} placeholder="e.g. 4"/></label>
+            <label className={labelCls}>Col label <input type="text" value={areaColLabel} onChange={e => setAreaColLabel(e.target.value)} className={`${inputCls} w-20 text-left`} placeholder="e.g. 7"/></label>
+          </div>
         </div>
       );
       case 'NUM_BOND': return (
@@ -1087,9 +1149,9 @@ function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
-  const TYPE_FILTERS = ['ALL','ARRAY','GROUPS','NUM_LINE','FRACTION','FRAC_CIRCLE','BASE10','PV_CHART','BAR_MODEL','TAPE','NUM_BOND','TENS_FRAME','FUNC_TABLE','IMAGE'];
+  const TYPE_FILTERS = ['ALL','ARRAY','AREA_MODEL','GROUPS','NUM_LINE','FRACTION','FRAC_CIRCLE','BASE10','PV_CHART','BAR_MODEL','TAPE','NUM_BOND','TENS_FRAME','FUNC_TABLE','IMAGE'];
   const TYPE_FILTER_LABELS = {
-    ALL: 'All', ARRAY: 'Arrays', GROUPS: 'Groups', NUM_LINE: 'Number Lines',
+    ALL: 'All', ARRAY: 'Arrays', AREA_MODEL: 'Area Models', GROUPS: 'Groups', NUM_LINE: 'Number Lines',
     FRACTION: 'Fraction Bars', FRAC_CIRCLE: 'Fraction Circles', BASE10: 'Base-10', PV_CHART: 'Place Value',
     BAR_MODEL: 'Bar Models', TAPE: 'Tape', NUM_BOND: 'Number Bonds',
     TENS_FRAME: 'Tens Frames', FUNC_TABLE: 'Function Tables', IMAGE: 'Images',
