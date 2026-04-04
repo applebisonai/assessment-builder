@@ -264,25 +264,49 @@ function EqualGroups({ groups=3, items=5 }) {
 function ArrayModel({ rows=3, cols=4 }) {
   // A true array: one discrete circle per cell, equal items in every row,
   // equal items in every column — NO filled rectangle, just individual dots.
+  // Labels along top (columns) and left (rows) make dimensions instantly visible.
   const cellSize = Math.min(36, Math.max(20, Math.floor(400 / Math.max(cols, rows))));
   const dotR = Math.floor(cellSize * 0.32);
+  const labelGap = 22; // space reserved for axis labels
   const pad = 8;
-  const totalW = cols * cellSize + pad * 2;
-  const totalH = rows * cellSize + pad * 2;
+  const gridW = cols * cellSize;
+  const gridH = rows * cellSize;
+  const totalW = gridW + pad * 2 + labelGap;
+  const totalH = gridH + pad * 2 + labelGap;
   const dots = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const cx = pad + c * cellSize + cellSize / 2;
-      const cy = pad + r * cellSize + cellSize / 2;
+      const cx = labelGap + pad + c * cellSize + cellSize / 2;
+      const cy = labelGap + pad + r * cellSize + cellSize / 2;
       dots.push(
         <circle key={`${r}-${c}`} cx={cx} cy={cy} r={dotR}
           fill="#4f46e5" opacity="0.85"/>
       );
     }
   }
+  // Column count label across the top with arrows
+  const arrowY = labelGap / 2;
+  const gridStartX = labelGap + pad;
+  const gridEndX = labelGap + pad + gridW;
+  const gridStartY = labelGap + pad;
+  const gridEndY = labelGap + pad + gridH;
   return (
     <div className="my-3">
       <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
+        {/* Column bracket: ←  cols  → along top */}
+        <line x1={gridStartX} y1={arrowY} x2={gridEndX} y2={arrowY} stroke="#6366f1" strokeWidth="1.5" markerStart="url(#al)" markerEnd="url(#ar)"/>
+        <text x={(gridStartX + gridEndX)/2} y={arrowY - 4} textAnchor="middle" fill="#4f46e5" fontSize="10" fontWeight="700">{cols} columns</text>
+        {/* Row bracket: ↑ rows ↓ along left */}
+        <line x1={labelGap/2} y1={gridStartY} x2={labelGap/2} y2={gridEndY} stroke="#6366f1" strokeWidth="1.5" markerStart="url(#au)" markerEnd="url(#ad)"/>
+        <text x={labelGap/2} y={(gridStartY + gridEndY)/2} textAnchor="middle" fill="#4f46e5" fontSize="10" fontWeight="700"
+          transform={`rotate(-90 ${labelGap/2} ${(gridStartY + gridEndY)/2})`}>{rows} rows</text>
+        {/* Arrow marker defs */}
+        <defs>
+          <marker id="al" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M6,0 L0,3 L6,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
+          <marker id="ar" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
+          <marker id="au" markerWidth="6" markerHeight="6" refX="3" refY="6" orient="auto"><path d="M0,6 L3,0 L6,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
+          <marker id="ad" markerWidth="6" markerHeight="6" refX="3" refY="0" orient="auto"><path d="M0,0 L3,6 L6,0" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
+        </defs>
         {dots}
       </svg>
     </div>
@@ -1317,6 +1341,24 @@ function ModelBankPanel({ bank, onInsert, onDelete, onClose }) {
           )}
         </div>
 
+        {/* Image Resources panel */}
+        <div className="px-5 py-3 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 mb-2">📎 Free visual resources — right-click any image → Copy image address → paste into an IMAGE model</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: '📐 Math Salamanders', href: 'https://www.math-salamanders.com/place-value-charts.html', note: 'Place value charts, number lines' },
+              { label: '🔟 Class Playground', href: 'https://classplayground.com/ten-frame/', note: 'Tens frames, place value' },
+              { label: '📊 Mashup Math', href: 'https://www.mashupmath.com/virtual-math-manipulatives-free-library-for-grades-k-8', note: 'Arrays, base-10, fractions' },
+            ].map(r => (
+              <a key={r.href} href={r.href} target="_blank" rel="noopener noreferrer"
+                className="flex-1 min-w-[140px] border border-gray-200 rounded-lg px-3 py-2 hover:border-violet-300 hover:bg-violet-50 transition text-center">
+                <p className="text-xs font-semibold text-violet-700">{r.label}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{r.note}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+
         {/* Footer hint */}
         <div className="px-5 py-3 border-t border-gray-100 text-center text-xs text-gray-400">
           To save a model: hover it in the preview → ✏ Edit → Save to Model Bank
@@ -1631,13 +1673,27 @@ export default function AssessmentBuilder() {
   const fileInputRef = useRef(null);
   const previewRef = useRef(null);
 
+  // Default starter items pre-loaded into a fresh bank
+  const DEFAULT_BANK_ITEMS = [
+    { id: 'default-1', marker: '[ARRAY: rows=4 cols=5]', name: '⭐ Starter: Array 4×5', type: 'ARRAY', autoSaved: false },
+    { id: 'default-2', marker: '[NUM_LINE: min=0 max=30 step=5 jumps=yes]', name: '⭐ Starter: Number Line 0–30 (by 5s)', type: 'NUM_LINE', autoSaved: false },
+    { id: 'default-3', marker: '[TENS_FRAME: filled=7 total=10]', name: '⭐ Starter: Tens Frame (7 out of 10)', type: 'TENS_FRAME', autoSaved: false },
+    { id: 'default-4', marker: '[FUNC_TABLE: pairs=1:?,2:?,3:?,4:?,5:? | rule=?]', name: '⭐ Starter: Blank Function Table', type: 'FUNC_TABLE', autoSaved: false },
+    { id: 'default-5', marker: '[NUM_BOND: whole=10 part1=4 part2=6]', name: '⭐ Starter: Number Bond (4+6=10)', type: 'NUM_BOND', autoSaved: false },
+  ];
+
   useEffect(() => {
     const saved = localStorage.getItem('anthropic_api_key');
     if (saved) setApiKey(saved);
-    // Load model bank from localStorage
+    // Load model bank from localStorage; seed with defaults if first run
     try {
       const bankSaved = localStorage.getItem('assessBuilderBank');
-      if (bankSaved) setModelBank(JSON.parse(bankSaved));
+      if (bankSaved) {
+        setModelBank(JSON.parse(bankSaved));
+      } else {
+        // First time — seed with starter templates
+        setModelBank(DEFAULT_BANK_ITEMS);
+      }
     } catch {}
   }, []);
 

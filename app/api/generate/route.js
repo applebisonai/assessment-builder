@@ -230,6 +230,21 @@ WRONG EXAMPLES (never do this):
   WRONG: question says "number line" but marker is [ARRAY:] ← this is always an error.
   When in doubt: omit the marker entirely rather than use the wrong type.
 
+⚠️ ARRAY DIMENSIONS MUST EXACTLY MATCH THE QUESTION'S MULTIPLICATION FACT:
+  Read the question to find the multiplication fact, then set rows and cols accordingly.
+  If the question involves 4 × 6 → use [ARRAY: rows=4 cols=6]. NOT rows=3 cols=5.
+  If the question involves 3 × 7 → use [ARRAY: rows=3 cols=7]. NOT rows=4 cols=7.
+  Each row shows one group. Each column position shows one item per group.
+  The total number of dots (rows × cols) MUST equal the product in the question.
+  Double-check: rows × cols = the answer to the multiplication. If they don't match, fix the marker.
+
+⚠️ VISUAL MARKERS MUST BE REFERENCED IN THE QUESTION TEXT:
+  If you place a [NUM_LINE:] marker, the question MUST say "this number line" or "the number line shown."
+  If you place an [ARRAY:] marker, the question MUST say "this array" or "the array shown."
+  NEVER add a marker to a question without the question text explicitly referencing that visual type.
+  WRONG: [NUM_LINE: min=0 max=30 step=5] followed by "What is 6 × 5?" ← question never mentions the number line ✗
+  CORRECT: [NUM_LINE: min=0 max=30 step=5] followed by "Which equation matches this number line?" ✓
+
 If you cannot make the marker type and values exactly consistent with the question, omit the visual entirely rather than show a misleading one.
 ${isEarlyGrades ? 'Include a visual on most questions where a model is provided to the student.' : ''}
 ${isMidGrades ? 'Include visuals on questions where a model is provided to the student (fractions, arrays, number lines, bar models). Skip visuals on word problems and "show your work" questions.' : ''}
@@ -330,6 +345,18 @@ RULE 5 — COPY VISUAL TYPES. NEVER SWAP THEM.
   Source has a number bond → output gets [NUM_BOND: ...]
   Source has a function table → output gets [FUNC_TABLE: ...]
   NEVER replace an array with a number line or any other type.
+
+RULE 5a — ARRAY DIMENSIONS MUST MATCH THE MULTIPLICATION FACT IN THE QUESTION.
+  Read the swapped question to find the multiplication fact, then set rows × cols accordingly.
+  If new question involves 4 × 6 → [ARRAY: rows=4 cols=6]. Verify: 4 × 6 = 24 dots. ✓
+  If new question involves 3 × 8 → [ARRAY: rows=3 cols=8]. Verify: 3 × 8 = 24 dots. ✓
+  rows × cols MUST equal the product in the question. Double-check before writing the marker.
+
+RULE 5b — QUESTION TEXT MUST REFERENCE THE VISUAL TYPE.
+  If you place a [NUM_LINE:] marker, the question MUST say "this number line" or "the number line shown."
+  If you place an [ARRAY:] marker, the question MUST say "this array" or "the array shown."
+  WRONG: [NUM_LINE: ...] before "What is 6 × 5?" — question never mentions a number line ✗
+  CORRECT: [NUM_LINE: ...] before "Which equation matches this number line?" ✓
 
 RULE 6 — NEVER ADD VISUALS WHERE SOURCE HAS NONE.
   If the source question has no pre-drawn model, the output gets no visual marker.
