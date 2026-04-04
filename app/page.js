@@ -665,9 +665,21 @@ function parseVisualModel(marker) {
 
 // ─── Assessment Parser ──────────────────────────────────────────────────────
 
+// Strip markdown formatting that AI models sometimes add despite instructions
+function stripMarkdown(s) {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold**
+    .replace(/\*(.+?)\*/g, '$1')        // *italic*
+    .replace(/^#{1,6}\s+/gm, '')        // ## headers
+    .replace(/^[-*]\s+/gm, '');         // bullet points at line start
+}
+
 function parseAssessment(text) {
   if (!text || typeof text !== 'string') return { title: '', subtitle: '', questions: [] };
-  const lines = text.split('\n');
+
+  // Pre-process: strip markdown formatting that some AI outputs contain
+  const cleaned = stripMarkdown(text);
+  const lines = cleaned.split('\n');
   const questions = [];
   let currentQ = null;
   let titleLine = '';
@@ -675,17 +687,44 @@ function parseAssessment(text) {
   let headerParsed = false;
   // Markers are placed BEFORE the question they belong to in the AI output.
   // We queue them here and attach them to the NEXT question that starts.
-  // This fixes the bug where markers were attached to the PREVIOUS question
-  // (when currentQ was already active) or dropped entirely (when currentQ was null).
   let pendingModels = [];
+  // Track whether we're waiting for the question text on the next line
+  // (handles "1.\n  Question text" format where number is on its own line)
+  let pendingQNum = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
     if (!trimmed) continue;
 
+    // If we saw a bare question number on the previous line, this line is the question text
+    if (pendingQNum !== null) {
+      // Only treat it as question text if it's not itself a new question number or choice
+      const isNewQ = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/);
+      const isChoice = trimmed.match(/^([A-Ja-j])[\.\)]\s*(.+)/);
+      if (!isNewQ && !isChoice) {
+        if (currentQ) questions.push(currentQ);
+        headerParsed = true;
+        currentQ = {
+          num: pendingQNum,
+          text: trimmed,
+          choices: [],
+          models: [...pendingModels],
+          extra: [],
+          standard: '',
+          type: 'open'
+        };
+        pendingModels = [];
+        pendingQNum = null;
+        continue;
+      }
+      pendingQNum = null; // wasn't actually a bare question number, abandon
+    }
+
     // Extract title from first non-empty lines
-    if (!headerParsed && !trimmed.match(/^\d+[\.\)]/)) {
+    // Guard must include all separators that qMatch uses (. ) :) so question
+    // numbers don't get consumed as title/subtitle.
+    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/)) {
       if (!titleLine) { titleLine = trimmed; continue; }
       if (!subtitleLine && !trimmed.match(/^(version|TEACHER|ANSWER)/i)) { subtitleLine = trimmed; continue; }
     }
@@ -720,6 +759,14 @@ function parseAssessment(text) {
         type: 'open'
       };
       pendingModels = []; // reset — they've been claimed by this question
+      continue;
+    }
+
+    // Bare question number on its own line (e.g. "1." or "2)") — question text follows
+    const bareQMatch = trimmed.match(/^(\d+)[\.\)\:]?\s*$/);
+    if (bareQMatch && parseInt(bareQMatch[1]) > 0 && parseInt(bareQMatch[1]) < 200) {
+      pendingQNum = parseInt(bareQMatch[1]);
+      headerParsed = true;
       continue;
     }
 
@@ -1800,56 +1847,65 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
             </div>
           )}
 
-          {/* Standard + Visual Bank row */}
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Standard <span className="font-normal text-gray-400">(optional)</span></label>
-              <input value={q.standard || ''} onChange={e => onUpdate({ standard: e.target.value })}
-                placeholder="e.g. 3.OA.A.1"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-            </div>
-            <div className="relative flex-shrink-0">
-              <button onClick={() => setShowModelPicker(v => !v)}
-                className="text-xs border border-indigo-200 text-indigo-600 rounded-lg px-3 py-2 hover:bg-indigo-50 transition whitespace-nowrap">
-                📊 Add Visual
-              </button>
-              {showModelPicker && (
-                <div className="absolute right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-xl shadow-xl p-2 z-30 w-56 max-h-52 overflow-y-auto">
-                  {modelBank.length > 0 ? modelBank.map(item => (
-                    <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
-                      className="w-full text-left text-xs px-3 py-2 hover:bg-indigo-50 rounded-lg truncate">{item.name}</button>
-                  )) : <p className="text-xs text-gray-400 px-3 py-2">No items in Model Bank yet. Generate an AI assessment first to auto-populate.</p>}
-                </div>
-              )}
-            </div>
+          {/* Standard row */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Standard <span className="font-normal text-gray-400">(optional)</span></label>
+            <input value={q.standard || ''} onChange={e => onUpdate({ standard: e.target.value })}
+              placeholder="e.g. 3.OA.A.1"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           </div>
 
-          {/* Image upload section */}
+          {/* ── Add Image / Visual unified panel ── */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Images</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              Images &amp; Visuals
+            </label>
+            {/* Hidden file input */}
             <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf"
               onChange={e => { handleImageFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
-            <div className="flex gap-2">
-              {/* Upload button */}
+
+            {/* Two primary action buttons — always visible */}
+            <div className="flex gap-2 mb-2">
               <button onClick={() => imageInputRef.current?.click()}
-                className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg px-3 py-2.5 hover:bg-gray-50 hover:border-gray-300 transition">
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg px-3 py-2.5 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-600 transition font-medium">
                 <span className="text-base leading-none">📁</span>
                 <span>Upload image or PDF</span>
               </button>
-              {/* Paste zone */}
               <button
                 onClick={() => setPasteActive(v => !v)}
-                className={'flex-1 flex items-center justify-center gap-1.5 text-xs border rounded-lg px-3 py-2.5 transition ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600')}
+                className={'flex-1 flex items-center justify-center gap-1.5 text-xs border rounded-lg px-3 py-2.5 transition font-medium ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600')}
               >
                 <span className="text-base leading-none">📋</span>
-                <span>{pasteActive ? 'Now press Ctrl+V / ⌘V' : 'Paste image'}</span>
+                <span>{pasteActive ? 'Press Ctrl+V / ⌘V now' : 'Paste copied image'}</span>
               </button>
             </div>
+
             {pasteActive && (
-              <p className="mt-1.5 text-xs text-indigo-500 text-center">
-                Copy an image (e.g. screenshot or right-click → Copy Image), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere in this card.
+              <p className="mb-2 text-xs text-indigo-500 text-center bg-indigo-50 border border-indigo-200 rounded-lg py-2 px-3">
+                Copy an image first (screenshot, right-click → Copy Image, etc.), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere in this card.
               </p>
             )}
+
+            {/* Model bank — visible below the buttons */}
+            <div className="relative">
+              <button onClick={() => setShowModelPicker(v => !v)}
+                className={'w-full text-left text-xs border rounded-lg px-3 py-2 transition flex items-center justify-between ' + (showModelPicker ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50')}>
+                <span>📊 {modelBank.length > 0 ? `Add from Model Bank (${modelBank.length} saved)` : 'Model Bank (empty — generate an AI assessment to populate)'}</span>
+                <span className="text-gray-400 ml-2">{showModelPicker ? '▲' : '▼'}</span>
+              </button>
+              {showModelPicker && (
+                <div className="mt-1 bg-white border border-gray-200 rounded-xl shadow-md p-2 z-30 max-h-44 overflow-y-auto">
+                  {modelBank.length > 0 ? modelBank.map(item => (
+                    <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
+                      className="w-full text-left text-xs px-3 py-2 hover:bg-violet-50 hover:text-violet-700 rounded-lg truncate">{item.name}</button>
+                  )) : (
+                    <p className="text-xs text-gray-400 px-3 py-3 text-center">
+                      No items saved yet. Use the <strong>AI Generate</strong> mode to create an assessment and visuals will be saved here automatically.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Attached images — thumbnails */}
