@@ -174,33 +174,46 @@ RULE 3 — COPY SECTION HEADERS AND DIRECTIONS EXACTLY.
 "Part A: Word Problems" → copy it exactly. It goes on its own line, no number.
 
 RULE 4 — VISUAL MARKERS.
-For EVERY question that has a visual in the source, include the right marker.
-Place markers on their own line IMMEDIATELY BEFORE the question number (or sub-question if the visual is inside a sub-part).
+For EVERY question that has a visual in the source, you MUST include the correct marker.
+Place markers on their own line IMMEDIATELY BEFORE the question number.
 
-Step A — Identify the visual TYPE from the source (see guide below).
+Step A — Look at the visual and identify its TYPE using the recognition guide below.
 Step B — Write the parallel question text with new numbers.
-Step C — Write the marker with values matching the PARALLEL question's numbers (not the source's).
+Step C — Write the marker with values matching the PARALLEL question's numbers.
 
-Example:
-  Source has a 4×6 dot array. Question: "The array shows ___ × ___."
-  Parallel question is about 3 × 8.
-  → Write: [ARRAY: rows=3 cols=8]   then: "3. The array shows ___ × ___."
+VISUAL RECOGNITION GUIDE — use specific markers whenever possible:
+  • Row/column grid of dots, stars, or shapes → [ARRAY: rows=R cols=C]
+  • Horizontal line with tick marks and numbers → [NUM_LINE: min=A max=B step=S]
+  • Horizontal line with curved arcs/jumps above it → [NUM_LINE: ... jumps=yes hop_size=N]
+  • Ovals or circles each containing equal groups of dots → [GROUPS: groups=G items=I]
+  • 2×5 or 1×5 grid of circles (some filled) → [TENS_FRAME: filled=F]
+  • Three connected circles (top=whole, two below=parts) → [NUM_BOND: whole=W part1=P1 part2=P2]
+  • Horizontal bar divided into equal sections, some shaded → [FRACTION: N/D]
+  • Circle divided into equal pie sectors, some shaded → [FRAC_CIRCLE: N/D]
+  • Multiple fraction bars (improper fractions) → [FRACTION: N/D] where N > D
+  • Whole bars plus partial bar → [MIXED_NUM: whole=W n=N d=D]
+  • Small unit cubes, rods (10s), flat squares (100s), big cubes (1000s) → [BASE10: ...]
+  • Rectangle split into sub-rectangles (multiplication model) → [AREA_MODEL: cols=... rows=...]
+  • Segmented horizontal bar with labeled parts → [BAR_MODEL: v1,v2,v3]
+  • Two-part tape/strip diagram with labels → [TAPE: A:labelA,B:labelB]
+  • Input→Output table with a rule → [FUNC_TABLE: pairs=1:3,2:6 | rule=×3]
+  • Multi-column data/tally table → [DATA_TABLE: header=... | row1 | row2]
+  • Number chart (like a hundred chart) with highlighted cells → [NUM_CHART: start=1 end=100 cols=10 shaded=5,10]
+  • Blank box labeled "Show your work" or "Draw a model" → [WORK_SPACE]
 
-VISUAL LABEL RULE (critical — prevents answer give-aways):
-  ONLY include parameters the source visual actually shows.
-  • Array with NO dimension labels → [ARRAY: rows=R cols=C] only, no extras.
+CRITICAL: Use [IMAGE: description] ONLY for things that CANNOT be a standard marker:
+  photos, clipart, illustrations of real objects, bar/line/picture graphs, clocks,
+  rulers, coordinate planes, geometry diagrams, partial quotients boxes,
+  complex multi-fraction comparison strips.
+  DO NOT use [IMAGE:] for number lines, fraction bars, arrays, base-10 blocks, number bonds,
+  tens frames, or any other standard math model type listed above.
+
+VISUAL PARAMETER RULES (prevents answer give-aways):
   • Number line labels at EVERY tick → add show=all; only endpoints labeled → omit show=all.
-  • Number line with hop arcs → add jumps=yes.
-  • Area model with BLANK cells (student finds products) → omit vals=. NEVER put products inside blank-cell models.
-  • Area model where products ARE shown (division context) → include vals=V1,V2,...
-  • Fraction bar with no label beside it → no label parameter.
+  • Area model with BLANK cells (student finds products) → omit vals=. NEVER pre-fill blank-cell models.
+  • Area model where products ARE shown → include vals=V1,V2,...
   • Number bond with a missing part → [NUM_BOND: whole=W part1=P1 part2=?].
   • Bar model with equal same-value segments → list value N times: [BAR_MODEL: 4,4,4,4,4,4].
-
-For "draw/show your work" blank spaces: use [WORK_SPACE] — not [IMAGE:].
-For pictures you cannot recreate (clipart, illustrations, bar graphs, clocks, rulers,
-partial quotients algorithm, multi-fraction bar comparisons, geometry, photographs):
-  → use [IMAGE: brief description].
 
 DO NOT add any visual to questions that had none in the source.
 DO NOT use [WORK_SPACE] unless the source actually has a blank drawing/work box there.
