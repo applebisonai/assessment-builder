@@ -1,5 +1,67 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+// ─── Post-processor: strip markers whose type contradicts the question text ──
+// This is deterministic code, not AI judgment — catches cases like a [NUM_LINE]
+// placed before a question that says "array", or [GROUPS] before "number line".
+function fixMarkerTypeMismatches(text) {
+  // keyword pattern → the ONLY allowed marker types for questions containing that keyword
+  const TYPE_RULES = [
+    { pattern: /\b(array|arrays|rows\s+and\s+columns)\b/i,          allowed: ['ARRAY', 'AREA_MODEL'] },
+    { pattern: /\bnumber\s+line\b/i,                                  allowed: ['NUM_LINE'] },
+    { pattern: /\b(equal\s+groups?|groups?\s+of\s+\d)\b/i,           allowed: ['GROUPS'] },
+    { pattern: /\bnumber\s+bond\b/i,                                  allowed: ['NUM_BOND'] },
+    { pattern: /\b(tens?\s+frame|five[\s-]frame)\b/i,                 allowed: ['TENS_FRAME'] },
+    { pattern: /\bfraction\s+circle\b/i,                              allowed: ['FRAC_CIRCLE'] },
+    { pattern: /\bfraction\s+bar\b/i,                                 allowed: ['FRACTION'] },
+    { pattern: /\b(function\s+table|input.{0,12}output|in\/out)\b/i,  allowed: ['FUNC_TABLE'] },
+    { pattern: /\btape\s+diagram\b/i,                                 allowed: ['TAPE'] },
+    { pattern: /\bbar\s+model\b/i,                                    allowed: ['BAR_MODEL'] },
+    { pattern: /\bplace\s+value\s+(chart|table)\b/i,                  allowed: ['PV_CHART'] },
+    { pattern: /\bbase[\s-]?10\b/i,                                   allowed: ['BASE10'] },
+  ];
+
+  const lines = text.split('\n');
+  const out = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Detect a visual marker line
+    const markerMatch = trimmed.match(/^\[([A-Z][A-Z0-9_]*):.*\]$/);
+    if (!markerMatch) {
+      out.push(line);
+      continue;
+    }
+
+    const markerType = markerMatch[1];
+
+    // Look ahead to find the question text (next non-empty line)
+    let questionText = '';
+    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+      const t = lines[j].trim();
+      if (t) { questionText = t; break; }
+    }
+
+    // Check each rule: if the question text matches a keyword pattern AND the
+    // marker type is NOT in that pattern's allowed list → strip the marker.
+    let shouldStrip = false;
+    for (const rule of TYPE_RULES) {
+      if (rule.pattern.test(questionText) && !rule.allowed.includes(markerType)) {
+        shouldStrip = true;
+        break;
+      }
+    }
+
+    if (!shouldStrip) {
+      out.push(line);
+    }
+    // else: drop the line entirely — mismatched marker removed
+  }
+
+  return out.join('\n');
+}
+
 export async function POST(request) {
   try {
     let gradeLevel, subject, standard, includeVersionB, includeAnswerKey, questionCount, customTitle, url, pastedText, apiKey;
@@ -154,17 +216,19 @@ WRONG EXAMPLES (never do this):
   • "What fraction of the bar is shaded?"
   • "Write the equation this bar model represents."
 
-MARKER TYPE MUST MATCH QUESTION WORDS:
-  • Question says "array" or "rows and columns" with small factors (≤12) → marker must be ARRAY (discrete dots)
-  • Question says "area model", "box method", "partial products", or involves 2-digit multiplication → marker must be AREA_MODEL with collabels and rowlabels showing the decomposed factors
-  • Question says "number line" → marker must be NUM_LINE
-  • Question says "equal groups" → marker must be GROUPS
-  • Question says "fraction bar" / "fraction strip" / "shaded bar" → marker must be FRACTION
-  • Question says "fraction circle" / "shaded circle" → marker must be FRAC_CIRCLE
-  • Question says "number bond" / "part-part-whole" → marker must be NUM_BOND
-  • Question says "tens frame" / "five frame" / "frame" with counters → marker must be TENS_FRAME
-  • Question says "function table" / "input-output table" / "in/out table" → marker must be FUNC_TABLE
-  • NEVER show a number line for an array question or vice versa.
+⚠️ ABSOLUTE RULE — MARKER TYPE MUST MATCH THE QUESTION'S OWN WORDS EXACTLY:
+  If the question says "array" → the marker MUST be [ARRAY:...]. NEVER [NUM_LINE:] or any other type.
+  If the question says "number line" → the marker MUST be [NUM_LINE:...]. NEVER [ARRAY:] or any other type.
+  If the question says "equal groups" → MUST be [GROUPS:...].
+  If the question says "number bond" → MUST be [NUM_BOND:...].
+  If the question says "tens frame" or "five frame" → MUST be [TENS_FRAME:...].
+  If the question says "fraction circle" → MUST be [FRAC_CIRCLE:...].
+  If the question says "fraction bar" → MUST be [FRACTION:...].
+  If the question says "function table" or "in/out table" → MUST be [FUNC_TABLE:...].
+  If the question says "area model" or "box method" → MUST be [AREA_MODEL:...].
+  WRONG: question says "array" but marker is [NUM_LINE:] ← this is always an error.
+  WRONG: question says "number line" but marker is [ARRAY:] ← this is always an error.
+  When in doubt: omit the marker entirely rather than use the wrong type.
 
 If you cannot make the marker type and values exactly consistent with the question, omit the visual entirely rather than show a misleading one.
 ${isEarlyGrades ? 'Include a visual on most questions where a model is provided to the student.' : ''}
@@ -322,7 +386,8 @@ ${standard ? 'Align to standard: ' + standard : ''}`
       messages: [{ role: 'user', content: userContent }]
     });
 
-    const result = response.content[0].text;
+    const rawResult = response.content[0].text;
+    const result = fixMarkerTypeMismatches(rawResult);
     return Response.json({ result });
 
   } catch (error) {
