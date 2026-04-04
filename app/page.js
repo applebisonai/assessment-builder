@@ -40,34 +40,86 @@ function ArrayViz({ rows, cols }) {
   );
 }
 
-function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = false }) {
+function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = false,
+  hopSize = null, hopStart = null, hops = null }) {
   const mn = parseFloat(min), mx = parseFloat(max), st = parseFloat(step) || 1;
+
+  // Build tick positions
   const ticks = [];
   for (let v = mn; v <= mx + 0.0001; v += st) ticks.push(parseFloat(v.toFixed(4)));
-  const W = 320, pad = 24, lineY = 36, h = jumps ? 72 : 52;
+
+  const hasArcs = jumps === true || jumps === 'true' || jumps === 'yes';
+  const W = 340, pad = 28, lineY = hasArcs ? 58 : 38;
+  const totalH = hasArcs ? 84 : 56;
   const toX = v => pad + ((v - mn) / (mx - mn)) * (W - 2 * pad);
+
+  // Build hop pairs — three modes:
+  // 1. custom hops string "0:5,5:12,12:20"
+  // 2. uniform hop_size with optional hop_start
+  // 3. default: hop every step (original behavior)
+  let hopPairs = [];
+  if (hasArcs) {
+    if (hops && String(hops).trim()) {
+      // Parse "0:5,5:12" style
+      hopPairs = String(hops).split(',').map(s => {
+        const [a, b] = s.split(':').map(Number);
+        return [a, b];
+      }).filter(([a, b]) => !isNaN(a) && !isNaN(b));
+    } else if (hopSize) {
+      // Uniform hops of hopSize units
+      const hs = parseFloat(hopSize);
+      const start = hopStart !== null && hopStart !== '' ? parseFloat(hopStart) : mn;
+      if (hs > 0) {
+        for (let v = start; v + hs <= mx + 0.0001; v = parseFloat((v + hs).toFixed(4))) {
+          hopPairs.push([v, parseFloat((v + hs).toFixed(4))]);
+        }
+      }
+    } else {
+      // Default: hop each step
+      ticks.slice(0, -1).forEach((v, i) => hopPairs.push([v, ticks[i + 1]]));
+    }
+  }
+
   return (
-    <svg width={W} height={h} style={{ display: 'block' }}>
+    <svg width={W} height={totalH} style={{ display: 'block' }}>
+      {/* Main line */}
       <line x1={pad} y1={lineY} x2={W - pad} y2={lineY} stroke="#334155" strokeWidth={2} />
       <polygon points={`${W - pad},${lineY} ${W - pad - 7},${lineY - 4} ${W - pad - 7},${lineY + 4}`} fill="#334155" />
+
+      {/* Ticks and labels */}
       {ticks.map((v, i) => {
         const x = toX(v);
         const showLabel = showAll || v === mn || v === mx;
         return (
           <g key={i}>
-            <line x1={x} y1={lineY - 6} x2={x} y2={lineY + 6} stroke="#334155" strokeWidth={1.5} />
+            <line x1={x} y1={lineY - 7} x2={x} y2={lineY + 7} stroke="#334155" strokeWidth={1.5} />
             {showLabel && (
-              <text x={x} y={lineY + 18} textAnchor="middle" fontSize={11} fill="#334155">{v}</text>
+              <text x={x} y={lineY + 20} textAnchor="middle" fontSize={11} fill="#334155">{v}</text>
             )}
           </g>
         );
       })}
-      {jumps && ticks.slice(0, -1).map((v, i) => {
-        const x1 = toX(v), x2 = toX(ticks[i + 1]);
-        const mx2 = (x1 + x2) / 2, arcH = 18;
+
+      {/* Hop arcs with value labels */}
+      {hopPairs.map(([v1, v2], i) => {
+        const x1 = toX(Math.max(v1, mn)), x2 = toX(Math.min(v2, mx));
+        const midX = (x1 + x2) / 2;
+        const span = x2 - x1;
+        const arcH = Math.min(32, Math.max(14, span * 0.45));
+        const hopVal = parseFloat((v2 - v1).toFixed(4));
+        const label = hopVal > 0 ? `+${hopVal % 1 === 0 ? hopVal : hopVal}` : `${hopVal}`;
         return (
-          <path key={i} d={`M${x1},${lineY} Q${mx2},${lineY - arcH} ${x2},${lineY}`}
-            fill="none" stroke="#2563eb" strokeWidth={1.5} />
+          <g key={i}>
+            <path d={`M${x1},${lineY} Q${midX},${lineY - arcH} ${x2},${lineY}`}
+              fill="none" stroke="#2563eb" strokeWidth={2} />
+            {/* Arrow tip */}
+            <polygon
+              points={`${x2},${lineY} ${x2 - 5},${lineY - 6} ${x2 + 1},${lineY - 3}`}
+              fill="#2563eb" />
+            {/* Value label above arc */}
+            <text x={midX} y={lineY - arcH - 4} textAnchor="middle" fontSize={10}
+              fontWeight="600" fill="#2563eb">{label}</text>
+          </g>
         );
       })}
     </svg>
@@ -546,7 +598,8 @@ function parseVisualModel(marker) {
   if (m.startsWith('[ARRAY:')) return <ArrayViz rows={kv.rows} cols={kv.cols} />;
   if (m.startsWith('[NUM_LINE:')) {
     return <NumberLine min={kv.min} max={kv.max} step={kv.step}
-      showAll={kv.show === 'all'} jumps={kv.jumps === 'yes'} />;
+      showAll={kv.show === 'all'} jumps={kv.jumps === 'yes'}
+      hopSize={kv.hop_size} hopStart={kv.hop_start} hops={kv.hops} />;
   }
   if (m.startsWith('[GROUPS:')) return <Groups groups={kv.groups} items={kv.items} />;
   if (m.startsWith('[TENS_FRAME:')) return <TensFrame filled={kv.filled} total={kv.total} />;
@@ -762,10 +815,40 @@ function VisualParamForm({ type, params, onChange }) {
       return <div className="flex gap-2">{inp('Rows', 'rows', { type: 'number', min: 1, max: 12 })}{inp('Cols', 'cols', { type: 'number', min: 1, max: 12 })}</div>;
     case 'NUM_LINE':
       return (
-        <div className="flex flex-wrap gap-2">
-          {inp('Min', 'min', { type: 'number' })}{inp('Max', 'max', { type: 'number' })}{inp('Step', 'step', { type: 'number', min: 1 })}
-          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={params.jumps === 'yes'} onChange={e => set('jumps', e.target.checked ? 'yes' : '')} /> Hops</label>
-          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={params.show === 'all'} onChange={e => set('show', e.target.checked ? 'all' : '')} /> All labels</label>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            {inp('Min', 'min', { type: 'number' })}
+            {inp('Max', 'max', { type: 'number' })}
+            {inp('Step', 'step', { type: 'number', min: 1 })}
+            <label className="text-xs flex items-center gap-1">
+              <input type="checkbox" checked={params.show === 'all'} onChange={e => set('show', e.target.checked ? 'all' : '')} />
+              All labels
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="text-xs flex items-center gap-1">
+              <input type="checkbox" checked={params.jumps === 'yes'} onChange={e => set('jumps', e.target.checked ? 'yes' : '')} />
+              <strong>Hops/Arcs</strong>
+            </label>
+            {params.jumps === 'yes' && (
+              <>
+                {inp('Hop size', 'hop_size', { type: 'number', min: 1, placeholder: '= 1 step' })}
+                {inp('Start at', 'hop_start', { type: 'number', placeholder: 'default: min' })}
+                <label className="text-xs flex flex-col gap-0.5">
+                  <span>Custom hops (from:to, ...)</span>
+                  <input value={params.hops || ''} onChange={e => set('hops', e.target.value)}
+                    className="border rounded p-1 w-40 font-mono text-xs"
+                    placeholder="e.g. 0:5,5:12,12:20" />
+                  <span className="text-slate-400 text-xs">Overrides hop size if filled</span>
+                </label>
+              </>
+            )}
+          </div>
+          {params.jumps === 'yes' && (
+            <p className="text-xs text-slate-400">
+              Examples: hop size=5 → equal +5 arcs · custom 0:3,3:7 → arcs of different sizes
+            </p>
+          )}
         </div>
       );
     case 'GROUPS':
@@ -846,7 +929,15 @@ function paramsToMarker(type, params) {
   if (type === 'ARRAY') return `[ARRAY: rows=${params.rows || 3} cols=${params.cols || 4}]`;
   if (type === 'NUM_LINE') {
     let m = `[NUM_LINE: min=${params.min ?? 0} max=${params.max ?? 20} step=${params.step ?? 1}`;
-    if (params.jumps === 'yes') m += ' jumps=yes';
+    if (params.jumps === 'yes') {
+      m += ' jumps=yes';
+      if (params.hops && String(params.hops).trim()) {
+        m += ` hops=${String(params.hops).replace(/\s/g, '')}`;
+      } else {
+        if (params.hop_size) m += ` hop_size=${params.hop_size}`;
+        if (params.hop_start !== undefined && params.hop_start !== '') m += ` hop_start=${params.hop_start}`;
+      }
+    }
     if (params.show === 'all') m += ' show=all';
     return m + ']';
   }
@@ -875,6 +966,97 @@ function paramsToMarker(type, params) {
   return null;
 }
 
+// ─── Math Symbol Toolbar ───────────────────────────────────────────────────────
+// Inserts math symbols at cursor position in any <input> or <textarea>
+function MathToolbar({ targetRef, onInsert }) {
+  const [showFrac, setShowFrac] = useState(false);
+  const [fracW, setFracW] = useState('');
+  const [fracN, setFracN] = useState('');
+  const [fracD, setFracD] = useState('');
+
+  const insert = (sym) => {
+    const el = targetRef?.current;
+    if (!el) { onInsert?.(sym); return; }
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const before = el.value.slice(0, start);
+    const after = el.value.slice(end);
+    const newVal = before + sym + after;
+    // Trigger React synthetic event
+    const nativeInputSetter = Object.getOwnPropertyDescriptor(
+      el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+      'value'
+    )?.set;
+    if (nativeInputSetter) {
+      nativeInputSetter.call(el, newVal);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    // Restore cursor after the inserted symbol
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + sym.length, start + sym.length);
+    });
+  };
+
+  const insertFraction = () => {
+    const w = fracW.trim(), n = fracN.trim(), d = fracD.trim();
+    if (!n || !d) return;
+    const str = w ? `${w} ${n}/${d}` : `${n}/${d}`;
+    insert(str);
+    setShowFrac(false); setFracW(''); setFracN(''); setFracD('');
+  };
+
+  const symbols = [
+    { label: '×', tip: 'Multiply' },
+    { label: '÷', tip: 'Divide' },
+    { label: '±', tip: 'Plus/minus' },
+    { label: '≠', tip: 'Not equal' },
+    { label: '≤', tip: 'Less than or equal' },
+    { label: '≥', tip: 'Greater than or equal' },
+    { label: '²', tip: 'Squared' },
+    { label: '³', tip: 'Cubed' },
+    { label: '½', tip: '1/2' },
+    { label: '⅓', tip: '1/3' },
+    { label: '¼', tip: '1/4' },
+    { label: '¾', tip: '3/4' },
+    { label: '⅔', tip: '2/3' },
+  ];
+
+  return (
+    <div className="mb-1">
+      <div className="flex flex-wrap gap-1 items-center">
+        {symbols.map(({ label, tip }) => (
+          <button key={label} type="button" title={tip}
+            onClick={() => insert(label)}
+            className="w-7 h-7 text-sm border border-gray-300 rounded bg-white hover:bg-blue-50 hover:border-blue-400 font-medium text-gray-700 leading-none">
+            {label}
+          </button>
+        ))}
+        <button type="button"
+          onClick={() => setShowFrac(v => !v)}
+          className={`px-2 h-7 text-xs border rounded font-medium ${showFrac ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-blue-50'}`}>
+          a/b
+        </button>
+      </div>
+      {showFrac && (
+        <div className="mt-1 flex items-center gap-1 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+          <input value={fracW} onChange={e => setFracW(e.target.value)}
+            className="border rounded p-1 w-10 text-center" placeholder="W" title="Whole number (optional)" />
+          <span className="text-gray-400 text-xs">and</span>
+          <input value={fracN} onChange={e => setFracN(e.target.value)}
+            className="border rounded p-1 w-10 text-center" placeholder="N" title="Numerator" />
+          <span className="font-bold">/</span>
+          <input value={fracD} onChange={e => setFracD(e.target.value)}
+            className="border rounded p-1 w-10 text-center" placeholder="D" title="Denominator" />
+          <button type="button" onClick={insertFraction}
+            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Insert</button>
+          <span className="text-gray-400 ml-1">Leave W blank for improper/proper fraction</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Question Form (for Manual Builder) ──────────────────────────────────────
 function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const isEdit = !!question?.id;
@@ -886,6 +1068,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const [visualParams, setVisualParams] = useState(question?._visualParams || {});
   const [customImg, setCustomImg] = useState(question?._customImg || null);
   const fileRef = useRef();
+  const qTextRef = useRef();
 
   const handlePaste = e => {
     const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image'));
@@ -953,7 +1136,8 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
       {/* Question text */}
       <div>
         <p className="text-xs text-gray-500 mb-1">Question Text</p>
-        <textarea value={qText} onChange={e => setQText(e.target.value)}
+        <MathToolbar targetRef={qTextRef} />
+        <textarea ref={qTextRef} value={qText} onChange={e => setQText(e.target.value)}
           placeholder={qType === 'fill' ? 'Use ___ for blanks, e.g. "3 × ___ = 12"' : qType === 'compute' ? 'e.g. "432 ÷ 6 ="' : 'Type your question...'}
           className="w-full border rounded p-2 text-sm h-20 resize-none" />
       </div>
@@ -1488,21 +1672,55 @@ function visualToHtml(marker) {
     const mx = parseFloat(gp('max') ?? '10');
     const st = parseFloat(gp('step') ?? '1') || 1;
     const showAll = m.includes('show=all');
-    const jumps = m.includes('jumps=yes');
+    const hasArcs = m.includes('jumps=yes');
+    const hopSizeParam = gp('hop_size');
+    const hopStartParam = gp('hop_start');
+    const hopsParam = gp('hops');
+
     const ticks = [];
     for (let v = mn; v <= mx + 0.0001; v += st) ticks.push(parseFloat(v.toFixed(4)));
-    const tw = Math.max(22, Math.min(36, Math.floor(320 / ticks.length)));
-    let t = `<table style="${tbl}border:none"><tbody>`;
-    if (jumps) {
-      t += '<tr>' + ticks.slice(0, -1).map(() =>
-        `<td style="border:none;border-bottom:2px solid #333;text-align:center;font-size:9pt;width:${tw}px">⌢</td>`
-      ).join('') + `<td style="border:none;width:${tw / 2}px"></td></tr>`;
+    const tw = Math.max(22, Math.min(40, Math.floor(340 / ticks.length)));
+
+    // Build hop pairs
+    let hopPairs = [];
+    if (hasArcs) {
+      if (hopsParam) {
+        hopPairs = hopsParam.split(',').map(s => s.split(':').map(Number)).filter(([a,b]) => !isNaN(a) && !isNaN(b));
+      } else if (hopSizeParam) {
+        const hs = parseFloat(hopSizeParam);
+        const start = hopStartParam !== null ? parseFloat(hopStartParam) : mn;
+        for (let v = start; v + hs <= mx + 0.0001; v = parseFloat((v + hs).toFixed(4)))
+          hopPairs.push([v, parseFloat((v + hs).toFixed(4))]);
+      } else {
+        ticks.slice(0, -1).forEach((v, i) => hopPairs.push([v, ticks[i + 1]]));
+      }
     }
-    // tick row
-    t += '<tr>' + ticks.map((_, i) =>
+
+    let t = `<table style="${tbl}border:none"><tbody>`;
+    // Arc labels row
+    if (hasArcs && hopPairs.length) {
+      // Map each hop to the tick columns it spans
+      t += '<tr>';
+      let lastIdx = 0;
+      hopPairs.forEach(([v1, v2]) => {
+        const idx1 = ticks.findIndex(t => Math.abs(t - v1) < 0.0001);
+        const idx2 = ticks.findIndex(t => Math.abs(t - v2) < 0.0001);
+        const span = (idx2 >= 0 && idx1 >= 0) ? idx2 - idx1 : 1;
+        const hopVal = parseFloat((v2 - v1).toFixed(4));
+        const label = hopVal > 0 ? `+${hopVal}` : `${hopVal}`;
+        t += `<td colspan="${Math.max(1,span)}" style="border:none;border-bottom:2px solid #2563eb;text-align:center;font-size:9pt;color:#2563eb;font-weight:bold;padding:0 2px;width:${tw * Math.max(1,span)}px">⌢ ${label}</td>`;
+        lastIdx = idx2 >= 0 ? idx2 : lastIdx + span;
+      });
+      // Fill remaining cols
+      if (lastIdx < ticks.length - 1)
+        t += `<td colspan="${ticks.length - 1 - lastIdx}" style="border:none"></td>`;
+      t += `<td style="border:none;width:${tw/2}px"></td></tr>`;
+    }
+    // Tick row
+    t += '<tr>' + ticks.map(() =>
       `<td style="border:none;border-left:2px solid #333;border-bottom:2px solid #333;height:10px;width:${tw}px"></td>`
     ).join('') + '</tr>';
-    // label row
+    // Label row
     t += '<tr>' + ticks.map((v, i) => {
       const show = showAll || i === 0 || i === ticks.length - 1;
       return `<td style="border:none;text-align:left;font-size:9pt;padding:1px 0;width:${tw}px">${show ? v : ''}</td>`;

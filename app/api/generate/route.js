@@ -66,8 +66,14 @@ Standard vector types (recreated automatically):
       Number line; numbers shown at 0 and M only.
   [NUM_LINE: min=0 max=M step=S show=all]
       Number line with a label at EVERY tick (only if source labels every tick).
-  [NUM_LINE: min=0 max=M step=S jumps=yes show=all]
-      Number line with curved hop arcs above each jump. Combine with show=all when source shows all labels.
+  [NUM_LINE: min=0 max=M step=S jumps=yes]
+      Number line with curved hop arcs — one arc per step by default. Shows +value label above each arc.
+  [NUM_LINE: min=0 max=M step=S jumps=yes hop_size=N]
+      Hop arcs that each span N units. e.g. hop_size=5 on a 0–20 line → four +5 arcs.
+  [NUM_LINE: min=0 max=M step=S jumps=yes hop_size=N hop_start=V]
+      Same but hops begin at value V instead of min.
+  [NUM_LINE: min=0 max=M step=1 jumps=yes hops=0:3,3:7,7:10]
+      Custom arcs between specific from:to values. Use for variable-size jumps (overrides hop_size).
   [GROUPS: groups=G items=I]
       G ovals, each containing I dots. Use for "groups of" / "equal groups" models.
   [TENS_FRAME: filled=F total=10]
