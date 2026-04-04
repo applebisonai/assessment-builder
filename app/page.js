@@ -227,15 +227,13 @@ function FractionBar({ n, d }) {
   const totalBars = wholeCount + (hasPartial ? 1 : 0);
   const totalW = totalBars * barW + (totalBars - 1) * gap + pad * 2;
   return (
-    <svg width={totalW} height={H + 22} style={{ display: 'block' }}>
+    <svg width={totalW} height={H + 2} style={{ display: 'block' }}>
       {Array.from({ length: wholeCount }, (_, bi) => (
         <g key={`w${bi}`}>
           {Array.from({ length: D }, (_, si) => (
             <rect key={si} x={pad + bi * (barW + gap) + si * segW} y={1}
               width={segW - 1} height={H} fill="#93c5fd" stroke="#334155" strokeWidth={1.5} />
           ))}
-          <text x={pad + bi * (barW + gap) + barW / 2} y={H + 17}
-            textAnchor="middle" fontSize={10} fill="#6b7280">1 whole</text>
         </g>
       ))}
       {hasPartial && (
@@ -245,8 +243,6 @@ function FractionBar({ n, d }) {
               width={segW - 1} height={H}
               fill={si < remainder ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />
           ))}
-          <text x={pad + wholeCount * (barW + gap) + barW / 2} y={H + 17}
-            textAnchor="middle" fontSize={10} fill="#6b7280">{remainder}/{D}</text>
         </g>
       )}
     </svg>
@@ -286,13 +282,12 @@ function FractionCircle({ n, d }) {
   const totalW = totalCircles * circleD + (totalCircles - 1) * gap;
   const cy = circleD / 2;
   return (
-    <svg width={totalW} height={circleD + 20} style={{ display: 'block' }}>
+    <svg width={totalW} height={circleD} style={{ display: 'block' }}>
       {Array.from({ length: wholeCount }, (_, bi) => {
         const cx = bi * (circleD + gap) + circleD / 2;
         return (
           <g key={`w${bi}`}>
             {makeCircle(cx, cy, D)}
-            <text x={cx} y={circleD + 15} textAnchor="middle" fontSize={10} fill="#6b7280">1 whole</text>
           </g>
         );
       })}
@@ -301,7 +296,6 @@ function FractionCircle({ n, d }) {
         return (
           <g key="frac">
             {makeCircle(cx, cy, remainder)}
-            <text x={cx} y={circleD + 15} textAnchor="middle" fontSize={10} fill="#6b7280">{remainder}/{D}</text>
           </g>
         );
       })()}
@@ -314,38 +308,47 @@ function AreaModel({ cols, rows: rowsStr, vals }) {
   const rowVals = (rowsStr || '10,4').split(',').map(s => s.trim());
   const cellVals = vals ? vals.split(',').map(s => s.trim()) : [];
 
-  // Proportional sizing: scale cell widths/heights to value, capped so total stays compact
-  const colNums = colVals.map(v => Math.max(parseFloat(v) || 1, 1));
-  const rowNums = rowVals.map(v => Math.max(parseFloat(v) || 1, 1));
+  // Allow decimals; proportional sizing capped so total stays compact
+  const colNums = colVals.map(v => Math.max(parseFloat(v) || 0.1, 0.1));
+  const rowNums = rowVals.map(v => Math.max(parseFloat(v) || 0.1, 0.1));
   const maxCol = Math.max(...colNums);
   const maxRow = Math.max(...rowNums);
-  const labelW = 38, labelH = 28;
-  const maxColW = Math.min(110, Math.floor(260 / colVals.length));
-  const minColW = 36;
-  const maxRowH = Math.min(60, Math.floor(160 / rowVals.length));
-  const minRowH = 28;
-  const colWidths = colNums.map(v => Math.max(minColW, Math.round((v / maxCol) * maxColW)));
+  const labelW = 44, labelH = 30;
+  const maxColW = Math.min(90, Math.floor(260 / colVals.length));
+  const minColW = 44; // wide enough for decimal labels without crowding
+  const maxRowH = Math.min(56, Math.floor(160 / rowVals.length));
+  const minRowH = 30;
+  const colWidths  = colNums.map(v => Math.max(minColW, Math.round((v / maxCol) * maxColW)));
   const rowHeights = rowNums.map(v => Math.max(minRowH, Math.round((v / maxRow) * maxRowH)));
+
+  // Correct cumulative offsets (was buggy for 3+ columns/rows)
+  const colX = [0];
+  for (let i = 1; i < colVals.length; i++) colX.push(colX[i - 1] + colWidths[i - 1]);
+  const rowY = [0];
+  for (let i = 1; i < rowVals.length; i++) rowY.push(rowY[i - 1] + rowHeights[i - 1]);
+
   const totalW = labelW + colWidths.reduce((a, b) => a + b, 0) + 2;
   const totalH = labelH + rowHeights.reduce((a, b) => a + b, 0) + 2;
-
-  // Compute x offsets for columns, y offsets for rows
-  const colX = colWidths.reduce((acc, w, i) => { acc.push((acc[i] || 0) + (i > 0 ? colWidths[i - 1] : 0)); return acc; }, []);
-  const rowY = rowHeights.reduce((acc, h, i) => { acc.push((acc[i] || 0) + (i > 0 ? rowHeights[i - 1] : 0)); return acc; }, []);
 
   const colors = ['#fed7aa', '#fce7f3', '#bbf7d0', '#bfdbfe', '#fef08a', '#d9f99d'];
   return (
     <svg width={totalW} height={totalH} style={{ display: 'block' }}>
-      {/* Column labels */}
-      {colVals.map((cv, ci) => (
-        <text key={ci} x={labelW + colX[ci] + colWidths[ci] / 2} y={labelH - 6}
-          textAnchor="middle" fontSize={12} fontWeight="700" fill="#334155">{cv}</text>
-      ))}
-      {/* Row labels */}
-      {rowVals.map((rv, ri) => (
-        <text key={ri} x={labelW - 6} y={labelH + rowY[ri] + rowHeights[ri] / 2 + 4}
-          textAnchor="end" fontSize={12} fontWeight="700" fill="#334155">{rv}</text>
-      ))}
+      {/* Column labels — font scales with cell width to prevent crowding */}
+      {colVals.map((cv, ci) => {
+        const fs = Math.min(12, Math.max(8, Math.floor(colWidths[ci] * 0.26)));
+        return (
+          <text key={ci} x={labelW + colX[ci] + colWidths[ci] / 2} y={labelH - 6}
+            textAnchor="middle" fontSize={fs} fontWeight="700" fill="#334155">{cv}</text>
+        );
+      })}
+      {/* Row labels — font scales with cell height */}
+      {rowVals.map((rv, ri) => {
+        const fs = Math.min(12, Math.max(8, Math.floor(rowHeights[ri] * 0.34)));
+        return (
+          <text key={ri} x={labelW - 4} y={labelH + rowY[ri] + rowHeights[ri] / 2 + 4}
+            textAnchor="end" fontSize={fs} fontWeight="700" fill="#334155">{rv}</text>
+        );
+      })}
       {/* Cells */}
       {rowVals.map((_, ri) =>
         colVals.map((_, ci) => {
@@ -360,7 +363,8 @@ function AreaModel({ cols, rows: rowsStr, vals }) {
                 fill={fill} stroke="#334155" strokeWidth={1.5} />
               {cellVal && (
                 <text x={cx + cw / 2} y={cy + ch / 2 + 5}
-                  textAnchor="middle" fontSize={Math.min(14, ch * 0.4)} fontWeight="600" fill="#334155">{cellVal}</text>
+                  textAnchor="middle" fontSize={Math.min(13, Math.max(8, ch * 0.38))}
+                  fontWeight="600" fill="#334155">{cellVal}</text>
               )}
             </g>
           );
@@ -439,41 +443,81 @@ function FractionBox({ n = '', d = '' }) {
 
 function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
   const TH = Math.min(parseInt(thousands) || 0, 9);
-  const H = Math.min(parseInt(hundreds) || 0, 9);
-  const T = Math.min(parseInt(tens) || 0, 9);
-  const O = Math.min(parseInt(ones) || 0, 9);
-  const gap = 8, pad = 10;
+  const H  = Math.min(parseInt(hundreds) || 0, 9);
+  const T  = Math.min(parseInt(tens)     || 0, 9);
+  const O  = Math.min(parseInt(ones)     || 0, 9);
+  const gap = 8, pad = 6;
+
+  // 3D cube constants (for thousands)
+  const cs = 36,  cox = 10, coy = 8;  // front-face size, depth-x, depth-y
+  // Front face sits at y=(pad+coy); top face peaks at y=pad; right face at x=(bx+cs)
+  const cubeW = cs + cox;  // 46
+  const cubeH = cs + coy;  // 44  – top of top-face (y=pad) to bottom of front-face (y=pad+coy+cs)
+
   let x = pad;
   const items = [];
-  // Thousands: 10×10 large square (each 4px unit → 40px block)
+
+  // ── Thousands: 3-dimensional cube with 10×10 grid on front face ─────────
   for (let i = 0; i < TH; i++) {
-    const bx = x, by = pad;
-    for (let r = 0; r < 10; r++)
-      for (let c = 0; c < 10; c++)
-        items.push(<rect key={`th${i}${r}${c}`} x={bx + c * 4} y={by + r * 4} width={3.5} height={3.5} fill="#7c3aed" />);
-    x += 42 + gap;
+    const fx = x, fy = pad + coy;   // top-left of front face
+    // Top face (lighter purple) – parallelogram above front
+    items.push(
+      <polygon key={`th${i}top`}
+        points={`${fx},${fy} ${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cox},${fy-coy}`}
+        fill="#c4b5fd" stroke="#5b21b6" strokeWidth={0.7} />
+    );
+    // Right side face (darker purple) – parallelogram right of front
+    items.push(
+      <polygon key={`th${i}rt`}
+        points={`${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cs+cox},${fy+cs-coy} ${fx+cs},${fy+cs}`}
+        fill="#5b21b6" stroke="#4c1d95" strokeWidth={0.7} />
+    );
+    // Front face
+    items.push(
+      <rect key={`th${i}fr`} x={fx} y={fy} width={cs} height={cs}
+        fill="#7c3aed" stroke="#5b21b6" strokeWidth={0.7} />
+    );
+    // 10×10 grid lines on front face
+    const gStep = cs / 10;
+    for (let g = 1; g < 10; g++) {
+      items.push(<line key={`th${i}gv${g}`}
+        x1={fx + g*gStep} y1={fy} x2={fx + g*gStep} y2={fy+cs}
+        stroke="#5b21b6" strokeWidth={0.35} />);
+      items.push(<line key={`th${i}gh${g}`}
+        x1={fx} y1={fy + g*gStep} x2={fx+cs} y2={fy + g*gStep}
+        stroke="#5b21b6" strokeWidth={0.35} />);
+    }
+    x += cubeW + gap;
   }
-  // Hundreds: 10×10 small square (each 3px unit → 30px block)
+
+  // ── Hundreds: flat 10×10 grid square ────────────────────────────────────
+  const hBy = pad + coy;  // align baseline with thousands
   for (let i = 0; i < H; i++) {
-    const bx = x, by = pad;
+    const bx = x;
     for (let r = 0; r < 10; r++)
       for (let c = 0; c < 10; c++)
-        items.push(<rect key={`h${i}${r}${c}`} x={bx + c * 3} y={by + r * 3} width={2.5} height={2.5} fill="#334155" />);
+        items.push(<rect key={`h${i}${r}${c}`}
+          x={bx + c * 3} y={hBy + r * 3} width={2.5} height={2.5} fill="#334155" />);
     x += 32 + gap;
   }
-  // Tens: vertical rod (10 units tall, 1 wide)
+
+  // ── Tens: vertical rod ───────────────────────────────────────────────────
   for (let i = 0; i < T; i++) {
     for (let r = 0; r < 10; r++)
-      items.push(<rect key={`t${i}${r}`} x={x} y={pad + r * 3} width={8} height={2.5} fill="#334155" />);
+      items.push(<rect key={`t${i}${r}`}
+        x={x} y={hBy + r * 3} width={8} height={2.5} fill="#334155" />);
     x += 12 + gap;
   }
-  // Ones: single small square
+
+  // ── Ones: single small square ────────────────────────────────────────────
   for (let i = 0; i < O; i++) {
-    items.push(<rect key={`o${i}`} x={x} y={pad + 4} width={8} height={8} fill="#334155" />);
-    x += 10 + gap;
+    items.push(<rect key={`o${i}`}
+      x={x} y={hBy + 12} width={8} height={8} fill="#334155" />);
+    x += 12 + gap;
   }
+
   const totalW = Math.max(x + pad, 60);
-  const totalH = Math.max(TH > 0 ? 52 : H > 0 ? 42 : 32, 32);
+  const totalH = pad + cubeH + pad;   // always tall enough for thousands cube
   return (
     <svg width={totalW} height={totalH} style={{ display: 'block' }}>
       {items}
@@ -1206,9 +1250,10 @@ function MathToolbar({ targetRef, onInsert }) {
   };
 
   const symbols = [
+    { label: '+', tip: 'Plus' },
+    { label: '−', tip: 'Minus' },
     { label: '×', tip: 'Multiply' },
     { label: '÷', tip: 'Divide' },
-    { label: '±', tip: 'Plus/minus' },
     { label: '≠', tip: 'Not equal' },
     { label: '≤', tip: 'Less than or equal' },
     { label: '≥', tip: 'Greater than or equal' },
@@ -1629,15 +1674,29 @@ function ModelEditor({ marker, onSave, onClose }) {
   const [pastedImg, setPastedImg] = useState(null);
   const fileRef = useRef();
 
-  const handlePaste = e => {
-    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image'));
-    if (item) {
-      const blob = item.getAsFile();
-      const reader = new FileReader();
-      reader.onload = ev => setPastedImg(ev.target.result);
-      reader.readAsDataURL(blob);
-    }
+  const captureImage = e => {
+    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
+    if (!item) return false;
+    e.preventDefault();
+    const blob = item.getAsFile();
+    const reader = new FileReader();
+    reader.onload = ev => setPastedImg(ev.target.result);
+    reader.readAsDataURL(blob);
+    return true;
   };
+
+  const handlePaste = e => captureImage(e);
+
+  // Document-level listener so paste works even when textarea has focus
+  useEffect(() => {
+    const onDocPaste = e => {
+      // Only capture if an image is in the clipboard; don't steal text pastes
+      const hasImg = Array.from(e.clipboardData?.items || []).some(i => i.type.startsWith('image'));
+      if (hasImg) captureImage(e);
+    };
+    document.addEventListener('paste', onDocPaste);
+    return () => document.removeEventListener('paste', onDocPaste);
+  }, []);
 
   const handleFile = e => {
     const file = e.target.files[0];
@@ -2016,12 +2075,12 @@ function visualToHtml(marker) {
     for (let bi = 0; bi < wholeCount; bi++) {
       t += `<td style="border:none;padding-right:6px"><table style="border-collapse:collapse;display:inline-table"><tbody><tr>`;
       for (let si = 0; si < d; si++) t += `<td style="${cell}width:20px;height:22px;background:#93c5fd"></td>`;
-      t += `</tr></tbody></table><br/><span style="font-size:9pt;color:#666">1 whole</span></td>`;
+      t += `</tr></tbody></table></td>`;
     }
     if (hasPartial) {
       t += `<td style="border:none;padding-right:6px"><table style="border-collapse:collapse;display:inline-table"><tbody><tr>`;
       for (let si = 0; si < d; si++) t += `<td style="${cell}width:20px;height:22px;background:${si < remainder ? '#93c5fd' : '#fff'}"></td>`;
-      t += `</tr></tbody></table><br/><span style="font-size:9pt;color:#666">${n <= d ? `${n}/${d}` : `${remainder}/${d}`}</span></td>`;
+      t += `</tr></tbody></table></td>`;
     }
     return t + '</tr></tbody></table>';
   }
@@ -2044,23 +2103,18 @@ function visualToHtml(marker) {
     const hasPartial = remainder > 0 || wholeCount === 0;
 
     // Build a circle as a grid of D sectors (shown as a row of shaded/unshaded cells)
-    const makeCircleRow = (filledN, total, label) => {
+    const makeCircleRow = (filledN, total) => {
       let row = `<table style="border-collapse:collapse;display:inline-table;margin:0 6px;vertical-align:top"><tbody>`;
-      // Top label
-      row += `<tr><td colspan="${total}" style="border:none;text-align:center;font-size:9pt;color:#555;padding:0 0 2px">${label}</td></tr>`;
-      // Sector row
       row += '<tr>';
       for (let i = 0; i < total; i++)
         row += `<td style="${cell}width:${Math.min(24, Math.floor(120/total))}px;height:28px;background:${i < filledN ? '#93c5fd' : '#fff'}"></td>`;
       row += '</tr>';
-      // Bottom fraction label
-      row += `<tr><td colspan="${total}" style="border:none;text-align:center;font-size:9pt;color:#555;padding:2px 0">${label}</td></tr>`;
       return row + '</tbody></table>';
     };
 
     let t = `<p style="margin:4px 0">`;
-    for (let bi = 0; bi < wholeCount; bi++) t += makeCircleRow(d, d, '1 whole');
-    if (hasPartial) t += makeCircleRow(remainder, d, `${n <= d ? n : remainder}/${d}`);
+    for (let bi = 0; bi < wholeCount; bi++) t += makeCircleRow(d, d);
+    if (hasPartial) t += makeCircleRow(remainder, d);
     return t + '</p>';
   }
 
@@ -2327,65 +2381,9 @@ function visualToHtml(marker) {
 }
 
 // ─── Google Docs copy helper ──────────────────────────────────────────────────
-function copyToGoogleDocs(questions) {
-  // Build HTML that pastes cleanly into Google Docs
-  let html = `<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.8;margin:0;padding:0">`;
 
-  questions.forEach(q => {
-    if (!q || !q.type) return;
-
-    if (q.type === 'header') {
-      html += `<p style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 4px 0">${q.text}</p>`;
-
-    } else if (q.type === 'meta') {
-      html += `<p style="text-align:center;font-size:11pt;color:#555;margin:0 0 12px 0">${q.text}</p>`;
-
-    } else if (q.type === 'section') {
-      html += `<p style="font-weight:bold;margin:16px 0 4px 0;font-size:12pt">${q.text}</p>`;
-
-    } else if (q.type === 'vb-divider') {
-      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">VERSION B</p>`;
-
-    } else if (q.type === 'ak-divider') {
-      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">TEACHER ANSWER KEY</p>`;
-
-    } else if (q.type === 'answer-key') {
-      html += `<p style="font-family:monospace;font-size:11pt;margin:0 0 2px 0">${q.text}</p>`;
-
-    } else if (q.type === 'question') {
-      html += `<p style="margin:12px 0 2px 0"></p>`;
-
-      // Visual/model — render as actual HTML table/structure
-      if (q.marker) {
-        html += visualToHtml(q.marker);
-      }
-
-      // Question text (with standard tag floated right)
-      const numStr = q.qNum ? `<strong>${q.qNum}.</strong> ` : '';
-      const stdSpan = q.standard ? `<span style="float:right;font-size:9pt;color:#3b82f6;font-style:italic">${q.standard}</span>` : '';
-      html += `<p style="margin:2px 0 4px 0">${stdSpan}${numStr}${q.text || ''}</p>`;
-
-      // Sub-lines (multi-part question continuation lines)
-      q.lines?.forEach(l => {
-        html += `<p style="margin:1px 0 1px 20px">${l}</p>`;
-      });
-
-      // Answer choices
-      if (q.choices?.length) {
-        const isSATA = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
-        const bubble = isSATA ? '☐' : '○';
-        q.choices.forEach(ch => {
-          html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
-        });
-      }
-
-    }
-  });
-
-  html += '</body></html>';
-
-  // Plain text fallback
-  const plain = questions
+function gdocPlainText(questions) {
+  return questions
     .filter(q => q.type === 'question' || q.type === 'header')
     .map(q => {
       if (q.type === 'header') return `\n${q.text}\n`;
@@ -2396,38 +2394,161 @@ function copyToGoogleDocs(questions) {
       return `${num}${q.text || ''}${choices}`;
     })
     .join('\n\n');
+}
 
-  // Use execCommand('copy') on a rendered contenteditable div —
-  // this is the most reliable way to get HTML (including tables) into Google Docs.
-  // ClipboardItem text/html is often ignored by Docs in favor of plain text.
+function execCopy(html) {
+  const bodyHtml = html.replace(/^<html><body[^>]*>/, '').replace(/<\/body><\/html>$/, '');
+  const div = document.createElement('div');
+  div.setAttribute('contenteditable', 'true');
+  div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.01;pointer-events:none;width:700px;';
+  div.innerHTML = bodyHtml;
+  document.body.appendChild(div);
+  div.focus();
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(div);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  const ok = document.execCommand('copy');
+  sel.removeAllRanges();
+  document.body.removeChild(div);
+  return ok;
+}
+
+async function copyToGoogleDocs(questions) {
+  // ── 1. Render each SVG visual to a PNG data-URL ───────────────────────────
+  const visualPngs = {};
+  const markersNeeded = [...new Set(
+    questions.filter(q => q.marker && !q.marker.startsWith('[IMAGE:')).map(q => q.marker)
+  )];
+
+  if (markersNeeded.length) {
+    try {
+      const { createRoot } = await import('react-dom/client');
+      const renderContainer = document.createElement('div');
+      renderContainer.style.cssText = 'position:fixed;top:-9999px;left:-9999px;background:white;pointer-events:none;';
+      document.body.appendChild(renderContainer);
+
+      // Render all markers in parallel
+      await Promise.all(markersNeeded.map(async marker => {
+        const div = document.createElement('div');
+        renderContainer.appendChild(div);
+        const root = createRoot(div);
+        try {
+          root.render(parseVisualModel(marker));
+          // Wait two frames for React to paint
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+          const svgEl = div.querySelector('svg');
+          if (!svgEl) return;
+
+          const w = parseFloat(svgEl.getAttribute('width')) || 300;
+          const h = parseFloat(svgEl.getAttribute('height')) || 100;
+
+          // Serialize SVG (ensure xmlns present for img src rendering)
+          const serializer = new XMLSerializer();
+          let svgStr = serializer.serializeToString(svgEl);
+          if (!svgStr.includes('xmlns='))
+            svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+
+          const dataUrl = await new Promise(res => {
+            const img = new Image();
+            img.onload = () => {
+              const scale = 2; // retina-quality
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.ceil(w * scale);
+              canvas.height = Math.ceil(h * scale);
+              const ctx = canvas.getContext('2d');
+              ctx.fillStyle = 'white';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(scale, scale);
+              ctx.drawImage(img, 0, 0, w, h);
+              res(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => res(null);
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+          });
+
+          if (dataUrl) visualPngs[marker] = { dataUrl, w: Math.ceil(w), h: Math.ceil(h) };
+        } catch (e) { /* skip individual render failures */ }
+        try { root.unmount(); } catch (e) {}
+      }));
+
+      document.body.removeChild(renderContainer);
+    } catch (e) { /* dynamic import failed – fall back to table HTML */ }
+  }
+
+  // ── 2. Build HTML ─────────────────────────────────────────────────────────
+  let html = `<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.8;margin:0;padding:0">`;
+
+  questions.forEach(q => {
+    if (!q || !q.type) return;
+
+    if (q.type === 'header') {
+      html += `<p style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 4px 0">${q.text}</p>`;
+    } else if (q.type === 'meta') {
+      html += `<p style="text-align:center;font-size:11pt;color:#555;margin:0 0 12px 0">${q.text}</p>`;
+    } else if (q.type === 'section') {
+      html += `<p style="font-weight:bold;margin:16px 0 4px 0;font-size:12pt">${q.text}</p>`;
+    } else if (q.type === 'vb-divider') {
+      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">VERSION B</p>`;
+    } else if (q.type === 'ak-divider') {
+      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">TEACHER ANSWER KEY</p>`;
+    } else if (q.type === 'answer-key') {
+      html += `<p style="font-family:monospace;font-size:11pt;margin:0 0 2px 0">${q.text}</p>`;
+    } else if (q.type === 'question') {
+      html += `<p style="margin:12px 0 2px 0"></p>`;
+
+      // Visual — use captured PNG if available, else fallback to table HTML
+      if (q.marker) {
+        const png = visualPngs[q.marker];
+        if (png) {
+          html += `<p style="margin:4px 0"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
+        } else {
+          html += visualToHtml(q.marker);
+        }
+      }
+
+      // Question number + text + standard tag (table for reliable right-align in Docs)
+      const numStr = q.qNum ? `<strong>${q.qNum}.</strong> ` : '';
+      if (q.standard) {
+        html += `<table style="width:100%;border-collapse:collapse;border:none;margin:2px 0 4px 0"><tbody><tr>
+          <td style="border:none;padding:0;vertical-align:top">${numStr}${q.text || ''}</td>
+          <td style="border:none;text-align:right;vertical-align:top;white-space:nowrap;font-size:9pt;color:#3b82f6;font-style:italic;padding-left:12px">${q.standard}</td>
+        </tr></tbody></table>`;
+      } else {
+        html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
+      }
+
+      // Sub-lines
+      q.lines?.forEach(l => { html += `<p style="margin:1px 0 1px 20px">${l}</p>`; });
+
+      // Choices
+      if (q.choices?.length) {
+        const isSATA = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
+        const bubble = isSATA ? '☐' : '○';
+        q.choices.forEach(ch => {
+          html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
+        });
+      }
+    }
+  });
+
+  html += '</body></html>';
+
+  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
+  const plain = gdocPlainText(questions);
   try {
-    const bodyHtml = html.replace(/^<html><body[^>]*>/, '').replace(/<\/body><\/html>$/, '');
-    const div = document.createElement('div');
-    div.setAttribute('contenteditable', 'true');
-    div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0.01;pointer-events:none;width:600px;';
-    div.innerHTML = bodyHtml;
-    document.body.appendChild(div);
-
-    div.focus();
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(div);
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    const ok = document.execCommand('copy');
-    sel.removeAllRanges();
-    document.body.removeChild(div);
-
-    if (!ok) throw new Error('execCommand failed');
+    const ok = execCopy(html);
+    if (!ok) throw new Error('execCommand returned false');
   } catch {
     // Fallback: ClipboardItem API
     try {
       const htmlBlob = new Blob([html], { type: 'text/html' });
       const textBlob = new Blob([plain], { type: 'text/plain' });
-      navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).catch(() => {});
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
     } catch {
-      navigator.clipboard.writeText(plain).catch(() => {});
+      await navigator.clipboard.writeText(plain).catch(() => {});
     }
   }
 
@@ -2444,8 +2565,10 @@ export default function AssessmentBuilder() {
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const handleCopyGdoc = qs => {
-    copyToGoogleDocs(qs);
-    showToast('Copied! Paste into the Google Doc that just opened (Ctrl+V / Cmd+V)');
+    showToast('Preparing visuals…');
+    copyToGoogleDocs(qs).then(() => {
+      showToast('Copied! Paste into the Google Doc that just opened (Ctrl+V / Cmd+V)');
+    });
   };
 
   // Input mode
