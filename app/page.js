@@ -1818,6 +1818,11 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
                             onReplace={(newMarkers) => {
                               // Replace this one IMAGE marker with one or more new markers
                               newMarkers.forEach((nm, ni) => onModelEdit(ni === 0 ? m : '', nm));
+                              // Auto-save each to the bank
+                              newMarkers.forEach(nm => onSaveToBank?.(nm, autoNameMarker(
+                                nm.replace(/^\[|\]$/g,'').split(':')[0],
+                                nm.replace(/^\[[A-Z_]+:/,'').replace(/\]$/,'')
+                              )));
                             }}>
                             {rendered ? <div>{rendered}</div> : null}
                           </ModelEditWrapper>
@@ -1990,8 +1995,31 @@ function autoNameMarker(type, spec) {
       const r = spec.match(/rule=([^|]+)/)?.[1]?.trim();
       return r ? `Function Table (${r})` : 'Function Table';
     }
-    case 'IMAGE':  return 'Image';
-    default:       return type.replace(/_/g, ' ');
+    case 'GRID_RESPONSE': {
+      const c = spec.match(/cols=(\d+)/)?.[1];
+      return c ? `Answer Grid (${c} digits)` : 'Answer Grid';
+    }
+    case 'NUM_CHART': {
+      const s  = spec.match(/start=(\d+)/)?.[1];
+      const e  = spec.match(/end=(\d+)/)?.[1];
+      const sh = spec.match(/shaded=([\d,]+)/)?.[1];
+      const shCount = sh ? sh.split(',').length : 0;
+      return s && e ? `Number Chart ${s}–${e}${shCount ? ` (${shCount} shaded)` : ''}` : 'Number Chart';
+    }
+    case 'DATA_TABLE': {
+      const h = spec.match(/header=([^|]+)/)?.[1]?.trim();
+      return h ? `Data Table (${h})` : 'Data Table';
+    }
+    case 'YES_NO_TABLE': {
+      const rows = spec.split('|').length;
+      return `Yes/No Table (${rows} rows)`;
+    }
+    case 'IMAGE': {
+      // For external URLs give a short name; skip data: URLs (handled separately)
+      if (!spec.trim().startsWith('data:')) return `Image (${spec.trim().slice(0, 40)}...)`;
+      return 'Pasted Image';
+    }
+    default: return type.replace(/_/g, ' ');
   }
 }
 
@@ -2079,7 +2107,7 @@ const VISUAL_LIBRARY = [
 ];
 
 // ─── BuilderQuestionCard: single editable question card for Manual Builder ───
-function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank, apiKey }) {
+function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, modelBank, apiKey, onSaveMarkerToBank }) {
   const [showInsertPanel, setShowInsertPanel] = useState(false);
   const [editingModelIdx, setEditingModelIdx] = useState(null);
   const [editMarkerText, setEditMarkerText] = useState('');
@@ -2144,6 +2172,7 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
   // Add a visual marker from library or bank
   const addVisualMarker = (marker) => {
     onUpdate({ models: [...(q.models||[]), marker] });
+    onSaveMarkerToBank?.(marker);
     setShowInsertPanel(false);
   };
 
@@ -2171,6 +2200,8 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
         const current = [...(q.models||[])];
         current.splice(mi, 1, ...markers);
         onUpdate({ models: current });
+        // Auto-save each recreated marker to the bank
+        markers.forEach(mk => onSaveMarkerToBank?.(mk));
       }
     } catch (err) {
       setAnalyzeError(err.message || 'Analysis failed.');
@@ -2596,7 +2627,8 @@ function ManualBuilder({ modelBank, onBack, gradeLevel, setGradeLevel, subject, 
                   onDelete={() => deleteQ(q.id)}
                   onMoveUp={() => moveQ(q.id, -1)} onMoveDown={() => moveQ(q.id, 1)}
                   isFirst={i===0} isLast={i===questions.length-1}
-                  modelBank={modelBank} apiKey={apiKey} />
+                  modelBank={modelBank} apiKey={apiKey}
+                  onSaveMarkerToBank={saveMarkerToBank} />
               ))}
 
               <div className="relative">
@@ -3009,22 +3041,27 @@ function AssessmentBuilderInner() {
   const handleSaveToBank = (marker, name) => {
     const inner = marker.replace(/^\[|\]$/g, '').trim();
     const type = inner.split(':')[0].trim();
-    const newItem = { id: Date.now().toString() + Math.random().toString(36).slice(2), marker, name, type };
-    setModelBank(prev => [...prev, newItem]);
+    setModelBank(prev => {
+      if (prev.some(item => item.marker === marker)) return prev; // deduplicate
+      return [...prev, { id: Date.now().toString() + Math.random().toString(36).slice(2), marker, name: name || autoNameMarker(type, inner.slice(inner.indexOf(':') + 1).trim()), type }];
+    });
   };
 
   // Auto-save all markers found in generated text into the Model Bank.
   // Skips duplicates (by exact marker string). Runs after every generation.
+  // Also skips IMAGE markers that contain data: URLs (too large for localStorage).
   const autoSaveMarkersToBank = (text) => {
     const found = [];
     const seen = new Set();
     for (const line of text.split('\n')) {
       const trimmed = line.trim();
       const m = trimmed.match(/^\[([A-Z][A-Z0-9_]*):(.+)\]$/);
-      if (m && !seen.has(trimmed)) {
-        seen.add(trimmed);
-        found.push({ marker: trimmed, type: m[1], spec: m[2].trim() });
-      }
+      if (!m || seen.has(trimmed)) continue;
+      const [, type, spec] = m;
+      // Skip IMAGE markers that embed base64 data (too large for localStorage)
+      if (type === 'IMAGE' && spec.trim().startsWith('data:')) continue;
+      seen.add(trimmed);
+      found.push({ marker: trimmed, type, spec: spec.trim() });
     }
     if (found.length === 0) return;
     setModelBank(prev => {
@@ -3042,6 +3079,26 @@ function AssessmentBuilderInner() {
       setBankSavedCount(toAdd.length);
       setTimeout(() => setBankSavedCount(0), 5000); // clear badge after 5 s
       return [...prev, ...toAdd];
+    });
+  };
+
+  // Save a single marker to the bank immediately (e.g. after Recreate or manual add).
+  // Skips duplicates and data: URL images.
+  const saveMarkerToBank = (marker, nameOverride) => {
+    const inner = marker.replace(/^\[|\]$/g, '').trim();
+    const colonIdx = inner.indexOf(':');
+    const type = colonIdx >= 0 ? inner.slice(0, colonIdx).trim() : inner;
+    const spec = colonIdx >= 0 ? inner.slice(colonIdx + 1).trim() : '';
+    if (type === 'IMAGE' && spec.startsWith('data:')) return; // skip large data URLs
+    setModelBank(prev => {
+      if (prev.some(item => item.marker === marker)) return prev; // already in bank
+      return [...prev, {
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        marker,
+        name: nameOverride || autoNameMarker(type, spec),
+        type,
+        autoSaved: true,
+      }];
     });
   };
 
