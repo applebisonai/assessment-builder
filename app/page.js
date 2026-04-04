@@ -107,32 +107,43 @@ function Base10Blocks({ hundreds=0, tens=0, ones=0 }) {
   );
 }
 
-function NumberLine({ min=0, max=10, step=1, marks=[], label='' }) {
-  const width = 460, pad = 30, h = 60;
+function NumberLine({ min=0, max=10, step=1, marks=[], label='', showJumps=false }) {
+  const width = 460, pad = 30;
+  const lineY = showJumps ? 54 : 30;
+  const svgH = showJumps ? 86 : 60;
+  const arcH = 22;
   const scale = (v) => pad + (v - min) / (max - min) * (width - pad*2);
   const ticks = [];
-  for (let v = min; v <= max; v += step) {
-    ticks.push(v);
-  }
+  for (let v = min; v <= max; v += step) ticks.push(v);
   return (
     <div className="my-3">
       {label && <div className="text-xs text-gray-500 mb-1 font-medium">{label}</div>}
-      <svg width={width} height={h} viewBox={`0 0 ${width} ${h}`} style={{maxWidth:'100%'}}>
+      <svg width={width} height={svgH} viewBox={`0 0 ${width} ${svgH}`} style={{maxWidth:'100%'}}>
+        {/* Jump arcs */}
+        {showJumps && ticks.slice(0, -1).map((v, i) => {
+          const x1 = scale(v), x2 = scale(v + step), mx = (x1 + x2) / 2;
+          return (
+            <g key={`arc-${i}`}>
+              <path d={`M ${x1} ${lineY} Q ${mx} ${lineY - arcH} ${x2} ${lineY}`} fill="none" stroke="#6366f1" strokeWidth="1.5"/>
+              <text x={mx} y={lineY - arcH - 3} textAnchor="middle" fill="#4f46e5" fontSize="10" fontWeight="600">+{step}</text>
+            </g>
+          );
+        })}
         {/* Main line */}
-        <line x1={pad-10} y1={30} x2={width-pad+10} y2={30} stroke="#374151" strokeWidth="2"/>
+        <line x1={pad-10} y1={lineY} x2={width-pad+10} y2={lineY} stroke="#374151" strokeWidth="2"/>
         {/* Arrow ends */}
-        <polygon points={`${pad-10},30 ${pad-2},26 ${pad-2},34`} fill="#374151"/>
-        <polygon points={`${width-pad+10},30 ${width-pad+2},26 ${width-pad+2},34`} fill="#374151"/>
+        <polygon points={`${pad-10},${lineY} ${pad-2},${lineY-4} ${pad-2},${lineY+4}`} fill="#374151"/>
+        <polygon points={`${width-pad+10},${lineY} ${width-pad+2},${lineY-4} ${width-pad+2},${lineY+4}`} fill="#374151"/>
         {/* Ticks */}
         {ticks.map(v => (
           <g key={v}>
-            <line x1={scale(v)} y1={22} x2={scale(v)} y2={38} stroke="#374151" strokeWidth="1.5"/>
-            <text x={scale(v)} y={52} textAnchor="middle" fill="#374151" fontSize="11">{v}</text>
+            <line x1={scale(v)} y1={lineY-8} x2={scale(v)} y2={lineY+8} stroke="#374151" strokeWidth="1.5"/>
+            <text x={scale(v)} y={lineY+22} textAnchor="middle" fill="#374151" fontSize="11">{v}</text>
           </g>
         ))}
         {/* Marked points */}
         {marks.map((m, i) => (
-          <circle key={i} cx={scale(m.value)} cy={30} r={5} fill={m.open ? 'white' : '#6366f1'} stroke="#6366f1" strokeWidth="2"/>
+          <circle key={i} cx={scale(m.value)} cy={lineY} r={5} fill={m.open ? 'white' : '#6366f1'} stroke="#6366f1" strokeWidth="2"/>
         ))}
       </svg>
     </div>
@@ -217,6 +228,63 @@ function MixedNumberBar({ whole, numerator, denominator, label='' }) {
   );
 }
 
+function EqualGroups({ groups=3, items=5 }) {
+  const bgColors = ['#c7d2fe','#fde68a','#bbf7d0','#fecaca','#bfdbfe','#f5d0fe','#fed7aa'];
+  const dotColors = ['#4f46e5','#d97706','#059669','#dc2626','#2563eb','#9333ea','#ea580c'];
+  const boxW = Math.min(88, Math.floor(460 / Math.max(groups, 1)) - 6);
+  const boxH = 72;
+  const totalW = groups * (boxW + 6) + 10;
+  const dotsPerRow = items <= 3 ? items : items <= 6 ? 3 : items <= 8 ? 4 : 5;
+  const rows = Math.ceil(items / dotsPerRow);
+  const dotR = Math.max(3, Math.min(7, Math.floor((boxW - 14) / dotsPerRow / 2) - 1));
+  const dxSp = (boxW - 12) / Math.max(dotsPerRow, 1);
+  const dySp = Math.min(16, (boxH - 12) / Math.max(rows, 1));
+  return (
+    <div className="my-3">
+      <div className="text-xs text-gray-500 mb-1 font-medium">{groups} groups of {items}</div>
+      <svg width={totalW} height={boxH + 20} viewBox={`0 0 ${totalW} ${boxH + 20}`} style={{maxWidth:'100%'}}>
+        {Array.from({length: groups}).map((_, gi) => {
+          const gx = 5 + gi * (boxW + 6);
+          return (
+            <g key={gi}>
+              <rect x={gx} y={0} width={boxW} height={boxH} fill={bgColors[gi % bgColors.length]} stroke="#6366f1" strokeWidth="1.5" rx="8"/>
+              {Array.from({length: items}).map((_, di) => {
+                const col = di % dotsPerRow, row = Math.floor(di / dotsPerRow);
+                const cx = gx + 7 + dxSp * col + dxSp / 2;
+                const cy = 7 + dySp * row + dySp / 2;
+                return <circle key={di} cx={cx} cy={cy} r={dotR} fill={dotColors[gi % dotColors.length]} opacity="0.85"/>;
+              })}
+              <text x={gx + boxW / 2} y={boxH + 14} textAnchor="middle" fill="#374151" fontSize="11">{items}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function ArrayModel({ rows=3, cols=4 }) {
+  const dotR = 8, gap = 5, dotSp = dotR * 2 + gap;
+  const svgW = cols * dotSp + 24, svgH = rows * dotSp + 32;
+  return (
+    <div className="my-3">
+      <div className="text-xs text-gray-500 mb-1 font-medium">{rows} rows × {cols} columns = {rows * cols}</div>
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
+        {Array.from({length: rows}).map((_, r) =>
+          Array.from({length: cols}).map((_, c) => (
+            <circle key={`${r}-${c}`}
+              cx={12 + c * dotSp + dotR}
+              cy={8 + r * dotSp + dotR}
+              r={dotR} fill="#6366f1" opacity="0.72" stroke="#4f46e5" strokeWidth="1"/>
+          ))
+        )}
+        <text x={svgW / 2} y={svgH - 4} textAnchor="middle" fill="#4f46e5" fontSize="11" fontWeight="600">{cols}</text>
+        <text x={6} y={8 + rows * dotSp / 2 + 4} textAnchor="middle" fill="#4f46e5" fontSize="11" fontWeight="600" transform={`rotate(-90, 6, ${8 + rows * dotSp / 2 + 4})`}>{rows}</text>
+      </svg>
+    </div>
+  );
+}
+
 // ─── Visual Model Parser ────────────────────────────────────────────────────
 
 function parseVisualModel(marker) {
@@ -261,7 +329,20 @@ function parseVisualModel(marker) {
     const mx = parseInt(rest.match(/max=(\d+)/)?.[1] || '10');
     const st = parseInt(rest.match(/step=(\d+)/)?.[1] || '1');
     const lbl = rest.match(/label=([^|]+)/)?.[1]?.trim() || '';
-    return <NumberLine min={mn} max={mx} step={st} label={lbl}/>;
+    const showJumps = rest.includes('jumps=yes');
+    return <NumberLine min={mn} max={mx} step={st} label={lbl} showJumps={showJumps}/>;
+  }
+  if (inner.startsWith('GROUPS:')) {
+    const rest = inner.slice('GROUPS:'.length).trim();
+    const g = parseInt(rest.match(/groups=(\d+)/)?.[1] || '3');
+    const it = parseInt(rest.match(/items=(\d+)/)?.[1] || '4');
+    return <EqualGroups groups={Math.min(g, 12)} items={Math.min(it, 12)}/>;
+  }
+  if (inner.startsWith('ARRAY:')) {
+    const rest = inner.slice('ARRAY:'.length).trim();
+    const r = parseInt(rest.match(/rows=(\d+)/)?.[1] || '3');
+    const c = parseInt(rest.match(/cols=(\d+)/)?.[1] || '4');
+    return <ArrayModel rows={Math.min(r, 12)} cols={Math.min(c, 12)}/>;
   }
   if (inner.startsWith('PV_CHART:')) {
     const rest = inner.slice('PV_CHART:'.length).trim();
@@ -531,6 +612,14 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   const [pvNum, setPvNum] = useState(parseInt(rawSpecInit.match(/(\d+)/)?.[1] || '0'));
   // BAR_MODEL / TAPE raw edit
   const [rawSpec, setRawSpec] = useState(rawSpecInit);
+  // GROUPS state
+  const [groupsCount, setGroupsCount] = useState(parseInt(rawSpecInit.match(/groups=(\d+)/)?.[1] || '3'));
+  const [itemsPerGroup, setItemsPerGroup] = useState(parseInt(rawSpecInit.match(/items=(\d+)/)?.[1] || '4'));
+  // ARRAY state
+  const [arrRows, setArrRows] = useState(parseInt(rawSpecInit.match(/rows=(\d+)/)?.[1] || '3'));
+  const [arrCols, setArrCols] = useState(parseInt(rawSpecInit.match(/cols=(\d+)/)?.[1] || '4'));
+  // NUM_LINE jumps
+  const [nlJumps, setNlJumps] = useState(rawSpecInit.includes('jumps=yes'));
 
   if (!modelType) return <>{children}</>;
 
@@ -549,8 +638,9 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
         newMarker = `[BASE10: hundreds=${hundreds} tens=${tens} ones=${ones}]`;
         break;
       case 'NUM_LINE': {
+        const jp = nlJumps ? ' jumps=yes' : '';
         const lp = nlLabel ? ` | label=${nlLabel}` : '';
-        newMarker = `[NUM_LINE: min=${nlMin} max=${nlMax} step=${nlStep}${lp}]`;
+        newMarker = `[NUM_LINE: min=${nlMin} max=${nlMax} step=${nlStep}${jp}${lp}]`;
         break;
       }
       case 'PV_CHART':
@@ -562,6 +652,12 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
       case 'TAPE':
         newMarker = `[TAPE: ${rawSpec}]`;
         break;
+      case 'GROUPS':
+        newMarker = `[GROUPS: groups=${groupsCount} items=${itemsPerGroup}]`;
+        break;
+      case 'ARRAY':
+        newMarker = `[ARRAY: rows=${arrRows} cols=${arrCols}]`;
+        break;
       default:
         newMarker = `[${modelType}: ${rawSpec}]`;
     }
@@ -572,6 +668,7 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
   const TYPE_LABELS = {
     FRACTION: 'Fraction', BASE10: 'Base-10 Blocks', NUM_LINE: 'Number Line',
     PV_CHART: 'Place Value Chart', BAR_MODEL: 'Bar Model', TAPE: 'Tape Diagram',
+    GROUPS: 'Equal Groups', ARRAY: 'Array',
   };
 
   const renderEditor = () => {
@@ -600,7 +697,20 @@ function ModelEditWrapper({ marker, onSave, onRemove, children, invalid }) {
           <label className={labelCls}>Min <input type="number" value={nlMin} onChange={e => setNlMin(parseInt(e.target.value)||0)} className={`${inputCls} w-16`}/></label>
           <label className={labelCls}>Max <input type="number" value={nlMax} onChange={e => setNlMax(parseInt(e.target.value)||10)} className={`${inputCls} w-16`}/></label>
           <label className={labelCls}>Step <input type="number" min="1" value={nlStep} onChange={e => setNlStep(Math.max(1,parseInt(e.target.value)||1))} className={`${inputCls} w-14`}/></label>
+          <label className={`${labelCls} cursor-pointer select-none`}><input type="checkbox" checked={nlJumps} onChange={e => setNlJumps(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600"/> Show jumps</label>
           <label className={labelCls}>Label <input type="text" value={nlLabel} onChange={e => setNlLabel(e.target.value)} className={`${inputCls} w-28 text-left`}/></label>
+        </div>
+      );
+      case 'GROUPS': return (
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className={labelCls}>Groups <input type="number" min="1" max="12" value={groupsCount} onChange={e => setGroupsCount(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+          <label className={labelCls}>Items per group <input type="number" min="1" max="12" value={itemsPerGroup} onChange={e => setItemsPerGroup(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+        </div>
+      );
+      case 'ARRAY': return (
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className={labelCls}>Rows <input type="number" min="1" max="12" value={arrRows} onChange={e => setArrRows(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
+          <label className={labelCls}>Columns <input type="number" min="1" max="12" value={arrCols} onChange={e => setArrCols(Math.max(1,Math.min(12,parseInt(e.target.value)||1)))} className={`${inputCls} w-14`}/></label>
         </div>
       );
       case 'PV_CHART': return (

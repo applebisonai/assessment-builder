@@ -64,7 +64,10 @@ export async function POST(request) {
     // Grade-appropriate visual model guidance
     const visualModelGuide = subject === 'Math' ? `
 
-VISUAL MODELS — place these markers on their OWN LINE immediately before the question they belong to:
+VISUAL MODELS — place these markers on their OWN LINE immediately before the question they belong to.
+
+⚠️ CRITICAL: You may ONLY use these exact 8 marker types. Do NOT invent new types.
+Allowed types: FRACTION, BASE10, NUM_LINE, PV_CHART, BAR_MODEL, TAPE, GROUPS, ARRAY
 
 For NUMBER SENSE / PLACE VALUE questions:
   [BASE10: hundreds=1 tens=2 ones=3]   ← shows base-10 blocks
@@ -76,6 +79,11 @@ For ADDITION / SUBTRACTION / PART-WHOLE:
 
 For COUNTING / NUMBER LINES:
   [NUM_LINE: min=0 max=20 step=2 | label=Count by 2s]
+  [NUM_LINE: min=0 max=20 step=5 jumps=yes]      ← adds hop arcs for skip counting
+
+For MULTIPLICATION / DIVISION — EQUAL GROUPS:
+  [GROUPS: groups=3 items=5]            ← 3 circles each containing 5 dots (use for "groups of" problems)
+  [ARRAY: rows=3 cols=5]                ← 3×5 dot array (use for array/area model problems)
 
 For FRACTIONS — ALWAYS include numerator/denominator with a slash. NEVER write just a whole number like [FRACTION: 7]:
   [FRACTION: 3/4]                       ← simple fraction (numerator/denominator, slash required)
