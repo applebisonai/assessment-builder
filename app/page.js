@@ -574,6 +574,78 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
   );
 }
 
+// ─── Partial Quotients long-division model ────────────────────────────────────
+function PartialQuotients({ dividend, divisor, steps }) {
+  const dvd = parseFloat(dividend) || 0;
+  const dvs = parseFloat(divisor) || 0;
+
+  // Parse "1560:10,1248:8" → [{sub, pq}, ...]
+  const stepList = steps ? String(steps).split(',').map(s => {
+    const [a, b] = s.split(':');
+    return { sub: parseFloat(a) || 0, pq: parseFloat(b) || 0 };
+  }).filter(s => s.sub > 0) : [];
+
+  // Running remainders
+  let running = dvd;
+  const rows = stepList.map(({ sub, pq }) => {
+    const before = running;
+    running -= sub;
+    return { before, sub, pq, after: running };
+  });
+  const quotient = stepList.reduce((s, r) => s + r.pq, 0);
+  const remainder = running;
+
+  // Geometry — monospace ~8px/char at 13px font
+  const ch = 8, fs = 13, rowH = 22, pad = 12;
+  const leftNums = [dvd, ...rows.map(r => r.sub), ...rows.map(r => r.after)];
+  const maxLeft = Math.max(...leftNums.map(n => String(Math.abs(Math.round(n))).length), 1);
+  const numX = pad + ch + maxLeft * ch + 4; // right edge of left column
+  const pqNums = [...rows.map(r => r.pq), quotient];
+  const maxPq = Math.max(...pqNums.map(n => String(Math.round(n)).length), 1);
+  const pqX = numX + 18;
+  const totalW = pqX + maxPq * ch + pad + 4;
+  const sepX = numX + 10;
+  const lineX1 = pad, lineX2 = numX + 4;
+
+  let y = pad;
+  const els = [];
+
+  // Row: divisor label + dividend
+  if (dvs > 0) els.push(<text key="dvs" x={lineX1} y={y + fs} fontSize={10} fill="#64748b" fontFamily="monospace">÷ {dvs}</text>);
+  els.push(<text key="dvd" x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{dvd}</text>);
+  y += rowH;
+
+  rows.forEach(({ sub, pq, after }, i) => {
+    // − sub   pq
+    els.push(<text key={`mi${i}`} x={lineX1} y={y + fs} fontSize={fs} fill="#1e293b" fontFamily="monospace">−</text>);
+    els.push(<text key={`su${i}`} x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{sub}</text>);
+    els.push(<text key={`pq${i}`} x={pqX} y={y + fs} fontSize={fs} fill="#2563eb" fontFamily="monospace">{pq}</text>);
+    y += rowH;
+    // Horizontal rule
+    els.push(<line key={`ln${i}`} x1={lineX1} y1={y - 2} x2={lineX2} y2={y - 2} stroke="#334155" strokeWidth={1.5} />);
+    y += 4;
+    // Remainder
+    els.push(<text key={`re${i}`} x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{Math.round(after * 10000) / 10000}</text>);
+    y += rowH;
+  });
+
+  // Separator above total
+  els.push(<line key="sep" x1={sepX} y1={y - 2} x2={totalW - pad} y2={y - 2} stroke="#334155" strokeWidth={1.5} />);
+  y += 4;
+  els.push(<text key="tot" x={pqX} y={y + fs} fontSize={fs} fill="#1e293b" fontFamily="monospace" fontWeight="700">{quotient}</text>);
+  if (remainder !== 0) {
+    els.push(<text key="rem" x={pqX + maxPq * ch + 4} y={y + fs} fontSize={10} fill="#64748b" fontFamily="monospace">r {Math.round(remainder * 10000) / 10000}</text>);
+  }
+  y += rowH + pad;
+
+  return (
+    <svg width={totalW} height={y} style={{ display: 'block' }}>
+      <line x1={sepX} y1={pad - 2} x2={sepX} y2={y - pad} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,2" />
+      {els}
+    </svg>
+  );
+}
+
 function PlaceValueChart({ number }) {
   const n = String(number || '0');
   const digits = n.split('').reverse();
@@ -870,6 +942,12 @@ function parseVisualModel(marker) {
   if (m.startsWith('[FRACTION_BOX:') || m === '[FRACTION_BOX]') {
     return <FractionBox n={kv.n || ''} d={kv.d || ''} />;
   }
+  if (m.startsWith('[PARTIAL_Q:')) {
+    // steps= contains commas, so use dedicated regex
+    const stepsM = m.match(/\bsteps=([\d.:\-,]+)/);
+    return <PartialQuotients dividend={kv.dividend} divisor={kv.divisor}
+      steps={stepsM ? stepsM[1] : ''} />;
+  }
   if (m.startsWith('[IMAGE:')) {
     return null; // handled separately as paste zone
   }
@@ -884,7 +962,7 @@ function parseAssessment(text) {
   let current = null;
   let inVersionB = false;
   let inAnswerKey = false;
-  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)\s*[:|\]]/i;
+  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|PARTIAL_Q|WORK_SPACE|IMAGE)\s*[:|\]]/i;
 
   const flush = () => { if (current) { questions.push(current); current = null; } };
 
@@ -994,6 +1072,7 @@ const VISUAL_TYPES_LIST = [
   { id: 'BASE10', label: 'Place Value Blocks' },
   { id: 'BAR_MODEL', label: 'Bar Model' },
   { id: 'DATA_TABLE', label: 'Data Table' },
+  { id: 'PARTIAL_Q', label: 'Partial Quotients' },
   { id: 'WORK_SPACE', label: 'Work Space (blank box)' },
   { id: 'custom', label: 'Upload / Paste Image' },
 ];
@@ -1029,16 +1108,22 @@ function VisualParamForm({ type, params, onChange }) {
             </label>
             {params.jumps === 'yes' && (
               <>
-                <label className="text-xs flex flex-col gap-0.5">
-                  <span>Operation</span>
-                  <select value={params.hop_op || '+'} onChange={e => set('hop_op', e.target.value)}
-                    className="border rounded p-1 text-xs w-28">
-                    <option value="+">+ Add</option>
-                    <option value="-">− Subtract</option>
-                    <option value="×">× Multiply</option>
-                    <option value="÷">÷ Divide</option>
-                  </select>
-                </label>
+                {/* Operation model buttons — two groups */}
+                <div className="flex flex-col gap-1 w-full">
+                  <p className="text-xs text-gray-500">Model type</p>
+                  <div className="flex gap-1">
+                    {[{op:'+',label:'+ Add'},{op:'-',label:'− Subtract'},{op:'×',label:'× Multiply'},{op:'÷',label:'÷ Divide'}].map(({op,label}) => {
+                      const active = (params.hop_op || '+') === op;
+                      return (
+                        <button key={op} type="button"
+                          onClick={() => set('hop_op', op)}
+                          className={`flex-1 text-xs py-1 px-1 rounded border font-medium transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 {inp('Amount / Factor', 'hop_size', { type: 'number', min: 0.01, step: 'any', placeholder: '= 1 step' })}
                 {inp('Start at', 'hop_start', { type: 'number', step: 'any', placeholder: 'auto' })}
                 <label className="text-xs flex flex-col gap-0.5">
@@ -1212,6 +1297,64 @@ function VisualParamForm({ type, params, onChange }) {
           </label>
         </div>
       );
+    case 'PARTIAL_Q': {
+      // Parse steps string "sub:pq,sub:pq" → editable rows
+      const raw = params.steps || '';
+      const stepRows = raw.split(',').filter(Boolean).map(s => {
+        const [a, b] = s.split(':');
+        return { sub: a || '', pq: b || '' };
+      });
+      if (stepRows.length === 0) stepRows.push({ sub: '', pq: '' });
+
+      const rebuildSteps = rows =>
+        rows.filter(r => r.sub !== '' || r.pq !== '').map(r => `${r.sub}:${r.pq}`).join(',');
+
+      const updateRow = (i, field, val) => {
+        const next = stepRows.map((r, j) => j === i ? { ...r, [field]: val } : r);
+        onChange({ ...params, steps: rebuildSteps(next) });
+      };
+      const addRow = () => onChange({ ...params, steps: rebuildSteps([...stepRows, { sub: '', pq: '' }]) });
+      const removeRow = i => {
+        const next = stepRows.filter((_, j) => j !== i);
+        onChange({ ...params, steps: rebuildSteps(next.length ? next : [{ sub: '', pq: '' }]) });
+      };
+
+      // Live remainder preview
+      let rem = parseFloat(params.dividend) || 0;
+      const remainders = stepRows.map(({ sub }) => {
+        rem -= parseFloat(sub) || 0;
+        return rem;
+      });
+
+      return (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            {inp('Dividend', 'dividend', { type: 'number', min: 0 })}
+            {inp('Divisor', 'divisor', { type: 'number', min: 1, placeholder: 'optional' })}
+          </div>
+          <p className="text-xs font-medium text-gray-600">Steps</p>
+          <div className="space-y-1">
+            {stepRows.map((row, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <span className="text-xs text-gray-400 w-4">−</span>
+                <input value={row.sub} onChange={e => updateRow(i, 'sub', e.target.value)}
+                  className="border rounded p-1 w-20 text-xs" placeholder="amount" type="number" min={0} />
+                <span className="text-xs text-gray-400">pq:</span>
+                <input value={row.pq} onChange={e => updateRow(i, 'pq', e.target.value)}
+                  className="border rounded p-1 w-16 text-xs" placeholder="quot" type="number" min={0} />
+                {remainders[i] !== undefined && (
+                  <span className="text-xs text-slate-400 ml-1">= {Math.round(remainders[i] * 1000) / 1000}</span>
+                )}
+                <button type="button" onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 text-xs ml-0.5">✕</button>
+              </div>
+            ))}
+            <button type="button" onClick={addRow}
+              className="text-xs text-blue-600 hover:text-blue-800 mt-1">+ Add step</button>
+          </div>
+          <p className="text-xs text-slate-400">Each step: amount subtracted · pq = partial quotient</p>
+        </div>
+      );
+    }
     default: return null;
   }
 }
@@ -1269,6 +1412,12 @@ function paramsToMarker(type, params) {
   if (type === 'DATA_TABLE') {
     const rows = (params.rowsText || '').split('\n').filter(Boolean);
     return `[DATA_TABLE: header=${params.header || 'Category,Count'} | ${rows.join(' | ')}]`;
+  }
+  if (type === 'PARTIAL_Q') {
+    let m = `[PARTIAL_Q: dividend=${params.dividend || 0}`;
+    if (params.divisor) m += ` divisor=${params.divisor}`;
+    if (params.steps) m += ` steps=${params.steps}`;
+    return m + ']';
   }
   return null;
 }
@@ -2511,6 +2660,35 @@ function visualToHtml(marker) {
       }
       t += '</tr>';
     }
+    return t + '</tbody></table>';
+  }
+
+  // ── PARTIAL QUOTIENTS ──
+  if (m.startsWith('PARTIAL_Q:')) {
+    const dvd = parseFloat(gp('dividend') || '0');
+    const dvs = gp('divisor');
+    const stepsM = m.match(/\bsteps=([\d.:\-,]+)/);
+    const stepsStr = stepsM ? stepsM[1] : '';
+    const stepList = stepsStr.split(',').filter(Boolean).map(s => {
+      const [a, b] = s.split(':');
+      return { sub: parseFloat(a)||0, pq: parseFloat(b)||0 };
+    });
+    let running = dvd;
+    const rows = stepList.map(({sub,pq}) => {
+      running -= sub;
+      return { sub, pq, after: running };
+    });
+    const quotient = stepList.reduce((s,r) => s + r.pq, 0);
+    const rem = running;
+    const mono = 'font-family:monospace;font-size:10pt;';
+    let t = `<table style="${tbl}border:none;${mono}"><tbody>`;
+    if (dvs) t += `<tr><td style="border:none;color:#64748b;font-size:8pt">÷ ${dvs}</td><td style="border:none;text-align:right">${dvd}</td><td style="border:none;padding-left:16px"></td></tr>`;
+    else     t += `<tr><td style="border:none"></td><td style="border:none;text-align:right">${dvd}</td><td style="border:none;padding-left:16px"></td></tr>`;
+    rows.forEach(({sub,pq,after}) => {
+      t += `<tr><td style="border:none;text-align:right">−${sub}</td><td style="border:none"></td><td style="border:none;padding-left:16px;color:#2563eb">${pq}</td></tr>`;
+      t += `<tr><td colspan="2" style="border:none;border-top:1.5px solid #334155;text-align:right">${Math.round(after*10000)/10000}</td><td style="border:none"></td></tr>`;
+    });
+    t += `<tr><td style="border:none"></td><td style="border:none"></td><td style="border:none;border-top:1.5px solid #334155;padding-left:16px;font-weight:bold">${quotient}${rem!==0?` r${Math.round(rem*10000)/10000}`:''}</td></tr>`;
     return t + '</tbody></table>';
   }
 
