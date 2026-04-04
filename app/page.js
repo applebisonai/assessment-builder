@@ -185,30 +185,51 @@ function FractionCircle({ n, d }) {
   );
 }
 
-function AreaModel({ cols, rows: rowsStr }) {
+function AreaModel({ cols, rows: rowsStr, vals }) {
   const colVals = (cols || '20,7').split(',').map(s => s.trim());
   const rowVals = (rowsStr || '4').split(',').map(s => s.trim());
-  const cellW = 64, cellH = 44, labelW = 36, labelH = 28;
+  const cellVals = vals ? vals.split(',').map(s => s.trim()) : [];
+  const cellW = 72, cellH = 48, labelW = 40, labelH = 30;
   const W = labelW + colVals.length * cellW + 2;
   const H = labelH + rowVals.length * cellH + 2;
   return (
     <svg width={W} height={H} style={{ display: 'block' }}>
       {colVals.map((cv, ci) => (
-        <text key={ci} x={labelW + ci * cellW + cellW / 2} y={labelH - 6}
-          textAnchor="middle" fontSize={12} fill="#334155">{cv}</text>
+        <text key={ci} x={labelW + ci * cellW + cellW / 2} y={labelH - 8}
+          textAnchor="middle" fontSize={13} fontWeight="600" fill="#334155">{cv}</text>
       ))}
       {rowVals.map((rv, ri) => (
-        <text key={ri} x={labelW - 6} y={labelH + ri * cellH + cellH / 2 + 5}
-          textAnchor="end" fontSize={12} fill="#334155">{rv}</text>
+        <text key={ri} x={labelW - 8} y={labelH + ri * cellH + cellH / 2 + 5}
+          textAnchor="end" fontSize={13} fontWeight="600" fill="#334155">{rv}</text>
       ))}
       {rowVals.map((_, ri) =>
-        colVals.map((_, ci) => (
-          <rect key={`${ri}-${ci}`}
-            x={labelW + ci * cellW} y={labelH + ri * cellH}
-            width={cellW} height={cellH}
-            fill="white" stroke="#334155" strokeWidth={1.5} />
-        ))
+        colVals.map((_, ci) => {
+          const idx = ri * colVals.length + ci;
+          const cellVal = cellVals[idx];
+          const colors = ['#fed7aa', '#fce7f3', '#bbf7d0', '#bfdbfe', '#fef08a'];
+          const fill = cellVal ? colors[ci % colors.length] : 'white';
+          return (
+            <g key={`${ri}-${ci}`}>
+              <rect x={labelW + ci * cellW} y={labelH + ri * cellH}
+                width={cellW} height={cellH}
+                fill={fill} stroke="#334155" strokeWidth={1.5} />
+              {cellVal && (
+                <text x={labelW + ci * cellW + cellW / 2} y={labelH + ri * cellH + cellH / 2 + 5}
+                  textAnchor="middle" fontSize={14} fontWeight="600" fill="#334155">{cellVal}</text>
+              )}
+            </g>
+          );
+        })
       )}
+    </svg>
+  );
+}
+
+function WorkSpace({ height = 80 }) {
+  return (
+    <svg width={380} height={parseInt(height)} style={{ display: 'block' }}>
+      <rect x={1} y={1} width={378} height={parseInt(height) - 2}
+        fill="#fafafa" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="6,4" rx={4} />
     </svg>
   );
 }
@@ -469,7 +490,10 @@ function parseVisualModel(marker) {
     return <FractionCircle n={n} d={d} />;
   }
   if (m.startsWith('[AREA_MODEL:')) {
-    return <AreaModel cols={kv.cols} rows={kv.rows} />;
+    return <AreaModel cols={kv.cols} rows={kv.rows} vals={kv.vals} />;
+  }
+  if (m.startsWith('[WORK_SPACE:') || m === '[WORK_SPACE]') {
+    return <WorkSpace height={kv.height || 80} />;
   }
   if (m.startsWith('[BASE10:')) {
     return <Base10 hundreds={kv.hundreds} tens={kv.tens} ones={kv.ones} />;
@@ -528,7 +552,7 @@ function parseAssessment(text) {
   let current = null;
   let inAnswerKey = false;
   let inVersionB = false;
-  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|IMAGE):/i;
+  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|WORK_SPACE|IMAGE)[:|\]]/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

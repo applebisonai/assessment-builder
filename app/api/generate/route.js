@@ -57,53 +57,80 @@ export async function POST(request) {
 
     // ─── Visual marker reference (shared across prompts) ──────────────────────
     const VISUAL_REFERENCE = `
-VISUAL MARKERS — place on their own line BEFORE the question number.
+VISUAL MARKERS — place on their own line BEFORE the question number or sub-question.
 
-Common types:
+Standard vector types (recreated automatically):
   [ARRAY: rows=R cols=C]
-      Simple dot array. R rows of C dots. No dimension labels unless source has them.
+      Dot array. R rows, C dots per row. No labels unless source shows them.
   [NUM_LINE: min=0 max=M step=S]
-      Number line. Shows numbers at 0 and M only.
+      Number line; numbers shown at 0 and M only.
   [NUM_LINE: min=0 max=M step=S show=all]
-      Number line showing a number at EVERY tick (use only when source labels all ticks).
-  [NUM_LINE: min=0 max=M step=S jumps=yes]
-      Number line with curved hop arcs above each jump.
+      Number line with a label at EVERY tick (only if source labels every tick).
+  [NUM_LINE: min=0 max=M step=S jumps=yes show=all]
+      Number line with curved hop arcs above each jump. Combine with show=all when source shows all labels.
   [GROUPS: groups=G items=I]
-      G ovals, each containing I dots.
+      G ovals, each containing I dots. Use for "groups of" / "equal groups" models.
   [TENS_FRAME: filled=F total=10]
-      Standard 2×5 tens frame with F filled circles.
+      2×5 tens frame with F filled circles.
   [TENS_FRAME: filled=F total=5]
       1×5 five-frame with F filled circles.
   [NUM_BOND: whole=W part1=P1 part2=P2]
-      Three connected circles: top=whole, bottom-left=P1, bottom-right=P2.
+      Three connected circles: top=whole, lower-left=P1, lower-right=P2.
   [NUM_BOND: whole=W part1=P1 part2=?]
-      Number bond with missing second part (student fills in).
+      Number bond with one missing part (student fills in).
   [FRACTION: N/D]
-      Horizontal fraction bar; N of D sections shaded.
+      Horizontal fraction bar shaded N out of D sections.
   [FRAC_CIRCLE: N/D]
-      Fraction circle; N of D sectors shaded.
+      Circle (pie) model shaded N out of D sectors.
   [AREA_MODEL: cols=A,B rows=R]
-      Distributive property rectangle. Interior cells are BLANK for student to fill.
+      Blank area model (multiplication). Cells are EMPTY — student fills in products.
+  [AREA_MODEL: cols=A,B rows=R vals=V1,V2]
+      Area model with products shown inside cells (use for DIVISION models where products are given).
   [BASE10: hundreds=H tens=T ones=O]
       Base-10 block diagram.
   [PV_CHART: NUMBER]
-      Place value chart showing NUMBER in its columns.
+      Place value chart showing NUMBER broken into columns.
+  [BAR_MODEL: v1,v2,...vN]
+      Equal or unequal segmented bar. For "6 equal groups of 4" → [BAR_MODEL: 4,4,4,4,4,4].
   [BAR_MODEL: v1,v2,v3 | label=Total]
-      Segmented bar; optional total label.
+      Bar model with a total label underneath.
   [TAPE: A:labelA,B:labelB | total=T]
-      Tape diagram with labeled segments.
+      Tape diagram with labeled segments and optional total.
   [FUNC_TABLE: pairs=1:3,2:6,3:?,4:? | rule=×3]
-      Input/output table. Use ? for missing values students must find.
-  [DATA_TABLE: header=Category,Count | Apples,5 | Bananas,8]
-      Data table (tally chart, frequency table, survey results).
-  [YES_NO_TABLE: 4×6=24 | 3×8=24 | 5×5=30]
-      Decision table; each row gets a Yes/No bubble pair.
+      Input/output function table. Use ? for blanks students must find.
+  [DATA_TABLE: header=Col1,Col2,Col3 | Row1Val1,Row1Val2,Row1Val3 | Row2Val1,...]
+      Any data table, tally chart, or multi-column reference table.
+      Example: [DATA_TABLE: header=Year,Nikolas,Jayson | Last Year,1362,1948 | This Year,1982,1013]
+  [YES_NO_TABLE: statement1 | statement2 | statement3]
+      Decision table; each statement gets a Yes/No bubble pair.
   [GRID_RESPONSE: cols=4]
-      Bubble-in student answer grid.
-  [NUM_CHART: start=1 end=40 cols=10 shaded=3,6,9,12]
-      Number chart with highlighted cells.
-  [IMAGE:]
-      Placeholder — teacher will paste their own image here.
+      Bubble-in answer grid (one column per digit).
+  [NUM_CHART: start=1 end=100 cols=10 shaded=5,10,15,20]
+      Hundred chart or partial number chart with highlighted cells.
+  [WORK_SPACE]
+      A blank box where students draw or show their work.
+      Use whenever the source has empty drawing space for: "Draw a model", "Show your work",
+      "Use a model to represent", or "Draw an array/number line/etc."
+  [IMAGE: brief description]
+      Teacher-paste placeholder for visuals that cannot be recreated as standard types:
+      illustrations of real objects (bags, apples, animals), bar/line/picture graphs,
+      clocks, rulers, coordinate planes, partial quotients algorithm boxes,
+      complex multi-fraction bar comparisons, geometry diagrams.
+`;
+
+    const VISUAL_SELECTION_GUIDE = `
+CHOOSING THE RIGHT MARKER:
+  • Dot array, star array, triangle array → [ARRAY:]
+  • Ovals/circles with items grouped inside → [GROUPS:]
+  • Number line with arcs/hops → [NUM_LINE: ... jumps=yes]
+  • Bar with labeled equal segments (multiplication/division model) → [BAR_MODEL: v,v,v,v]
+  • Area rectangle for multiplication (blank cells) → [AREA_MODEL: cols=... rows=...]
+  • Area rectangle for division (products shown inside) → [AREA_MODEL: cols=... rows=... vals=...]
+  • Fraction bar segments → [FRACTION: N/D]
+  • Real-world pictures (clipart, photographs) → [IMAGE: description]
+  • Partial quotients long division work → [IMAGE: partial quotients]
+  • Student draw/show-work blank → [WORK_SPACE]
+  • Table of data referenced by questions → [DATA_TABLE: ...]
 `;
 
     // ─── Parallel form system prompt ──────────────────────────────────────────
@@ -127,10 +154,10 @@ RULE 3 — COPY SECTION HEADERS AND DIRECTIONS EXACTLY.
 "Part A: Word Problems" → copy it exactly. It goes on its own line, no number.
 
 RULE 4 — VISUAL MARKERS.
-For EVERY question that has a visual in the source, you MUST include a visual marker.
-Place the marker on its own line IMMEDIATELY BEFORE the question number.
+For EVERY question that has a visual in the source, include the right marker.
+Place markers on their own line IMMEDIATELY BEFORE the question number (or sub-question if the visual is inside a sub-part).
 
-Step A — Identify the visual TYPE from the source.
+Step A — Identify the visual TYPE from the source (see guide below).
 Step B — Write the parallel question text with new numbers.
 Step C — Write the marker with values matching the PARALLEL question's numbers (not the source's).
 
@@ -139,23 +166,27 @@ Example:
   Parallel question is about 3 × 8.
   → Write: [ARRAY: rows=3 cols=8]   then: "3. The array shows ___ × ___."
 
-VISUAL LABEL RULE (critical):
+VISUAL LABEL RULE (critical — prevents answer give-aways):
   ONLY include parameters the source visual actually shows.
-  • Source array has NO dimension labels → output [ARRAY: rows=R cols=C] with no extras.
-  • Source number line shows numbers at EVERY tick → add show=all. If only endpoints → omit show=all.
-  • Source area model interior is BLANK → interior stays blank (student fills it in). NEVER put the product inside.
-  • Source fraction bar has NO fraction text beside it → do NOT add any label.
-  • Source number bond has a missing part → use [NUM_BOND: whole=W part1=P1 part2=?].
-  This rule exists so visuals never give away the answer students are supposed to find.
+  • Array with NO dimension labels → [ARRAY: rows=R cols=C] only, no extras.
+  • Number line labels at EVERY tick → add show=all; only endpoints labeled → omit show=all.
+  • Number line with hop arcs → add jumps=yes.
+  • Area model with BLANK cells (student finds products) → omit vals=. NEVER put products inside blank-cell models.
+  • Area model where products ARE shown (division context) → include vals=V1,V2,...
+  • Fraction bar with no label beside it → no label parameter.
+  • Number bond with a missing part → [NUM_BOND: whole=W part1=P1 part2=?].
+  • Bar model with equal same-value segments → list value N times: [BAR_MODEL: 4,4,4,4,4,4].
 
-For visuals you CANNOT recreate as a standard type (illustrations, bar graphs, clocks, rulers,
-coordinate planes, photographs, complex geometry diagrams):
-  → Output [IMAGE:] as a placeholder. The teacher will paste their own image.
+For "draw/show your work" blank spaces: use [WORK_SPACE] — not [IMAGE:].
+For pictures you cannot recreate (clipart, illustrations, bar graphs, clocks, rulers,
+partial quotients algorithm, multi-fraction bar comparisons, geometry, photographs):
+  → use [IMAGE: brief description].
 
-DO NOT add a visual to questions with none in the source.
-DO NOT add a visual to "explain how/why", "show your work", or "write the fact family" questions.
+DO NOT add any visual to questions that had none in the source.
+DO NOT use [WORK_SPACE] unless the source actually has a blank drawing/work box there.
 
 ${VISUAL_REFERENCE}
+${VISUAL_SELECTION_GUIDE}
 
 RULE 5 — ANSWER CHOICES.
 Recalculate MC choices to match the new numbers. Keep the same structure (one correct + three plausible distractors).
