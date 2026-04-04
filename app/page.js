@@ -241,8 +241,7 @@ function EqualGroups({ groups=3, items=5 }) {
   const dySp = Math.min(16, (boxH - 12) / Math.max(rows, 1));
   return (
     <div className="my-3">
-      <div className="text-xs text-gray-500 mb-1 font-medium">{groups} groups of {items}</div>
-      <svg width={totalW} height={boxH + 20} viewBox={`0 0 ${totalW} ${boxH + 20}`} style={{maxWidth:'100%'}}>
+      <svg width={totalW} height={boxH} viewBox={`0 0 ${totalW} ${boxH}`} style={{maxWidth:'100%'}}>
         {Array.from({length: groups}).map((_, gi) => {
           const gx = 5 + gi * (boxW + 6);
           return (
@@ -254,7 +253,6 @@ function EqualGroups({ groups=3, items=5 }) {
                 const cy = 7 + dySp * row + dySp / 2;
                 return <circle key={di} cx={cx} cy={cy} r={dotR} fill={dotColors[gi % dotColors.length]} opacity="0.85"/>;
               })}
-              <text x={gx + boxW / 2} y={boxH + 14} textAnchor="middle" fill="#374151" fontSize="11">{items}</text>
             </g>
           );
         })}
@@ -265,21 +263,18 @@ function EqualGroups({ groups=3, items=5 }) {
 
 function ArrayModel({ rows=3, cols=4 }) {
   const dotR = 8, gap = 5, dotSp = dotR * 2 + gap;
-  const svgW = cols * dotSp + 24, svgH = rows * dotSp + 32;
+  const svgW = cols * dotSp + 20, svgH = rows * dotSp + 16;
   return (
     <div className="my-3">
-      <div className="text-xs text-gray-500 mb-1 font-medium">{rows} rows × {cols} columns = {rows * cols}</div>
       <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{maxWidth:'100%'}}>
         {Array.from({length: rows}).map((_, r) =>
           Array.from({length: cols}).map((_, c) => (
             <circle key={`${r}-${c}`}
-              cx={12 + c * dotSp + dotR}
+              cx={10 + c * dotSp + dotR}
               cy={8 + r * dotSp + dotR}
               r={dotR} fill="#6366f1" opacity="0.72" stroke="#4f46e5" strokeWidth="1"/>
           ))
         )}
-        <text x={svgW / 2} y={svgH - 4} textAnchor="middle" fill="#4f46e5" fontSize="11" fontWeight="600">{cols}</text>
-        <text x={6} y={8 + rows * dotSp / 2 + 4} textAnchor="middle" fill="#4f46e5" fontSize="11" fontWeight="600" transform={`rotate(-90, 6, ${8 + rows * dotSp / 2 + 4})`}>{rows}</text>
       </svg>
     </div>
   );
