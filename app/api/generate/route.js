@@ -55,103 +55,13 @@ export async function POST(request) {
     const client = new Anthropic({ apiKey });
     const gradeDisplay = gradeLevel === 'K' ? 'Kindergarten' : 'Grade ' + gradeLevel;
 
-    // Determine grade band for age-appropriate instructions
     const gradeNum = gradeLevel === 'K' ? 0 : parseInt(gradeLevel) || 3;
     const isEarlyGrades = gradeNum <= 2;
     const isMidGrades = gradeNum >= 3 && gradeNum <= 5;
     const isUpperGrades = gradeNum >= 6;
 
-    // Grade-appropriate visual model guidance
-    const visualModelGuide = subject === 'Math' ? `
-
-VISUAL MODELS — place these markers on their OWN LINE immediately before the question they belong to.
-
-⚠️ CRITICAL: You may ONLY use these exact 8 marker types. Do NOT invent new types.
-Allowed types: FRACTION, BASE10, NUM_LINE, PV_CHART, BAR_MODEL, TAPE, GROUPS, ARRAY
-
-For NUMBER SENSE / PLACE VALUE questions:
-  [BASE10: hundreds=1 tens=2 ones=3]   ← shows base-10 blocks
-  [PV_CHART: 342]                       ← shows a place value chart
-
-For ADDITION / SUBTRACTION / PART-WHOLE:
-  [BAR_MODEL: 4,6 | label=How many in all?]      ← colored bar segments
-  [TAPE: 4:Group A,6:Group B | brace=yes | total=10]  ← tape diagram with brace
-
-For COUNTING / NUMBER LINES:
-  [NUM_LINE: min=0 max=20 step=2 | label=Count by 2s]
-  [NUM_LINE: min=0 max=20 step=5 jumps=yes]      ← adds hop arcs for skip counting
-
-For MULTIPLICATION / DIVISION — EQUAL GROUPS:
-  [GROUPS: groups=3 items=5]            ← 3 circles each containing 5 dots (use for "groups of" problems)
-  [ARRAY: rows=3 cols=5]                ← 3×5 dot array (use for array/area model problems)
-
-For FRACTIONS — ALWAYS include numerator/denominator with a slash. NEVER write just a whole number like [FRACTION: 7]:
-  [FRACTION: 3/4]                       ← simple fraction (numerator/denominator, slash required)
-  [FRACTION: 1 2/3]                     ← mixed number (whole SPACE numerator/denominator, slash required)
-
-For FRACTION ADDITION (mixed numbers), place TWO fraction markers on separate lines before the question:
-  [FRACTION: 1 2/4]
-  [FRACTION: 2 1/4]
-  What is 1 2/4 + 2 1/4?
-
-MANDATORY WORKFLOW FOR EVERY QUESTION THAT INCLUDES A VISUAL:
-You must follow these 4 steps IN ORDER. Never skip or reverse them.
-
-  STEP A — Choose the visual TYPE for this question (ARRAY, NUM_LINE, GROUPS, FRACTION, etc.)
-  STEP B — Choose the exact VALUES (e.g. rows=4, cols=7)
-  STEP C — Write the marker using those values: [ARRAY: rows=4 cols=7]
-  STEP D — Write the question text using ONLY the numbers already in the marker (4, 7, or 28).
-            Do not introduce any number in the question text that is not in the marker.
-
-This means: you commit to the visual first, then write the question about what you drew.
-NEVER write the question first and then try to fit a visual to it.
-
-TYPE RULES — the word used in the question must match the visual type:
-- Question says "number line" → marker MUST be NUM_LINE
-- Question says "array" → marker MUST be ARRAY
-- Question says "groups of" → marker MUST be GROUPS
-- Question says "fraction bar" or "shaded" → marker MUST be FRACTION
-- Question says "place value chart" → marker MUST be PV_CHART
-- Question says "base-10 blocks" → marker MUST be BASE10
-- NEVER pair a NUM_LINE marker with an array question, or an ARRAY marker with a number line question.
-
-SELF-CHECK — before writing each question with a visual, verify all 3:
-  ✓ The marker type matches the word used in the question ("array" → ARRAY, "number line" → NUM_LINE, etc.)
-  ✓ Every specific number mentioned in the question (factor, groups, rows, step, etc.) appears in the marker
-  ✓ No number appears in the question that is NOT in the marker spec
-
-CORRECT:
-  [ARRAY: rows=4 cols=7]
-  What does the factor 4 tell you about this array?  ← "array" → ARRAY ✓, 4 is in rows= ✓
-
-  [NUM_LINE: min=0 max=30 step=5 jumps=yes]
-  Use the number line to skip count by 5s. What number comes after 25?  ← "number line" → NUM_LINE ✓, step=5 ✓
-
-  [GROUPS: groups=3 items=6]
-  There are 3 equal groups. How many items are in each group?  ← "groups" → GROUPS ✓, 3 matches groups= ✓
-
-WRONG — never do any of these:
-  [ARRAY: rows=3 cols=4]
-  What does the factor 5 tell you about this array?  ← 5 not in marker ✗
-
-  [ARRAY: rows=3 cols=5]
-  Use the number line to find the missing number.  ← wrong visual type ✗
-
-  [NUM_LINE: min=0 max=20 step=4]
-  What does the factor 4 tell you about this array?  ← wrong visual type ✗
-
-FINAL RULE: If you cannot satisfy all 3 self-check conditions, omit the visual entirely.
-A question with no visual is always better than a question with a wrong or misleading visual.
-
-CRITICAL — WHEN TO USE VISUAL MODELS:
-- If the uploaded document contains visual representations (fraction bars, number lines, base-10 blocks, bar models, place value charts, tape diagrams), you MUST include the matching visual model marker on EVERY question that tests the same concept. Match the visual style of the source document.
-- Do NOT skip visuals for questions about fractions, place value, number lines, or part-whole relationships if those visuals appear in the source.
-${isEarlyGrades ? `- K-2: include a visual on EVERY question` : ''}
-${isMidGrades ? `- Grades 3-5: include a visual on every question involving fractions, place value, number lines, or part-whole relationships` : ''}
-${isUpperGrades ? `- Grades 6+: include visuals wherever a diagram clarifies the problem` : ''}
-` : '';
-
-    const systemPrompt = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
+    // ─── PASS 1: Generate clean question text, NO visual markers ───────────────
+    const systemPromptPass1 = `You are an expert ${gradeDisplay} ${subject} teacher creating a high-quality formative assessment.
 
 FORMAT RULES (CRITICAL — follow exactly):
 1. Start with the assessment title on line 1${customTitle ? ` — use exactly this title: "${customTitle}"` : ' (e.g. "3.NBT.1 Place Value Check-In")'}
@@ -166,11 +76,18 @@ FORMAT RULES (CRITICAL — follow exactly):
 6. Add the standard tag on its own line after the question: [3.NBT.A.1]
 7. Do NOT use asterisks, markdown, bold, or special formatting.
 8. Keep language ${isEarlyGrades ? 'very simple and concrete — short sentences, familiar vocabulary' : isMidGrades ? 'clear and grade-appropriate' : 'precise and academic'}.
-${visualModelGuide}
+
+VISUAL REFERENCES — when a question involves a visual model, describe it completely in the question text itself:
+- Instead of relying on a diagram, write the numbers directly into the question.
+- Example: "Look at an array with 4 rows and 6 columns." — NOT just "Look at the array below."
+- Example: "Use a number line that counts by 5s from 0 to 30." — NOT just "Use the number line."
+- Example: "There are 3 groups with 7 items in each group." — NOT just "Use the groups shown."
+- Every number a student needs to answer the question must appear in the question text.
+- Do NOT include any visual marker tags like [ARRAY:], [NUM_LINE:], [GROUPS:], etc. Those will be added automatically in a separate step.
 
 QUESTION QUALITY GUIDELINES:
 - Write exactly ${questionCount} questions for Version A
-- Mix question types: ${isEarlyGrades ? 'mostly open response with visuals, some MC' : 'mix of MC and open response'}
+- Mix question types: ${isEarlyGrades ? 'mostly open response, some MC' : 'mix of MC and open response'}
 - Questions should progress from basic recall → application → reasoning
 - ${isEarlyGrades ? 'Use simple story contexts (e.g. "Sam has 5 apples...") and avoid abstract notation' : 'Use real-world contexts when possible'}
 - ${standard ? 'Focus specifically on standard: ' + standard : 'Cover the key concepts from the uploaded content'}
@@ -183,20 +100,23 @@ ${includeAnswerKey ? `After all questions, write "TEACHER ANSWER KEY" on its own
 - For open response: "2. [Sample answer] — scoring note"
 - Include brief notes on common misconceptions to watch for` : ''}`;
 
-    let userContent;
+    let userContentPass1;
 
     if (fileContent) {
       const isImageFile = ['image/png','image/jpeg','image/gif','image/webp'].includes(fileMediaType);
-      userContent = [
+      userContentPass1 = [
         {
           type: 'text',
           text: `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the content in this file.
 
-STEP 1 — Carefully examine every visual in the document: fraction strips, number lines, base-10 blocks, bar models, place value charts, tape diagrams, and any other math representations.
+Carefully examine the document and identify the key concepts and skills being assessed. For any question that involves a visual (array, number line, groups, fraction, place value, etc.), write the exact numbers into the question text so the question is fully self-contained.
 
-STEP 2 — For every question you write that tests a concept shown visually in the document, place the matching visual model marker on its own line immediately before that question. Use the exact same representation type as the source (e.g. if the source shows fraction strips, use [FRACTION:]; if it shows base-10 blocks, use [BASE10:]). CRITICAL: the marker must use the EXACT values from that specific question — if the question is about 3/4, write [FRACTION: 3/4]; if it's about the number 205, write [BASE10: hundreds=2 tens=0 ones=5]; if the number line counts by 2s to 20, write [NUM_LINE: min=0 max=20 step=2]. Never use placeholder or generic values.
+For example:
+- If the source shows a 4×6 array, write: "Look at an array with 4 rows and 6 columns."
+- If the source shows a number line counting by 3s to 24, write: "Use a number line that counts by 3s from 0 to 24."
+- If the source shows 2 groups of 5, write: "There are 2 groups with 5 items in each group."
 
-STEP 3 — Do not skip visuals. If the source document is heavy with visuals, your assessment should match that density.`
+Do NOT include any marker tags like [ARRAY:] or [NUM_LINE:] in your output. Those are added automatically.`
         },
         {
           type: isImageFile ? 'image' : 'document',
@@ -208,29 +128,90 @@ STEP 3 — Do not skip visuals. If the source document is heavy with visuals, yo
         }
       ];
     } else if (url) {
-      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the lesson content at this URL: ${url}
+      userContentPass1 = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on the lesson content at this URL: ${url}
 
-Analyze the key concepts covered and create questions that assess student understanding of those concepts.`;
+For any question involving a visual, write the exact numbers into the question text so it is self-contained. Do not include any visual marker tags.`;
     } else if (pastedText) {
-      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on this content:
+      userContentPass1 = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''} based on this content:
 
 ${pastedText}
 
-Analyze the key concepts and create questions that assess student understanding.`;
+For any question involving a visual, write the exact numbers into the question text so it is self-contained. Do not include any visual marker tags.`;
     } else {
-      userContent = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''}.
+      userContentPass1 = `Create a ${gradeDisplay} ${subject} assessment${standard ? ' aligned to ' + standard : ''}.
 
-Generate ${questionCount} questions that assess the most important skills for this grade level and subject. Include a variety of question types and difficulty levels.`;
+Generate ${questionCount} questions that assess the most important skills for this grade level and subject. For any question involving a visual, write the exact numbers into the question text. Do not include any visual marker tags.`;
     }
 
-    const response = await client.messages.create({
+    const pass1Response = await client.messages.create({
       model: 'claude-opus-4-5',
       max_tokens: 4000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }]
+      system: systemPromptPass1,
+      messages: [{ role: 'user', content: userContentPass1 }]
     });
 
-    const result = response.content[0].text;
+    const assessmentText = pass1Response.content[0].text;
+
+    // ─── PASS 2: Inject visual markers derived from question text ──────────────
+    // Only run pass 2 for Math assessments
+    if (subject !== 'Math') {
+      return Response.json({ result: assessmentText });
+    }
+
+    const systemPromptPass2 = `You are a visual marker injector for elementary math assessments.
+
+You receive a complete assessment and return it with visual model markers inserted before questions that reference specific math visuals. You do NOT change any question text, answer choices, titles, subtitles, standard tags, or any other content — you ONLY insert marker lines.
+
+ALLOWED MARKER TYPES (use only these — do not invent new types):
+[FRACTION: N/D]                              simple fraction
+[FRACTION: W N/D]                            mixed number (whole, space, fraction)
+[BASE10: hundreds=H tens=T ones=O]           base-10 blocks
+[PV_CHART: NNN]                              place value chart for number NNN
+[NUM_LINE: min=A max=B step=S]               number line
+[NUM_LINE: min=A max=B step=S jumps=yes]     number line with hop arcs
+[BAR_MODEL: N,M | label=text]               bar model
+[TAPE: N:A,M:B | brace=yes | total=T]       tape diagram
+[GROUPS: groups=N items=M]                   equal groups
+[ARRAY: rows=R cols=C]                       dot array
+
+WHEN to insert a marker — look for these exact phrases in the question text:
+- "array" or "rows and columns" → ARRAY
+- "number line" → NUM_LINE
+- "groups" and "items" or "groups of N" → GROUPS
+- "fraction" with a specific fraction like 3/4 → FRACTION
+- "fraction bar" or "shaded" parts → FRACTION
+- "base-10 blocks" → BASE10
+- "place value chart" → PV_CHART
+
+HOW to extract values — use ONLY numbers already written in the question text:
+- "4 rows and 6 columns" → [ARRAY: rows=4 cols=6]
+- "4 rows of 6" → [ARRAY: rows=4 cols=6]
+- "factor 4 … 4 × 7 array" → [ARRAY: rows=4 cols=7]
+- "counts by 5s from 0 to 30" → [NUM_LINE: min=0 max=30 step=5 jumps=yes]
+- "skip count by 3s to 24" → [NUM_LINE: min=0 max=24 step=3 jumps=yes]
+- "3 groups of 7" or "3 groups with 7 items" → [GROUPS: groups=3 items=7]
+- "the fraction 3/4" or "3/4 of the bar" → [FRACTION: 3/4]
+- "1 and 2/3" or "1 2/3" → [FRACTION: 1 2/3]
+- "the number 342 … base-10 blocks" → [BASE10: hundreds=3 tens=4 ones=2]
+- "place value chart … 508" → [PV_CHART: 508]
+
+PLACEMENT: insert the marker on its own line immediately BEFORE the line that starts with the question number (e.g., before "3. ").
+
+DO NOT insert a marker if:
+- The question does not explicitly name a visual type (array, number line, groups, fraction bar, etc.)
+- You cannot find the exact numeric values in the question text
+- The values are ambiguous or missing
+
+Return the COMPLETE assessment text. Only add marker lines — change nothing else.`;
+
+    const pass2Response = await client.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 5000,
+      system: systemPromptPass2,
+      messages: [{ role: 'user', content: assessmentText }]
+    });
+
+    const result = pass2Response.content[0].text;
     return Response.json({ result });
 
   } catch (error) {
