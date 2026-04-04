@@ -262,53 +262,45 @@ function EqualGroups({ groups=3, items=5 }) {
 }
 
 function ArrayModel({ rows=3, cols=4 }) {
-  // A true array: one discrete circle per cell, equal items in every row,
-  // equal items in every column — NO filled rectangle, just individual dots.
-  // Labels along top (columns) and left (rows) make dimensions instantly visible.
-  const cellSize = Math.min(36, Math.max(20, Math.floor(400 / Math.max(cols, rows))));
-  const dotR = Math.floor(cellSize * 0.32);
-  const labelGap = 22; // space reserved for axis labels
-  const pad = 8;
-  const gridW = cols * cellSize;
-  const gridH = rows * cellSize;
-  const totalW = gridW + pad * 2 + labelGap;
-  const totalH = gridH + pad * 2 + labelGap;
-  const dots = [];
+  // A true array: discrete dots arranged in a strict grid.
+  // Every row has exactly `cols` dots. Every column has exactly `rows` dots.
+  // Grid lines make the equal-groups structure immediately visible.
+  // NO SVG marker elements — they cause ID conflicts when multiple arrays
+  // appear on the same page and scramble the dot positions.
+  const cellSize = Math.min(40, Math.max(22, Math.floor(380 / Math.max(cols, rows))));
+  const dotR = Math.max(6, Math.floor(cellSize * 0.3));
+  const pad = 10;
+  const svgW = cols * cellSize + pad * 2;
+  const svgH = rows * cellSize + pad * 2;
+  const elements = [];
+  // Light grid lines so rows and columns are crystal-clear
+  for (let r = 0; r <= rows; r++) {
+    const y = pad + r * cellSize;
+    elements.push(<line key={`hr${r}`} x1={pad} y1={y} x2={pad + cols * cellSize} y2={y} stroke="#c7d2fe" strokeWidth="1"/>);
+  }
+  for (let c = 0; c <= cols; c++) {
+    const x = pad + c * cellSize;
+    elements.push(<line key={`vc${c}`} x1={x} y1={pad} x2={x} y2={pad + rows * cellSize} stroke="#c7d2fe" strokeWidth="1"/>);
+  }
+  // One dot per cell — centered exactly in its cell
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const cx = labelGap + pad + c * cellSize + cellSize / 2;
-      const cy = labelGap + pad + r * cellSize + cellSize / 2;
-      dots.push(
-        <circle key={`${r}-${c}`} cx={cx} cy={cy} r={dotR}
-          fill="#4f46e5" opacity="0.85"/>
+      const cx = pad + c * cellSize + cellSize / 2;
+      const cy = pad + r * cellSize + cellSize / 2;
+      elements.push(
+        <circle key={`d${r}-${c}`} cx={cx} cy={cy} r={dotR} fill="#4f46e5" opacity="0.85"/>
       );
     }
   }
-  // Column count label across the top with arrows
-  const arrowY = labelGap / 2;
-  const gridStartX = labelGap + pad;
-  const gridEndX = labelGap + pad + gridW;
-  const gridStartY = labelGap + pad;
-  const gridEndY = labelGap + pad + gridH;
   return (
     <div className="my-3">
-      <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`} style={{maxWidth:'100%'}}>
-        {/* Column bracket: ←  cols  → along top */}
-        <line x1={gridStartX} y1={arrowY} x2={gridEndX} y2={arrowY} stroke="#6366f1" strokeWidth="1.5" markerStart="url(#al)" markerEnd="url(#ar)"/>
-        <text x={(gridStartX + gridEndX)/2} y={arrowY - 4} textAnchor="middle" fill="#4f46e5" fontSize="10" fontWeight="700">{cols} columns</text>
-        {/* Row bracket: ↑ rows ↓ along left */}
-        <line x1={labelGap/2} y1={gridStartY} x2={labelGap/2} y2={gridEndY} stroke="#6366f1" strokeWidth="1.5" markerStart="url(#au)" markerEnd="url(#ad)"/>
-        <text x={labelGap/2} y={(gridStartY + gridEndY)/2} textAnchor="middle" fill="#4f46e5" fontSize="10" fontWeight="700"
-          transform={`rotate(-90 ${labelGap/2} ${(gridStartY + gridEndY)/2})`}>{rows} rows</text>
-        {/* Arrow marker defs */}
-        <defs>
-          <marker id="al" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M6,0 L0,3 L6,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
-          <marker id="ar" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
-          <marker id="au" markerWidth="6" markerHeight="6" refX="3" refY="6" orient="auto"><path d="M0,6 L3,0 L6,6" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
-          <marker id="ad" markerWidth="6" markerHeight="6" refX="3" refY="0" orient="auto"><path d="M0,0 L3,6 L6,0" fill="none" stroke="#6366f1" strokeWidth="1.2"/></marker>
-        </defs>
-        {dots}
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}
+        style={{maxWidth:'100%', display:'block'}}>
+        {elements}
       </svg>
+      <div style={{fontSize:'11px', color:'#4f46e5', fontWeight:'600', marginTop:'4px'}}>
+        {rows} row{rows!==1?'s':''} × {cols} column{cols!==1?'s':''} = {rows*cols} total
+      </div>
     </div>
   );
 }
@@ -680,6 +672,11 @@ function parseAssessment(text) {
   let titleLine = '';
   let subtitleLine = '';
   let headerParsed = false;
+  // Markers are placed BEFORE the question they belong to in the AI output.
+  // We queue them here and attach them to the NEXT question that starts.
+  // This fixes the bug where markers were attached to the PREVIOUS question
+  // (when currentQ was already active) or dropped entirely (when currentQ was null).
+  let pendingModels = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -693,30 +690,33 @@ function parseAssessment(text) {
     }
 
     // Check for visual model markers (type names may contain digits, e.g. BASE10)
+    // Always queue into pendingModels — they belong to the NEXT question below them.
     const modelMatch = trimmed.match(/^\[([A-Z][A-Z0-9_]*):.+\]$/);
-    if (modelMatch && currentQ) {
-      currentQ.models.push(trimmed);
+    if (modelMatch) {
+      pendingModels.push(trimmed);
       continue;
     }
 
-    // New question
+    // New question — attach any queued markers, then start fresh
     const qMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)/);
     if (qMatch) {
       if (currentQ) questions.push(currentQ);
       headerParsed = true;
       const qText = qMatch[2];
-      // Check if question has inline model
+      // Also handle inline model on the same line as question number
       const inlineModel = qText.match(/\[([A-Z][A-Z0-9_]*):.+\]/);
       const cleanText = inlineModel ? qText.replace(inlineModel[0], '').trim() : qText;
       currentQ = {
         num: parseInt(qMatch[1]),
         text: cleanText,
         choices: [],
-        models: inlineModel ? [inlineModel[0]] : [],
+        // Pending markers come first; inline marker (if any) appended after
+        models: [...pendingModels, ...(inlineModel ? [inlineModel[0]] : [])],
         extra: [],
         standard: '',
         type: 'open'
       };
+      pendingModels = []; // reset — they've been claimed by this question
       continue;
     }
 
@@ -1857,16 +1857,26 @@ export default function AssessmentBuilder() {
   };
 
   const handleInsertFromBank = (marker) => {
+    const lines = currentTabContent.split('\n');
     if (bankTarget !== null) {
-      const lines = currentTabContent.split('\n');
-      const idx = lines.findIndex(l => /^\d+\./.test(l.trim()) && parseInt(l.trim()) === bankTarget);
+      // Insert the marker immediately before the targeted question line.
+      // parseAssessment reads markers as "pending for the next question below",
+      // so placing the marker right before "N. Question text" assigns it to question N.
+      const idx = lines.findIndex(l => {
+        const t = l.trim();
+        return /^\d+[\.\)]/.test(t) && parseInt(t) === bankTarget;
+      });
       if (idx >= 0) {
         lines.splice(idx, 0, marker);
       } else {
+        // Target question not found in text — append to end as a fallback
         lines.push(marker);
       }
-      setEditedSections(prev => ({ ...prev, [outputTab]: lines.join('\n') }));
+    } else {
+      // Bank opened from header (no specific question targeted) — append to end
+      lines.push(marker);
     }
+    setEditedSections(prev => ({ ...prev, [outputTab]: lines.join('\n') }));
     setShowBank(false);
     setBankTarget(null);
   };
