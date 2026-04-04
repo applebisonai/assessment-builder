@@ -1345,47 +1345,369 @@ const PRINT_STYLE = `
 }
 `;
 
+// ─── Visual marker → HTML table (for Google Docs paste) ───────────────────────
+function visualToHtml(marker) {
+  if (!marker) return '';
+  const m = marker.replace(/^\[/, '').replace(/\]$/, '').trim();
+  const gp = key => { const x = m.match(new RegExp(key + '=([^\\s\\]|,]+)')); return x ? x[1] : null; };
+  const tbl = 'border-collapse:collapse;margin:8px 0;';
+  const cell = 'border:1px solid #333;text-align:center;padding:4px;';
+
+  // ── ARRAY ──
+  if (m.startsWith('ARRAY:')) {
+    const R = Math.min(parseInt(gp('rows')) || 3, 12);
+    const C = Math.min(parseInt(gp('cols')) || 3, 12);
+    let t = `<table style="${tbl}border:none"><tbody>`;
+    for (let r = 0; r < R; r++) {
+      t += '<tr>';
+      for (let c = 0; c < C; c++)
+        t += '<td style="border:none;width:18px;height:18px;text-align:center;font-size:13pt;line-height:1;padding:1px">●</td>';
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── NUMBER LINE ──
+  if (m.startsWith('NUM_LINE:')) {
+    const mn = parseFloat(gp('min') ?? '0');
+    const mx = parseFloat(gp('max') ?? '10');
+    const st = parseFloat(gp('step') ?? '1') || 1;
+    const showAll = m.includes('show=all');
+    const jumps = m.includes('jumps=yes');
+    const ticks = [];
+    for (let v = mn; v <= mx + 0.0001; v += st) ticks.push(parseFloat(v.toFixed(4)));
+    const tw = Math.max(22, Math.min(36, Math.floor(320 / ticks.length)));
+    let t = `<table style="${tbl}border:none"><tbody>`;
+    if (jumps) {
+      t += '<tr>' + ticks.slice(0, -1).map(() =>
+        `<td style="border:none;border-bottom:2px solid #333;text-align:center;font-size:9pt;width:${tw}px">⌢</td>`
+      ).join('') + `<td style="border:none;width:${tw / 2}px"></td></tr>`;
+    }
+    // tick row
+    t += '<tr>' + ticks.map((_, i) =>
+      `<td style="border:none;border-left:2px solid #333;border-bottom:2px solid #333;height:10px;width:${tw}px"></td>`
+    ).join('') + '</tr>';
+    // label row
+    t += '<tr>' + ticks.map((v, i) => {
+      const show = showAll || i === 0 || i === ticks.length - 1;
+      return `<td style="border:none;text-align:left;font-size:9pt;padding:1px 0;width:${tw}px">${show ? v : ''}</td>`;
+    }).join('') + '</tr>';
+    return t + '</tbody></table>';
+  }
+
+  // ── GROUPS ──
+  if (m.startsWith('GROUPS:')) {
+    const G = Math.min(parseInt(gp('groups')) || 3, 8);
+    const I = Math.min(parseInt(gp('items')) || 3, 8);
+    const dots = Array(I).fill('●').join(' ');
+    let t = `<table style="${tbl}border:none"><tbody><tr>`;
+    for (let g = 0; g < G; g++) {
+      t += `<td style="border:2px solid #333;border-radius:40px;padding:6px 10px;text-align:center;font-size:11pt">${dots}</td>`;
+      if (g < G - 1) t += '<td style="border:none;width:10px"></td>';
+    }
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── TENS FRAME ──
+  if (m.startsWith('TENS_FRAME:')) {
+    const filled = parseInt(gp('filled') ?? '5');
+    const total = parseInt(gp('total') ?? '10');
+    const cols = total <= 5 ? total : 5;
+    const rows = total <= 5 ? 1 : 2;
+    let count = 0;
+    let t = `<table style="${tbl}"><tbody>`;
+    for (let r = 0; r < rows; r++) {
+      t += '<tr>';
+      for (let c = 0; c < cols; c++) {
+        count++;
+        t += `<td style="${cell}width:26px;height:26px;font-size:14pt;background:${count <= filled ? '#334155' : '#fff'};color:#fff">${count <= filled ? '●' : ''}</td>`;
+      }
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── NUMBER BOND ──
+  if (m.startsWith('NUM_BOND:')) {
+    const whole = gp('whole') ?? '?';
+    const p1 = gp('part1') ?? '?';
+    const p2 = gp('part2') ?? '?';
+    const circle = (v) => `<td style="border:2px solid #333;border-radius:50%;width:40px;height:40px;text-align:center;vertical-align:middle;font-size:13pt;font-weight:bold">${v}</td>`;
+    return `<table style="${tbl}border:none;text-align:center"><tbody>
+      <tr><td style="border:none;width:55px"></td>${circle(whole)}<td style="border:none;width:55px"></td></tr>
+      <tr><td style="border:none;border-top:2px solid #333;border-right:2px solid #333;height:22px"></td><td style="border:none"></td><td style="border:none;border-top:2px solid #333;border-left:2px solid #333;height:22px"></td></tr>
+      <tr>${circle(p1)}<td style="border:none;width:55px"></td>${circle(p2)}</tr>
+    </tbody></table>`;
+  }
+
+  // ── FRACTION BAR ──
+  if (m.startsWith('FRACTION:')) {
+    const frac = m.replace('FRACTION:', '').trim();
+    const [ns, ds] = frac.split('/');
+    const n = parseInt(ns) || 0, d = parseInt(ds) || 1;
+    let t = `<table style="${tbl}"><tbody><tr>`;
+    for (let i = 1; i <= d; i++)
+      t += `<td style="${cell}width:32px;height:28px;background:${i <= n ? '#334155' : '#fff'}"></td>`;
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── FRACTION CIRCLE ──
+  if (m.startsWith('FRAC_CIRCLE:')) {
+    const frac = m.replace('FRAC_CIRCLE:', '').trim();
+    return `<p style="border:2px solid #333;border-radius:50%;width:64px;height:64px;line-height:64px;text-align:center;font-size:10pt;margin:8px 0">${frac}</p>`;
+  }
+
+  // ── AREA MODEL ──
+  if (m.startsWith('AREA_MODEL:')) {
+    const colsRaw = (m.match(/cols=([\d,]+)/) || [])[1] || '10,10';
+    const colVals = colsRaw.split(',');
+    const rowsN = parseInt(gp('rows') ?? '1');
+    const valsRaw = (m.match(/vals=([\d,]+)/) || [])[1];
+    const vals = valsRaw ? valsRaw.split(',') : null;
+    let t = `<table style="${tbl}"><tbody>`;
+    t += '<tr><td style="border:none;width:20px"></td>' +
+      colVals.map(cv => `<td style="${cell}font-weight:bold;background:#f1f5f9;min-width:44px;padding:4px 8px">${cv}</td>`).join('') + '</tr>';
+    for (let r = 0; r < rowsN; r++) {
+      t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 8px">${r + 1}</td>`;
+      colVals.forEach((_, ci) => {
+        const idx = r * colVals.length + ci;
+        const v = vals ? (vals[idx] ?? '') : '';
+        t += `<td style="${cell}min-width:44px;height:36px;padding:6px 12px">${v}</td>`;
+      });
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── BASE-10 BLOCKS ──
+  if (m.startsWith('BASE10:')) {
+    const H = parseInt(gp('hundreds') ?? '0');
+    const T = parseInt(gp('tens') ?? '0');
+    const O = parseInt(gp('ones') ?? '0');
+    let parts = [];
+    if (H) parts.push(`Hundreds: ${Array(H).fill('▪▪▪▪▪▪▪▪▪▪').join(' ')}`);
+    if (T) parts.push(`Tens: ${Array(T).fill('▪▪▪▪▪▪▪▪▪▪').join(' ')}`);
+    if (O) parts.push(`Ones: ${Array(O).fill('▪').join(' ')}`);
+    return `<p style="margin:8px 0;font-size:11pt">${parts.join(' &nbsp;&nbsp; ')}</p>`;
+  }
+
+  // ── PLACE VALUE CHART ──
+  if (m.startsWith('PV_CHART:')) {
+    const num = m.replace('PV_CHART:', '').trim();
+    const digits = num.replace(/,/g, '').split('');
+    const allPlaces = ['Millions','Hundred-Thousands','Ten-Thousands','Thousands','Hundreds','Tens','Ones'];
+    const places = allPlaces.slice(allPlaces.length - digits.length);
+    let t = `<table style="${tbl}"><tbody><tr>`;
+    places.forEach(p => { t += `<td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 6px;font-size:10pt;min-width:44px">${p}</td>`; });
+    t += '</tr><tr>';
+    digits.forEach(d => { t += `<td style="${cell}font-size:16pt;padding:8px 6px;text-align:center">${d}</td>`; });
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── BAR MODEL ──
+  if (m.startsWith('BAR_MODEL:')) {
+    const raw = m.replace('BAR_MODEL:', '').split('|')[0].trim();
+    const labelM = m.match(/label=([^\]]+)/);
+    const label = labelM ? labelM[1].trim() : null;
+    const vals = raw.split(',').map(s => s.trim());
+    let t = `<table style="${tbl}border:none"><tbody><tr>`;
+    vals.forEach(v => {
+      t += `<td style="border:2px solid #333;text-align:center;padding:5px 10px;min-width:36px;font-size:11pt">${v}</td>`;
+    });
+    t += '</tr>';
+    if (label) t += `<tr><td colspan="${vals.length}" style="border:none;text-align:center;font-size:10pt;padding:2px 0">Total: ${label}</td></tr>`;
+    return t + '</tbody></table>';
+  }
+
+  // ── TAPE DIAGRAM ──
+  if (m.startsWith('TAPE:')) {
+    const segsRaw = m.replace('TAPE:', '').split('|')[0].trim();
+    const totalM = m.match(/total=([^\]\s|]+)/);
+    const total = totalM ? totalM[1] : null;
+    const segs = segsRaw.split(',').map(s => s.trim());
+    let t = `<table style="${tbl}border:none"><tbody><tr>`;
+    segs.forEach(seg => {
+      const colonIdx = seg.lastIndexOf(':');
+      const lbl = colonIdx >= 0 ? seg.slice(0, colonIdx) : seg;
+      const val = colonIdx >= 0 ? seg.slice(colonIdx + 1) : '';
+      t += `<td style="border:2px solid #333;text-align:center;padding:4px 10px;min-width:44px"><div style="font-size:9pt;color:#555">${val}</div><div style="font-size:11pt;font-weight:bold">${lbl}</div></td>`;
+    });
+    t += '</tr>';
+    if (total) t += `<tr><td colspan="${segs.length}" style="border:none;text-align:center;font-size:10pt;padding:2px 0">Total: ${total}</td></tr>`;
+    return t + '</tbody></table>';
+  }
+
+  // ── FUNCTION TABLE ──
+  if (m.startsWith('FUNC_TABLE:')) {
+    const pairsM = m.match(/pairs=([\w:,?]+)/);
+    const ruleM = m.match(/rule=([^\]\|]+)/);
+    const pairs = pairsM ? pairsM[1].split(',').map(p => p.split(':')) : [];
+    const rule = ruleM ? ruleM[1].trim() : '';
+    let t = `<table style="${tbl}"><tbody>`;
+    t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 12px">Input</td><td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 12px">Output</td></tr>`;
+    pairs.forEach(([inp, out]) => {
+      t += `<tr><td style="${cell}padding:5px 12px;min-width:48px">${inp ?? ''}</td><td style="${cell}padding:5px 12px;min-width:48px">${out === '?' ? '' : (out ?? '')}</td></tr>`;
+    });
+    if (rule) t += `<tr><td colspan="2" style="${cell}font-size:10pt;background:#f8fafc">Rule: ${rule}</td></tr>`;
+    return t + '</tbody></table>';
+  }
+
+  // ── DATA TABLE ──
+  if (m.startsWith('DATA_TABLE:')) {
+    const rest = m.replace('DATA_TABLE:', '').trim();
+    const parts = rest.split('|').map(p => p.trim());
+    const headerStr = parts[0].replace(/^header=/, '');
+    const headers = headerStr.split(',');
+    const dataRows = parts.slice(1);
+    let t = `<table style="${tbl}"><tbody>`;
+    t += '<tr>' + headers.map(h => `<td style="${cell}font-weight:bold;background:#f1f5f9;padding:4px 8px">${h.trim()}</td>`).join('') + '</tr>';
+    dataRows.forEach(row => {
+      const cells = row.split(',');
+      t += '<tr>' + cells.map(c => `<td style="${cell}padding:4px 8px">${c.trim()}</td>`).join('') + '</tr>';
+    });
+    return t + '</tbody></table>';
+  }
+
+  // ── YES/NO TABLE ──
+  if (m.startsWith('YES_NO_TABLE:')) {
+    const stmts = m.replace('YES_NO_TABLE:', '').split('|').map(s => s.trim()).filter(Boolean);
+    let t = `<table style="${tbl}"><tbody>`;
+    t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;min-width:180px;padding:4px 8px">Statement</td><td style="${cell}font-weight:bold;background:#f1f5f9;width:52px">Yes</td><td style="${cell}font-weight:bold;background:#f1f5f9;width:52px">No</td></tr>`;
+    stmts.forEach(s => {
+      t += `<tr><td style="${cell}padding:4px 8px">${s}</td><td style="${cell}text-align:center;font-size:14pt">○</td><td style="${cell}text-align:center;font-size:14pt">○</td></tr>`;
+    });
+    return t + '</tbody></table>';
+  }
+
+  // ── GRID RESPONSE ──
+  if (m.startsWith('GRID_RESPONSE:')) {
+    const cols = Math.min(parseInt(gp('cols') ?? '4'), 8);
+    let t = `<table style="${tbl}"><tbody>`;
+    t += '<tr>' + Array(cols).fill(0).map(() => `<td style="${cell}width:30px;height:32px;background:#f8fafc"></td>`).join('') + '</tr>';
+    '0123456789'.split('').forEach(d => {
+      t += '<tr>' + Array(cols).fill(0).map(() => `<td style="${cell}width:30px;height:22px;font-size:9pt;text-align:center">○ ${d}</td>`).join('') + '</tr>';
+    });
+    return t + '</tbody></table>';
+  }
+
+  // ── NUMBER CHART ──
+  if (m.startsWith('NUM_CHART:')) {
+    const start = parseInt(gp('start') ?? '1');
+    const end = parseInt(gp('end') ?? '100');
+    const cols = parseInt(gp('cols') ?? '10');
+    const shadedStr = gp('shaded') ?? '';
+    const shaded = new Set(shadedStr.split(',').map(Number).filter(Boolean));
+    let t = `<table style="${tbl}"><tbody>`;
+    for (let num = start; num <= end;) {
+      t += '<tr>';
+      for (let c = 0; c < cols && num <= end; c++, num++) {
+        const hi = shaded.has(num);
+        t += `<td style="${cell}width:22px;font-size:9pt;padding:2px;background:${hi ? '#334155' : '#fff'};color:${hi ? '#fff' : '#000'}">${num}</td>`;
+      }
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── WORK SPACE ──
+  if (m.startsWith('WORK_SPACE')) {
+    return `<table style="${tbl}width:100%"><tbody><tr><td style="border:1px dashed #94a3b8;height:80pt;width:100%">&nbsp;</td></tr></tbody></table>`;
+  }
+
+  // ── IMAGE placeholder ──
+  if (m.startsWith('IMAGE:')) {
+    const desc = m.replace('IMAGE:', '').trim();
+    return `<p style="border:1px dashed #ea580c;padding:6px 10px;color:#ea580c;font-size:10pt;margin:6px 0">[Insert image: ${desc}]</p>`;
+  }
+
+  // Default
+  return `<p style="border:1px dashed #94a3b8;padding:4px 8px;color:#64748b;font-size:9pt;margin:4px 0">[${m}]</p>`;
+}
+
 // ─── Google Docs copy helper ──────────────────────────────────────────────────
 function copyToGoogleDocs(questions) {
-  let html = '<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.6">';
+  // Build HTML that pastes cleanly into Google Docs
+  let html = `<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.8;margin:0;padding:0">`;
+
   questions.forEach(q => {
     if (!q || !q.type) return;
+
     if (q.type === 'header') {
-      html += `<p style="font-weight:bold;text-align:center;margin:12px 0">${q.text}</p>`;
+      html += `<p style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 4px 0">${q.text}</p>`;
+
+    } else if (q.type === 'meta') {
+      html += `<p style="text-align:center;font-size:11pt;color:#555;margin:0 0 12px 0">${q.text}</p>`;
+
+    } else if (q.type === 'section') {
+      html += `<p style="font-weight:bold;margin:16px 0 4px 0;font-size:12pt">${q.text}</p>`;
+
     } else if (q.type === 'vb-divider') {
-      html += `<hr/><p style="font-weight:bold;margin:12px 0">VERSION B</p>`;
+      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">VERSION B</p>`;
+
     } else if (q.type === 'ak-divider') {
-      html += `<hr/><p style="font-weight:bold;margin:12px 0">TEACHER ANSWER KEY</p>`;
+      html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">TEACHER ANSWER KEY</p>`;
+
     } else if (q.type === 'answer-key') {
-      html += `<p style="font-family:monospace;font-size:11pt">${q.text}</p>`;
+      html += `<p style="font-family:monospace;font-size:11pt;margin:0 0 2px 0">${q.text}</p>`;
+
     } else if (q.type === 'question') {
+      html += `<p style="margin:12px 0 2px 0"></p>`;
+
+      // Visual/model — render as actual HTML table/structure
       if (q.marker) {
-        if (q.marker.startsWith('[IMAGE:')) {
-          html += `<p style="border:1px dashed #ea580c;padding:4px 8px;color:#ea580c;font-size:10pt">[Paste your image here]</p>`;
-        } else if (q.marker.startsWith('[WORK_SPACE')) {
-          html += `<p style="border:1px dashed #94a3b8;height:72pt;margin:8px 0">&nbsp;</p>`;
-        } else {
-          html += `<p style="border:1px dashed #94a3b8;padding:4px 8px;color:#64748b;font-size:10pt">[${q.marker}]</p>`;
-        }
+        html += visualToHtml(q.marker);
       }
-      html += `<p style="margin:4px 0"><strong>${q.qNum ? q.qNum + '. ' : ''}</strong>${q.text}</p>`;
-      q.lines?.forEach(l => { html += `<p style="margin:2px 0 2px 16px">${l}</p>`; });
-      q.choices?.forEach(ch => { html += `<p style="margin:2px 0 2px 24px">${ch.letter}) ${ch.text}</p>`; });
-      if (q.standard) html += `<p style="color:#94a3b8;font-size:10pt">${q.standard}</p>`;
+
+      // Question text
+      const numStr = q.qNum ? `<strong>${q.qNum}.</strong> ` : '';
+      html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
+
+      // Sub-lines (multi-part question continuation lines)
+      q.lines?.forEach(l => {
+        html += `<p style="margin:1px 0 1px 20px">${l}</p>`;
+      });
+
+      // Answer choices
+      if (q.choices?.length) {
+        const isSATA = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
+        const bubble = isSATA ? '☐' : '○';
+        q.choices.forEach(ch => {
+          html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
+        });
+      }
+
+      // Standard tag
+      if (q.standard) {
+        html += `<p style="color:#888;font-size:9pt;margin:1px 0">${q.standard}</p>`;
+      }
     }
   });
+
   html += '</body></html>';
 
+  // Plain text fallback
+  const plain = questions
+    .filter(q => q.type === 'question' || q.type === 'header')
+    .map(q => {
+      if (q.type === 'header') return `\n${q.text}\n`;
+      const num = q.qNum ? `${q.qNum}. ` : '';
+      const choices = q.choices?.length
+        ? '\n' + q.choices.map(c => `    ${c.letter}) ${c.text}`).join('\n')
+        : '';
+      return `${num}${q.text || ''}${choices}`;
+    })
+    .join('\n\n');
+
   try {
-    const blob = new Blob([html], { type: 'text/html' });
-    const plain = new Blob([questions.filter(q => q.type === 'question').map(q =>
-      (q.qNum ? q.qNum + '. ' : '') + q.text + (q.choices?.length ? '\n' + q.choices.map(c => `  ${c.letter}) ${c.text}`).join('\n') : '')
-    ).join('\n\n')], { type: 'text/plain' });
-    const item = new ClipboardItem({ 'text/html': blob, 'text/plain': plain });
-    navigator.clipboard.write([item]).catch(() => navigator.clipboard.writeText(plain));
+    const htmlBlob = new Blob([html], { type: 'text/html' });
+    const textBlob = new Blob([plain], { type: 'text/plain' });
+    navigator.clipboard.write([
+      new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })
+    ]).catch(() => navigator.clipboard.writeText(plain).catch(() => {}));
   } catch {
-    navigator.clipboard.writeText(questions.filter(q => q.text).map(q => q.text).join('\n\n')).catch(() => {});
+    navigator.clipboard.writeText(plain).catch(() => {});
   }
+
   window.open('https://docs.google.com/document/create', '_blank');
 }
 
