@@ -666,6 +666,7 @@ function parseVisualModel(marker) {
 // ─── Assessment Parser ──────────────────────────────────────────────────────
 
 function parseAssessment(text) {
+  if (!text || typeof text !== 'string') return { title: '', subtitle: '', questions: [] };
   const lines = text.split('\n');
   const questions = [];
   let currentQ = null;
@@ -697,9 +698,11 @@ function parseAssessment(text) {
       continue;
     }
 
-    // New question — attach any queued markers, then start fresh
-    const qMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)/);
-    if (qMatch) {
+    // New question — attach any queued markers, then start fresh.
+    // \s* allows zero spaces between "1." and the text (some AI outputs omit the space).
+    // Also accept "1:" as a separator for wider compatibility.
+    const qMatch = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/);
+    if (qMatch && parseInt(qMatch[1]) > 0 && parseInt(qMatch[1]) < 200) {
       if (currentQ) questions.push(currentQ);
       headerParsed = true;
       const qText = qMatch[2];
@@ -726,7 +729,7 @@ function parseAssessment(text) {
     // 5 or more options (E, F …) display correctly alongside A–D.
     // O A) text  or  O A. text  or  A) text  or  (A) text
     const choiceMatch = trimmed.match(/^[Oo○◯]\s*([A-Ja-j])[\.\)]\s*(.+)/) ||
-                        trimmed.match(/^([A-Ja-j])[\.\)]\s+(.+)/) ||
+                        trimmed.match(/^([A-Ja-j])[\.\)]\s*(.+)/) ||
                         trimmed.match(/^\(([A-Ja-j])\)\s*(.+)/);
     if (choiceMatch) {
       currentQ.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
@@ -1545,11 +1548,14 @@ function AssessmentPreview({ text, subject, gradeLevel, onModelEdit, onAddImage,
         })}
 
         {/* Empty state */}
-        {questions.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-5xl mb-3">📋</div>
-            <p className="text-gray-500 font-medium">No questions detected yet.</p>
-            <p className="text-sm text-gray-400 mt-1">Switch to Raw Text to see the full output.</p>
+        {questions.length === 0 && text && text.trim().length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-amber-200 bg-amber-50 p-8 text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <p className="text-gray-700 font-semibold mb-1">Questions couldn't be parsed from this output.</p>
+            <p className="text-sm text-gray-500 mb-4">Switch to <strong>📄 Text</strong> view to see the raw output, or <strong>✏️ Raw Edit</strong> to correct the formatting.</p>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 text-left max-h-48 overflow-y-auto">
+              <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap">{text.slice(0, 600)}{text.length > 600 ? '\n...' : ''}</pre>
+            </div>
           </div>
         )}
 
@@ -2399,11 +2405,14 @@ export default function AssessmentBuilder() {
 
   // Parse output sections
   const parseOutput = (text) => {
-    const vBIdx = text.indexOf('VERSION B');
-    const akIdx = text.indexOf('TEACHER ANSWER KEY');
-    const versionA = vBIdx > 0 ? text.slice(0, vBIdx).trim() : (akIdx > 0 ? text.slice(0, akIdx).trim() : text.trim());
-    const versionB = vBIdx > 0 ? (akIdx > vBIdx ? text.slice(vBIdx, akIdx).trim() : text.slice(vBIdx).trim()) : '';
-    const answerKey = akIdx > 0 ? text.slice(akIdx).trim() : '';
+    if (!text) return { versionA: '', versionB: '', answerKey: '' };
+    // Strip an explicit "VERSION A" header line if the AI added one at the top
+    const cleaned = text.replace(/^VERSION A[:\s]*\n/i, '').trim();
+    const vBIdx = cleaned.indexOf('VERSION B');
+    const akIdx = cleaned.indexOf('TEACHER ANSWER KEY');
+    const versionA = vBIdx > 0 ? cleaned.slice(0, vBIdx).trim() : (akIdx > 0 ? cleaned.slice(0, akIdx).trim() : cleaned);
+    const versionB = vBIdx > 0 ? (akIdx > vBIdx ? cleaned.slice(vBIdx, akIdx).trim() : cleaned.slice(vBIdx).trim()) : '';
+    const answerKey = akIdx > 0 ? cleaned.slice(akIdx).trim() : '';
     return { versionA, versionB, answerKey };
   };
 
