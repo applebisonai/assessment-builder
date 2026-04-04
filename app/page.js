@@ -1784,6 +1784,10 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
 
       {isEditing && (
         <div className="border-t border-gray-100 px-4 pb-5 pt-3 space-y-3" onPaste={handlePaste}>
+          {/* Hidden file input */}
+          <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf"
+            onChange={e => { handleImageFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
+
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Question Type</label>
             <select value={q.type} onChange={e => {
@@ -1802,6 +1806,82 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
             </select>
           </div>
 
+          {/* ── Images & Visuals — above the question text so you can see them while writing ── */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-600">Images &amp; Visuals</label>
+              {/* Compact action buttons inline with the label */}
+              <div className="flex items-center gap-1">
+                <button onClick={() => imageInputRef.current?.click()}
+                  title="Upload image or PDF"
+                  className="flex items-center gap-1 text-xs border border-gray-200 text-gray-500 rounded-md px-2 py-0.5 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition">
+                  📁 Upload
+                </button>
+                <button onClick={() => setPasteActive(v => !v)}
+                  title="Paste a copied image (Ctrl+V / ⌘V)"
+                  className={'flex items-center gap-1 text-xs border rounded-md px-2 py-0.5 transition ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:text-indigo-600')}>
+                  📋 Paste
+                </button>
+                <div className="relative">
+                  <button onClick={() => setShowModelPicker(v => !v)}
+                    title="Add a visual from the Model Bank"
+                    className={'flex items-center gap-1 text-xs border rounded-md px-2 py-0.5 transition ' + (showModelPicker ? 'border-violet-400 bg-violet-50 text-violet-700 font-semibold' : 'border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600')}>
+                    📊 Bank {modelBank.length > 0 ? `(${modelBank.length})` : ''}
+                  </button>
+                  {showModelPicker && (
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-40 w-60 max-h-48 overflow-y-auto">
+                      {modelBank.length > 0 ? modelBank.map(item => (
+                        <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
+                          className="w-full text-left text-xs px-2.5 py-1.5 hover:bg-violet-50 hover:text-violet-700 rounded-lg">
+                          <div className="font-medium truncate">{item.name}</div>
+                          <div className="text-gray-400 truncate text-[10px]">{item.marker}</div>
+                        </button>
+                      )) : (
+                        <p className="text-xs text-gray-400 px-2.5 py-2.5 text-center">
+                          No items yet — generate an AI assessment to populate the bank automatically.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {pasteActive && (
+              <p className="mb-2 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 px-2.5 text-center">
+                First copy an image (screenshot / right-click → Copy Image), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere on this card.
+              </p>
+            )}
+
+            {/* Rendered previews of all attached images + visual models */}
+            {(q.models||[]).length > 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-3 overflow-hidden">
+                {(q.models||[]).map((m, mi) => {
+                  const rendered = parseVisualModel(m);
+                  return (
+                    <div key={mi} className="relative group">
+                      {rendered
+                        ? <div className="overflow-x-auto">{rendered}</div>
+                        : <div className="text-xs text-gray-400 italic px-1">{m}</div>}
+                      <button
+                        onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== mi) })}
+                        className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow">
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {(q.models||[]).length === 0 && (
+              <div className="border-2 border-dashed border-gray-200 rounded-xl py-3 text-center text-xs text-gray-400">
+                No image or visual added yet — use the buttons above
+              </div>
+            )}
+          </div>
+
+          {/* Question Text — below visuals so you can write referencing what you see above */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Question Text</label>
             <textarea value={q.text} onChange={e => onUpdate({ text: e.target.value })}
@@ -1855,97 +1935,6 @@ function BuilderQuestionCard({ q, num, isEditing, onToggleEdit, onUpdate, onDele
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           </div>
 
-          {/* ── Add Image / Visual unified panel ── */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Images &amp; Visuals
-            </label>
-            {/* Hidden file input */}
-            <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,application/pdf"
-              onChange={e => { handleImageFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
-
-            {/* Two primary action buttons — always visible */}
-            <div className="flex gap-2 mb-2">
-              <button onClick={() => imageInputRef.current?.click()}
-                className="flex-1 flex items-center justify-center gap-1.5 text-xs border border-gray-200 text-gray-600 rounded-lg px-3 py-2.5 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-600 transition font-medium">
-                <span className="text-base leading-none">📁</span>
-                <span>Upload image or PDF</span>
-              </button>
-              <button
-                onClick={() => setPasteActive(v => !v)}
-                className={'flex-1 flex items-center justify-center gap-1.5 text-xs border rounded-lg px-3 py-2.5 transition font-medium ' + (pasteActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-dashed border-gray-300 text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600')}
-              >
-                <span className="text-base leading-none">📋</span>
-                <span>{pasteActive ? 'Press Ctrl+V / ⌘V now' : 'Paste copied image'}</span>
-              </button>
-            </div>
-
-            {pasteActive && (
-              <p className="mb-2 text-xs text-indigo-500 text-center bg-indigo-50 border border-indigo-200 rounded-lg py-2 px-3">
-                Copy an image first (screenshot, right-click → Copy Image, etc.), then press <strong>Ctrl+V</strong> / <strong>⌘V</strong> anywhere in this card.
-              </p>
-            )}
-
-            {/* Model bank — visible below the buttons */}
-            <div className="relative">
-              <button onClick={() => setShowModelPicker(v => !v)}
-                className={'w-full text-left text-xs border rounded-lg px-3 py-2 transition flex items-center justify-between ' + (showModelPicker ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50')}>
-                <span>📊 {modelBank.length > 0 ? `Add from Model Bank (${modelBank.length} saved)` : 'Model Bank (empty — generate an AI assessment to populate)'}</span>
-                <span className="text-gray-400 ml-2">{showModelPicker ? '▲' : '▼'}</span>
-              </button>
-              {showModelPicker && (
-                <div className="mt-1 bg-white border border-gray-200 rounded-xl shadow-md p-2 z-30 max-h-44 overflow-y-auto">
-                  {modelBank.length > 0 ? modelBank.map(item => (
-                    <button key={item.id} onClick={() => { onUpdate({ models: [...(q.models||[]), item.marker] }); setShowModelPicker(false); }}
-                      className="w-full text-left text-xs px-3 py-2 hover:bg-violet-50 hover:text-violet-700 rounded-lg truncate">{item.name}</button>
-                  )) : (
-                    <p className="text-xs text-gray-400 px-3 py-3 text-center">
-                      No items saved yet. Use the <strong>AI Generate</strong> mode to create an assessment and visuals will be saved here automatically.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Attached images — thumbnails */}
-          {imageMarkers.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-gray-600 mb-1.5">Attached Images</div>
-              <div className="flex flex-wrap gap-3">
-                {imageMarkers.map((m, mi) => {
-                  const src = m.replace(/^\[IMAGE:\s*/, '').replace(/\]$/, '').trim();
-                  const globalIdx = (q.models||[]).indexOf(m);
-                  return (
-                    <div key={mi} className="relative group">
-                      <img src={src} alt={`Image ${mi+1}`}
-                        className="h-24 w-auto max-w-[160px] object-contain rounded-lg border border-gray-200 bg-gray-50" />
-                      <button
-                        onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== globalIdx) })}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow">
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Attached visual markers (non-image) */}
-          {visualMarkers.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {visualMarkers.map((m, mi) => {
-                const globalIdx = (q.models||[]).indexOf(m);
-                return (
-                  <span key={mi} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded-lg">
-                    <span className="truncate max-w-[180px]">{m}</span>
-                    <button onClick={() => onUpdate({ models: (q.models||[]).filter((_,j) => j !== globalIdx) })} className="text-indigo-300 hover:text-red-400 flex-shrink-0">✕</button>
-                  </span>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
     </div>
