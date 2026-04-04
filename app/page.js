@@ -727,7 +727,9 @@ function parseAssessment(text) {
     // If we saw a bare question number on the previous line, this line is the question text
     if (pendingQNum !== null) {
       // Only treat it as question text if it's not itself a new question number or choice
-      const isNewQ = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/);
+      const isNewQ = trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/) ||
+                     trimmed.match(/^(\d+)\s*[—–]\s*(.+)/) ||
+                     trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i);
       const isChoice = trimmed.match(/^([A-Ja-j])[\.\)]\s*(.+)/);
       if (!isNewQ && !isChoice) {
         if (currentQ) questions.push(currentQ);
@@ -750,7 +752,7 @@ function parseAssessment(text) {
 
     // Extract title from first non-empty lines
     // Guard matches all question-number formats so they aren't swallowed as title/subtitle.
-    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/) && !trimmed.match(/^\(\d+\)/) && !trimmed.match(/^Q\.?\s*\d+/i) && !trimmed.match(/^Question\s+\d+/i)) {
+    if (!headerParsed && !trimmed.match(/^\d+[\.\)\:]/) && !trimmed.match(/^\d+\s*[—–]/) && !trimmed.match(/^\(\d+\)/) && !trimmed.match(/^Q\.?\s*\d+/i) && !trimmed.match(/^Question\s+\d+/i)) {
       if (!titleLine) { titleLine = trimmed; continue; }
       if (!subtitleLine && !trimmed.match(/^(version|TEACHER|ANSWER)/i)) { subtitleLine = trimmed; continue; }
     }
@@ -767,8 +769,10 @@ function parseAssessment(text) {
     // Handles many real-world formats:
     //   "1. text"  "1) text"  "1: text"  "1.text" (no space)
     //   "(1) text"  "Q1. text"  "Q. 1. text"  "Question 1. text"
+    //   "1 — text"  "1 – text"  (em/en dash)
     const qMatch =
       trimmed.match(/^(\d+)[\.\)\:]\s*(.+)/) ||
+      trimmed.match(/^(\d+)\s*[—–]\s*(.+)/) ||
       trimmed.match(/^\((\d+)\)\s*(.+)/) ||
       trimmed.match(/^Q\.?\s*(\d+)[\.\)\:]?\s*(.+)/i) ||
       trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s+(.+)/i);
@@ -793,8 +797,9 @@ function parseAssessment(text) {
       continue;
     }
 
-    // Bare question number on its own line (e.g. "1." or "2)") — question text follows
-    const bareQMatch = trimmed.match(/^(\d+)[\.\)\:]?\s*$/);
+    // Bare question number on its own line (e.g. "1." or "2)" or "Question 3") — question text follows
+    const bareQMatch = trimmed.match(/^(\d+)[\.\)\:]?\s*$/) ||
+                       trimmed.match(/^Question\s+(\d+)[\.\)\:]?\s*$/i);
     if (bareQMatch && parseInt(bareQMatch[1]) > 0 && parseInt(bareQMatch[1]) < 200) {
       pendingQNum = parseInt(bareQMatch[1]);
       headerParsed = true;
