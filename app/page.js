@@ -303,8 +303,8 @@ function parseAssessment(text) {
       if (!subtitleLine && !trimmed.match(/^(version|TEACHER|ANSWER)/i)) { subtitleLine = trimmed; continue; }
     }
 
-    // Check for visual model markers
-    const modelMatch = trimmed.match(/^\[([A-Z_]+):.+\]$/);
+    // Check for visual model markers (type names may contain digits, e.g. BASE10)
+    const modelMatch = trimmed.match(/^\[([A-Z][A-Z0-9_]*):.+\]$/);
     if (modelMatch && currentQ) {
       currentQ.models.push(trimmed);
       continue;
@@ -317,7 +317,7 @@ function parseAssessment(text) {
       headerParsed = true;
       const qText = qMatch[2];
       // Check if question has inline model
-      const inlineModel = qText.match(/\[([A-Z_]+):.+\]/);
+      const inlineModel = qText.match(/\[([A-Z][A-Z0-9_]*):.+\]/);
       const cleanText = inlineModel ? qText.replace(inlineModel[0], '').trim() : qText;
       currentQ = {
         num: parseInt(qMatch[1]),
@@ -344,9 +344,9 @@ function parseAssessment(text) {
       continue;
     }
 
-    // Standard tag
+    // Standard tag — exclude visual model markers like [BASE10:], [NUM_LINE:], etc.
     const stdMatch = trimmed.match(/^\[(.+)\]$/);
-    if (stdMatch && !trimmed.match(/^[A-Z_]+:/)) {
+    if (stdMatch && !trimmed.match(/^\[[A-Z][A-Z0-9_]*:/)) {
       currentQ.standard = stdMatch[1];
       continue;
     }
