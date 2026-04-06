@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-
+export const maxDuration = 60;
 export async function POST(request) {
   try {
     let apiKey, gradeLevel, subject, standard, customTitle;
