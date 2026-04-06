@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-
+export const maxDuration = 60;
 const ANALYZE_PROMPT = `You are analyzing a math visual model from a K-5 assessment worksheet.
 
 Look at this image carefully and identify what type of math visual it shows.
