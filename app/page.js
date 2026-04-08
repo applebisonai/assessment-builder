@@ -1401,26 +1401,26 @@ const LETTERS = 'ABCDEFGHIJ'.split('');
 const defaultChoices = () => LETTERS.slice(0, 4).map(l => ({ letter: l, text: '' }));
 
 const VISUAL_TYPES_LIST = [
-  { id: 'none', label: 'None' },
-  { id: 'ARRAY', label: 'Array (dots)' },
-  { id: 'NUM_LINE', label: 'Number Line' },
-  { id: 'GROUPS', label: 'Groups / Ovals' },
-  { id: 'TENS_FRAME', label: 'Tens Frame' },
-  { id: 'NUM_BOND', label: 'Number Bond' },
-  { id: 'FRACTION', label: 'Fraction Bar (proper / improper)' },
+  { id: 'none',        label: 'None' },
+  { id: 'custom',      label: 'UPLOAD / PASTE IMAGE', color: '#b45309' },
+  { id: 'AREA_MODEL',  label: 'Area Model (multi-digit)' },
+  { id: 'ARRAY',       label: 'Array (dots)' },
+  { id: 'BAR_MODEL',   label: 'Bar Model' },
+  { id: 'DATA_TABLE',  label: 'Data Table' },
+  { id: 'FRACTION',    label: 'Fraction Bar (proper / improper)' },
   { id: 'FRAC_CIRCLE', label: 'Fraction Circle (proper / improper)' },
-  { id: 'MIXED_NUM', label: 'Mixed Number Bar' },
-  { id: 'MIXED_CIRCLE', label: 'Mixed Number Circle' },
-  { id: 'MIXED_NUM_BOX', label: 'Mixed Number Response Box' },
-  { id: 'FRACTION_BOX', label: 'Fraction Response Box' },
-  { id: 'AREA_MODEL', label: 'Area Model (multi-digit)' },
-  { id: 'BASE10', label: 'Place Value Blocks' },
-  { id: 'BAR_MODEL', label: 'Bar Model' },
+  { id: 'FRACTION_BOX',label: 'Fraction Response Box' },
   { id: 'FRAC_STRIPS', label: 'Fraction Strips (add / subtract)' },
-  { id: 'DATA_TABLE', label: 'Data Table' },
-  { id: 'PARTIAL_Q', label: 'Partial Quotients' },
-  { id: 'WORK_SPACE', label: 'Work Space (blank box)' },
-  { id: 'custom', label: 'Upload / Paste Image' },
+  { id: 'GROUPS',      label: 'Groups / Ovals' },
+  { id: 'MIXED_NUM',   label: 'Mixed Number Bar' },
+  { id: 'MIXED_CIRCLE',label: 'Mixed Number Circle' },
+  { id: 'MIXED_NUM_BOX',label:'Mixed Number Response Box' },
+  { id: 'NUM_BOND',    label: 'Number Bond' },
+  { id: 'NUM_LINE',    label: 'Number Line' },
+  { id: 'PARTIAL_Q',   label: 'Partial Quotients' },
+  { id: 'BASE10',      label: 'Place Value Blocks' },
+  { id: 'TENS_FRAME',  label: 'Tens Frame' },
+  { id: 'WORK_SPACE',  label: 'Work Space (blank box)' },
 ];
 
 // Default params for visual types that need values to render a visible preview
@@ -2157,7 +2157,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         <p className="text-xs text-gray-500 mb-1">Visual / Model</p>
         <select value={visualType} onChange={e => { const t = e.target.value; setVisualType(t); setVisualParams(VISUAL_TYPE_DEFAULTS[t] || {}); setCustomImg(null); }}
           className="border rounded p-1.5 text-sm w-full mb-2">
-          {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+          {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id} style={vt.color ? { color: vt.color, fontWeight: 'bold' } : {}}>{vt.label}</option>)}
         </select>
 
         {visualType !== 'none' && visualType !== 'custom' && (
@@ -2858,7 +2858,7 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
           <select value={visualType}
             onChange={e => { const t = e.target.value; setVisualType(t); setVisualParams(VISUAL_TYPE_DEFAULTS[t] || {}); setCustomImg(null); setClipMsg(''); }}
             className="border rounded p-1.5 text-sm w-full">
-            {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+            {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id} style={vt.color ? { color: vt.color, fontWeight: 'bold' } : {}}>{vt.label}</option>)}
           </select>
         </div>
 
