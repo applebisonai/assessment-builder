@@ -77,13 +77,14 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
   hopSize = null, hopStart = null, hops = null, hopOp = '+',
   labelFmt = 'decimal', labelAt = null }) {
   const mn = parseFloat(min) || 0, mx = parseFloat(max) || 10;
-  const st = Math.max(parseFloat(step) || 1, 0.0001); // guard against 0-step infinite loop
+  // step = number of equal divisions across the number line (e.g. 4 → ticks at min, 25%, 50%, 75%, max)
+  const numDivs = Math.max(1, Math.min(Math.round(parseFloat(step) || 4), 60));
+  const st = (mx - mn) / numDivs; // actual interval between ticks
 
-  // Build tick positions — use 6 decimal places for decimal step accuracy
+  // Build tick positions — exactly numDivs+1 evenly-spaced ticks
   const ticks = [];
-  const maxTicks = 60; // cap to keep SVG manageable
-  for (let v = mn; v <= mx + st * 0.001 && ticks.length < maxTicks; v = parseFloat((v + st).toFixed(6))) {
-    ticks.push(parseFloat(v.toFixed(6)));
+  for (let i = 0; i <= numDivs; i++) {
+    ticks.push(parseFloat((mn + i * st).toFixed(6)));
   }
 
   // Parse custom label positions (supports fractions: "0, 1/4, 1/2, 3/4, 1")
@@ -849,14 +850,15 @@ function BarModel({ segments, label }) {
 // Shows stacked fraction strips for addition (two colored groups) or
 // subtraction (one group with ✕ marks on crossed-out sections).
 function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
-                      op = '+', cross = 0 }) {
-  const dA  = Math.max(2, Math.min(parseInt(d)   || 4,  24));
-  const dB  = d2 ? Math.max(2, Math.min(parseInt(d2) || dA, 24)) : dA;
-  const aWh = Math.max(0, Math.min(parseInt(aw)  || 0,  10));
-  const aFr = Math.max(0, Math.min(parseInt(an)  || 0,  dA));
-  const bWh = Math.max(0, Math.min(parseInt(bw)  || 0,  10));
-  const bFr = Math.max(0, Math.min(parseInt(bn)  || 0,  dB));
-  const xN  = Math.max(0, Math.min(parseInt(cross)|| 0, dA));
+                      op = '+', cross = 0, crossWh = 0 }) {
+  const dA   = Math.max(2, Math.min(parseInt(d)      || 4,  24));
+  const dB   = d2 ? Math.max(2, Math.min(parseInt(d2) || dA, 24)) : dA;
+  const aWh  = Math.max(0, Math.min(parseInt(aw)     || 0,  10));
+  const aFr  = Math.max(0, Math.min(parseInt(an)     || 0,  dA));
+  const bWh  = Math.max(0, Math.min(parseInt(bw)     || 0,  10));
+  const bFr  = Math.max(0, Math.min(parseInt(bn)     || 0,  dB));
+  const xN   = Math.max(0, Math.min(parseInt(cross)  || 0,  dA));
+  const xWh  = Math.max(0, Math.min(parseInt(crossWh)|| 0,  aWh));
   const isAdd  = String(op).trim() === '+';
   const showB  = bWh > 0 || bFr > 0;
   const hasRHS = isAdd || showB;
@@ -882,16 +884,27 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
   };
 
   // Render one group: wholes + fraction strip
-  // xStart: index from which filled sections become crossed (−1 = no crossing)
-  const renderGroup = (ox, oy, wholes, num, den, col, xStart) => {
+  // xStart: fraction section index from which filled sections become crossed (−1 = none)
+  // xWhStart: whole strip index from which strips become crossed (−1 = none)
+  const renderGroup = (ox, oy, wholes, num, den, col, xStart, xWhStart = -1) => {
     const els = [];
     // Whole strips
     for (let i = 0; i < wholes; i++) {
       const y = oy + i * (SH + GY);
+      const wholeCrossed = xWhStart >= 0 && i >= xWhStart;
+      const wFill   = wholeCrossed ? CX.fill   : col.fill;
+      const wStroke = wholeCrossed ? CX.stroke  : col.stroke;
+      const wText   = wholeCrossed ? CX.text    : col.text;
       els.push(
         <g key={`w${i}`}>
-          <rect x={ox} y={y} width={SW} height={SH} fill={col.fill} stroke={col.stroke} strokeWidth={1.5} rx={2} />
-          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={col.text}>1</text>
+          <rect x={ox} y={y} width={SW} height={SH} fill={wFill} stroke={wStroke} strokeWidth={1.5} rx={2} />
+          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={wText}>1</text>
+          {wholeCrossed && (
+            <>
+              <line x1={ox+4} y1={y+4} x2={ox+SW-4} y2={y+SH-4} stroke="#dc2626" strokeWidth={2}/>
+              <line x1={ox+SW-4} y1={y+4} x2={ox+4} y2={y+SH-4} stroke="#dc2626" strokeWidth={2}/>
+            </>
+          )}
         </g>
       );
     }
@@ -926,13 +939,14 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
     return els;
   };
 
-  // For subtraction: cross out the last xN filled sections
-  const crossStart = !isAdd && xN > 0 ? aFr - xN : -1;
+  // For subtraction: cross out the last xN filled fraction sections + last xWh whole strips
+  const crossStart  = !isAdd && xN  > 0 ? aFr - xN  : -1;
+  const crossWhStart = !isAdd && xWh > 0 ? aWh - xWh : -1;
 
   return (
     <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block', maxWidth: '100%' }}>
       {/* Group A */}
-      {renderGroup(PAD, PAD, aWh, aFr, dA, CA, crossStart)}
+      {renderGroup(PAD, PAD, aWh, aFr, dA, CA, crossStart, crossWhStart)}
       {/* Operator */}
       {hasRHS && (
         <text x={PAD + SW + OPW / 2} y={svgH / 2 + 7}
@@ -1159,7 +1173,7 @@ function parseVisualModel(marker) {
   }
   if (m.startsWith('[FRAC_STRIPS:')) {
     return <FracStrips aw={kv.aw} an={kv.an} d={kv.d} bw={kv.bw} bn={kv.bn} d2={kv.bd}
-      op={kv.op || '+'} cross={kv.cross} />;
+      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crossWh} />;
   }
   if (m.startsWith('[TAPE:')) {
     const pipeIdx = kvPart.indexOf('|');
@@ -1425,9 +1439,9 @@ const VISUAL_TYPES_LIST = [
 
 // Default params for visual types that need values to render a visible preview
 const VISUAL_TYPE_DEFAULTS = {
-  FRAC_STRIPS: { aw: '0', an: '3', d: '4', op: '+', bw: '0', bn: '3', d2: '', cross: '0' },
+  FRAC_STRIPS: { aw: '0', an: '3', d: '4', op: '+', bw: '0', bn: '3', d2: '', cross: '0', crossWh: '0' },
   ARRAY:       { rows: '3', cols: '4' },
-  NUM_LINE:    { min: '0', max: '10', step: '1' },
+  NUM_LINE:    { min: '0', max: '10', step: '4' },
   GROUPS:      { groups: '3', each: '4' },
   TENS_FRAME:  { filled: '7' },
   FRACTION:    { n: '3', d: '4' },
@@ -1454,7 +1468,7 @@ function VisualParamForm({ type, params, onChange }) {
           <div className="flex flex-wrap gap-2 items-center">
             {inp('Min', 'min', { type: 'number', step: 'any' })}
             {inp('Max', 'max', { type: 'number', step: 'any' })}
-            {inp('Step', 'step', { type: 'number', min: 0.01, step: 'any', placeholder: '1' })}
+            {inp('Divisions', 'step', { type: 'number', min: 1, max: 60, step: '1', placeholder: '4' })}
           </div>
           {/* Label positions */}
           <div className="space-y-1">
@@ -1714,10 +1728,13 @@ function VisualParamForm({ type, params, onChange }) {
           </div>
           {/* Cross out (subtraction only) */}
           {!isAddOp && (
-            <div className="space-y-1 bg-red-50 rounded p-2">
+            <div className="space-y-2 bg-red-50 rounded p-2">
               <p className="text-xs font-semibold text-red-700">Cross out (subtraction):</p>
-              {inp('Sections to ✕', 'cross', { type:'number', min:0 })}
-              <p className="text-xs text-slate-500">Crosses out the last N filled sections of Group A with red ✕ marks. Set to 0 for none.</p>
+              <div className="flex gap-2 flex-wrap">
+                {inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })}
+                {inp('Fraction sections to ✕', 'cross', { type:'number', min:0, placeholder:'0' })}
+              </div>
+              <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red ✕ marks.</p>
             </div>
           )}
         </div>
@@ -1805,7 +1822,7 @@ function paramsToMarker(type, params) {
   if (type === 'WORK_SPACE') return '[WORK_SPACE]';
   if (type === 'ARRAY') return `[ARRAY: rows=${params.rows || 3} cols=${params.cols || 4}]`;
   if (type === 'NUM_LINE') {
-    let m = `[NUM_LINE: min=${params.min ?? 0} max=${params.max ?? 20} step=${params.step ?? 1}`;
+    let m = `[NUM_LINE: min=${params.min ?? 0} max=${params.max ?? 20} step=${params.step ?? 4}`;
     if (params.jumps === 'yes') {
       m += ' jumps=yes';
       if (params.hops && String(params.hops).trim()) {
@@ -1861,6 +1878,7 @@ function paramsToMarker(type, params) {
       m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
       if (params.d2 && params.d2 !== params.d) m += ` bd=${params.d2}`;
     } else {
+      if (params.crossWh && parseInt(params.crossWh) > 0) m += ` crossWh=${params.crossWh}`;
       if (params.cross && parseInt(params.cross) > 0) m += ` cross=${params.cross}`;
       if (params.bw || params.bn) m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
     }
