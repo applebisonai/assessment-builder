@@ -2977,7 +2977,7 @@ function MathLine({ text, className = '' }) {
 }
 
 // ─── Assessment Preview ────────────────────────────────────────────────────────
-function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, onRegen, regenningIdx, twoColChoices = false }) {
+function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, onRegen, onDelete, regenningIdx, twoColChoices = false }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [editText, setEditText] = useState('');
   const [activeVersion, setActiveVersion] = useState('A');
@@ -3003,6 +3003,22 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
     onQuestionEdit(qIdx, { ...q, choices: newChoices });
     setEditingChoiceIdx(null);
   };
+  // Type editing
+  const [editingTypeIdx, setEditingTypeIdx] = useState(null);
+  const changeType = (origIdx, q, newType) => {
+    const wasMulti = q.qType === 'mc' || q.qType === 'multiselect';
+    const isMulti = newType === 'mc' || newType === 'multiselect';
+    const updatedQ = { ...q, qType: newType };
+    if (isMulti && !wasMulti) updatedQ.choices = defaultChoices();
+    else if (!isMulti && wasMulti) updatedQ.choices = [];
+    onQuestionEdit(origIdx, updatedQ);
+    setEditingTypeIdx(null);
+  };
+  // Answer editing
+  const [editingAnswerIdx, setEditingAnswerIdx] = useState(null);
+  const [editAnswerText, setEditAnswerText] = useState('');
+  const startAnswerEdit = (origIdx, answer) => { setEditingAnswerIdx(origIdx); setEditAnswerText(answer || ''); setEditingTypeIdx(null); setEditingIdx(null); setEditingChoiceIdx(null); };
+  const saveAnswer = (origIdx, q) => { onQuestionEdit(origIdx, { ...q, answer: editAnswerText }); setEditingAnswerIdx(null); };
 
   // Map from visibleQs index to original questions index (used for onQuestionEdit/onRegen callbacks)
   const origIdxMap = visibleQs.map(vq => questions.indexOf(vq));
@@ -3176,8 +3192,44 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                   );
                 })()}
 
+                {/* Type picker — shown when ⇄ Change Type is clicked */}
+                {editingTypeIdx === idx && onQuestionEdit && (
+                  <div className="mt-2 no-print">
+                    <p className="text-xs text-gray-500 mb-1 font-medium">Select question type:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {Q_TYPES.map(qt => (
+                        <button key={qt.id} type="button"
+                          onClick={() => changeType(idx, q, qt.id)}
+                          className={`text-xs border rounded px-2 py-1 transition-colors ${q.qType === qt.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700'}`}>
+                          {qt.label}
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => setEditingTypeIdx(null)}
+                        className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-400 hover:bg-gray-50 ml-1">✕</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline answer display / edit */}
+                {editingAnswerIdx === idx ? (
+                  <div className="mt-2 flex gap-1.5 items-center no-print">
+                    <span className="text-xs font-semibold text-green-700 shrink-0">Answer:</span>
+                    <input value={editAnswerText} onChange={e => setEditAnswerText(e.target.value)}
+                      autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') saveAnswer(idx, q); if (e.key === 'Escape') setEditingAnswerIdx(null); }}
+                      className="flex-1 border border-green-300 rounded px-2 py-0.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-green-200" />
+                    <button type="button" onClick={() => saveAnswer(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-0.5 hover:bg-green-700">Save</button>
+                    <button type="button" onClick={() => setEditingAnswerIdx(null)} className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-500 hover:bg-gray-50">✕</button>
+                  </div>
+                ) : q.answer && onQuestionEdit ? (
+                  <div className="mt-1 text-xs text-green-700 no-print flex items-center gap-1">
+                    <span className="font-semibold">✓ Answer:</span> <span>{q.answer}</span>
+                    <button type="button" onClick={() => startAnswerEdit(idx, q.answer)} className="ml-1 text-blue-400 hover:text-blue-600">✏</button>
+                  </div>
+                ) : null}
+
                 {/* Action toolbar — no-print, always visible (not hover-dependent) */}
-                {(onEdit || onQuestionEdit || onRegen) && editingIdx !== idx && (
+                {(onEdit || onQuestionEdit || onRegen || onDelete) && editingIdx !== idx && editingTypeIdx !== idx && (
                   <div className="flex gap-1.5 mt-3 flex-wrap no-print">
                     {onEdit && (
                       <button type="button"
@@ -3193,6 +3245,20 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         ✏ Edit Text
                       </button>
                     )}
+                    {onQuestionEdit && (
+                      <button type="button"
+                        onClick={() => { setEditingTypeIdx(idx); setEditingIdx(null); setEditingAnswerIdx(null); setEditingChoiceIdx(null); }}
+                        className="text-xs border rounded px-2 py-0.5 text-purple-600 border-purple-200 bg-white hover:bg-purple-50 transition-colors">
+                        ⇄ Change Type
+                      </button>
+                    )}
+                    {onQuestionEdit && (
+                      <button type="button"
+                        onClick={() => startAnswerEdit(idx, q.answer)}
+                        className="text-xs border rounded px-2 py-0.5 text-green-600 border-green-200 bg-white hover:bg-green-50 transition-colors">
+                        ✓ Edit Answer
+                      </button>
+                    )}
                     {onRegen && (
                       <button type="button"
                         onClick={() => onRegen(idx)}
@@ -3203,6 +3269,13 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                             : 'text-gray-400 border-gray-200 bg-white hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50'
                         }`}>
                         {regenningIdx === idx ? '↺ Regenerating…' : '↺ Regenerate'}
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button type="button"
+                        onClick={() => onDelete(idx)}
+                        className="text-xs border rounded px-2 py-0.5 text-red-400 border-red-200 bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors ml-auto">
+                        🗑 Delete
                       </button>
                     )}
                   </div>
@@ -4791,6 +4864,7 @@ export default function AssessmentBuilder() {
                       onEdit={handleEditVisual}
                       onQuestionEdit={(idx, updatedQ) => handleQuestionEdit(updatedQ)}
                       onRegen={(idx) => handleRegenQuestion(idx + off)}
+                      onDelete={(idx) => setQuestions(prev => prev.filter((_, i) => i !== idx + off))}
                       regenningIdx={regenningIdx != null ? regenningIdx - off : null}
                     />
                   );
