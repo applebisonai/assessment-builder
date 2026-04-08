@@ -108,14 +108,17 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
 
   if (hasArcs) {
     if (hops && String(hops).trim()) {
-      // Custom "from:to" pairs — label derived from difference
+      // Custom "from:to" pairs — supports fractions (1/4), mixed numbers (1 1/4), and decimals
       hopPairs = String(hops).split(',').map(s => {
-        const [a, b] = s.split(':').map(Number);
+        const parts = s.split(':');
+        const a = parseFracStr(parts[0]);
+        const b = parseFracStr(parts[1]);
         return [a, b];
       }).filter(([a, b]) => !isNaN(a) && !isNaN(b));
       hopPairs.forEach(([a, b]) => {
-        const diff = parseFloat((b - a).toFixed(4));
-        hopLabels.push(diff >= 0 ? `+${diff}` : `−${Math.abs(diff)}`);
+        const diff = parseFloat((b - a).toFixed(6));
+        const diffStr = labelFmt === 'fraction' ? toFrac(Math.abs(diff)) : String(parseFloat(Math.abs(diff).toFixed(4)));
+        hopLabels.push(diff >= 0 ? `+${diffStr}` : `−${diffStr}`);
       });
     } else if (hopSize) {
       const hs = parseFloat(hopSize);
@@ -1103,6 +1106,144 @@ function NumberChart({ start = 1, end = 100, cols = 10, shaded = '' }) {
   );
 }
 
+// ─── Volume 3D (Rectangular Prism) ────────────────────────────────────────────
+function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h }) {
+  const L = Math.min(Math.max(parseInt(l) || 3, 1), 8);
+  const W = Math.min(Math.max(parseInt(w) || 2, 1), 8);
+  const H = Math.min(Math.max(parseInt(h) || 2, 1), 8);
+  const showFormula = formula !== 'no';
+  const s = 22;
+  const off_x = W * s + 32;
+  const off_y = H * s + 18;
+  const X = (i, j) => (i - j) * s + off_x;
+  const Y = (i, j, k) => (i + j) * s * 0.5 - k * s + off_y;
+  const P = (i, j, k) => `${X(i, j)},${Y(i, j, k)}`;
+  const svgW = (L + W) * s + 64;
+  const svgH = H * s + (L + W) * s * 0.5 + 48 + (showFormula ? 22 : 0);
+  const frontPts = `${P(0,0,0)} ${P(L,0,0)} ${P(L,0,H)} ${P(0,0,H)}`;
+  const rightPts = `${P(L,0,0)} ${P(L,W,0)} ${P(L,W,H)} ${P(L,0,H)}`;
+  const topPts   = `${P(0,0,H)} ${P(L,0,H)} ${P(L,W,H)} ${P(0,W,H)}`;
+  const gridLines = [];
+  let gk = 0;
+  for (let i = 1; i < L; i++) gridLines.push(<line key={gk++} x1={X(i,0)} y1={Y(i,0,0)} x2={X(i,0)} y2={Y(i,0,H)} stroke="#93c5fd" strokeWidth={0.8} />);
+  for (let k = 1; k < H; k++) gridLines.push(<line key={gk++} x1={X(0,0)} y1={Y(0,0,k)} x2={X(L,0)} y2={Y(L,0,k)} stroke="#93c5fd" strokeWidth={0.8} />);
+  for (let j = 1; j < W; j++) gridLines.push(<line key={gk++} x1={X(L,j)} y1={Y(L,j,0)} x2={X(L,j)} y2={Y(L,j,H)} stroke="#60a5fa" strokeWidth={0.8} />);
+  for (let k = 1; k < H; k++) gridLines.push(<line key={gk++} x1={X(L,0)} y1={Y(L,0,k)} x2={X(L,W)} y2={Y(L,W,k)} stroke="#60a5fa" strokeWidth={0.8} />);
+  for (let i = 1; i < L; i++) gridLines.push(<line key={gk++} x1={X(i,0)} y1={Y(i,0,H)} x2={X(i,W)} y2={Y(i,W,H)} stroke="#bfdbfe" strokeWidth={0.8} />);
+  for (let j = 1; j < W; j++) gridLines.push(<line key={gk++} x1={X(0,j)} y1={Y(0,j,H)} x2={X(L,j)} y2={Y(L,j,H)} stroke="#bfdbfe" strokeWidth={0.8} />);
+  const decLbl = s => String(s || '').replace(/_/g, ' ');
+  const lx = X(L/2, 0), ly = Y(L/2, 0, 0) + 15;
+  const wx = X(L, W/2) + 12, wy = Y(L, W/2, 0) + 4;
+  const hx = X(0, 0) - 10, hy = Y(0, 0, H/2);
+  const vol = L * W * H;
+  return (
+    <svg width={svgW} height={svgH} style={{ display: 'block' }}>
+      <polygon points={frontPts} fill="#dbeafe" stroke="none" />
+      <polygon points={rightPts} fill="#bfdbfe" stroke="none" />
+      <polygon points={topPts}   fill="#eff6ff" stroke="none" />
+      {gridLines}
+      <polygon points={frontPts} fill="none" stroke="#2563eb" strokeWidth={1.5} />
+      <polygon points={rightPts} fill="none" stroke="#1d4ed8" strokeWidth={1.5} />
+      <polygon points={topPts}   fill="none" stroke="#3b82f6" strokeWidth={1.5} />
+      <text x={lx} y={ly} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{decLbl(lbl_l) || `l = ${L}`}</text>
+      <text x={wx} y={wy} textAnchor="start" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_w) || `w = ${W}`}</text>
+      <text x={hx} y={hy} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>
+      {showFormula && (
+        <text x={svgW / 2} y={svgH - 6} textAnchor="middle" fontSize={11} fill="#1e3a8a">
+          {`V = ${L} × ${W} × ${H} = ${vol} cubic units`}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+// ─── 2D Shape with side labels ────────────────────────────────────────────────
+function Shape2D({ shape, labels, color }) {
+  const shapeId = shape || 'rectangle';
+  const fillColor = color || '#dbeafe';
+  const W = 220, H = 190;
+  const cx = W / 2, cy = H / 2;
+  const scl = 82;
+  const decLbl = s => String(s || '').replace(/_/g, ' ');
+
+  const regPts = (n, r = 0.42) => Array.from({ length: n }, (_, i) => {
+    const a = (2 * Math.PI * i / n) - Math.PI / 2;
+    return [r * Math.cos(a), r * Math.sin(a)];
+  });
+
+  const DEFS = {
+    equilateral:   [[0,-0.47],[0.41,0.24],[-0.41,0.24]],
+    right:         [[-0.45,0.35],[0.45,0.35],[-0.45,-0.40]],
+    isosceles:     [[0,-0.47],[0.38,0.35],[-0.38,0.35]],
+    square:        [[-0.38,-0.38],[0.38,-0.38],[0.38,0.38],[-0.38,0.38]],
+    rectangle:     [[-0.47,-0.28],[0.47,-0.28],[0.47,0.28],[-0.47,0.28]],
+    rhombus:       [[0,-0.45],[0.35,0],[0,0.45],[-0.35,0]],
+    parallelogram: [[-0.25,-0.28],[0.47,-0.28],[0.25,0.28],[-0.47,0.28]],
+    quadrilateral: [[-0.38,-0.35],[0.45,-0.25],[0.30,0.40],[-0.45,0.28]],
+    pentagon:      regPts(5),
+    hexagon:       regPts(6, 0.40),
+    octagon:       regPts(8, 0.38),
+  };
+
+  if (shapeId === 'circle') {
+    const r = 64;
+    const lbls = String(labels || '').split(',').map(s => decLbl(s.trim()));
+    return (
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        <circle cx={cx} cy={cy} r={r} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
+        {lbls[0] && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[0]}</text>}
+        {lbls[1] && <text x={cx + r + 10} y={cy} textAnchor="start" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[1]}</text>}
+      </svg>
+    );
+  }
+  if (shapeId === 'oval') {
+    const rx = 80, ry = 50;
+    const lbls = String(labels || '').split(',').map(s => decLbl(s.trim()));
+    return (
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
+        {lbls[0] && <text x={cx} y={cy - ry - 10} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[0]}</text>}
+        {lbls[1] && <text x={cx + rx + 10} y={cy} textAnchor="start" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[1]}</text>}
+      </svg>
+    );
+  }
+
+  const rawPts = DEFS[shapeId] || DEFS.rectangle;
+  const svgPts = rawPts.map(([nx, ny]) => ({ x: cx + nx * scl, y: cy + ny * scl }));
+  const polyPts = svgPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const n = svgPts.length;
+  const centX = svgPts.reduce((s, p) => s + p.x, 0) / n;
+  const centY = svgPts.reduce((s, p) => s + p.y, 0) / n;
+  const lblArr = String(labels || '').split(',').map(s => decLbl(s.trim()));
+
+  const lblEls = svgPts.map((p, i) => {
+    const q = svgPts[(i + 1) % n];
+    const lbl = lblArr[i] || '';
+    if (!lbl) return null;
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+    const elen = Math.sqrt((q.x - p.x) ** 2 + (q.y - p.y) ** 2);
+    if (elen < 0.001) return null;
+    const dx = (q.x - p.x) / elen, dy = (q.y - p.y) / elen;
+    const n1x = -dy, n1y = dx;
+    const dot1 = (mx + n1x - centX) * n1x + (my + n1y - centY) * n1y;
+    const nx2 = dot1 > 0 ? n1x : dy, ny2 = dot1 > 0 ? n1y : -dx;
+    const off = 16;
+    return (
+      <text key={i} x={(mx + nx2 * off).toFixed(1)} y={(my + ny2 * off).toFixed(1)}
+        textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">
+        {lbl}
+      </text>
+    );
+  });
+
+  return (
+    <svg width={W} height={H} style={{ display: 'block' }}>
+      <polygon points={polyPts} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
+      {lblEls}
+    </svg>
+  );
+}
+
 // ─── Parse visual marker string → React component ─────────────────────────────
 function parseVisualModel(marker) {
   const m = marker.trim();
@@ -1216,6 +1357,17 @@ function parseVisualModel(marker) {
     const stepsM = m.match(/\bsteps=([\d.:\-,]+)/);
     return <PartialQuotients dividend={kv.dividend} divisor={kv.divisor}
       steps={stepsM ? stepsM[1] : ''} />;
+  }
+  if (m.startsWith('[VOL_3D:')) {
+    const lblLM = m.match(/\blbl_l=(\S+)/);
+    const lblWM = m.match(/\blbl_w=(\S+)/);
+    const lblHM = m.match(/\blbl_h=(\S+)/);
+    return <Volume3D l={kv.l} w={kv.w} h={kv.h} formula={kv.formula}
+      lbl_l={lblLM ? lblLM[1] : ''} lbl_w={lblWM ? lblWM[1] : ''} lbl_h={lblHM ? lblHM[1] : ''} />;
+  }
+  if (m.startsWith('[SHAPE_2D:')) {
+    const labelsM = m.match(/\blabels=(\S+)/);
+    return <Shape2D shape={kv.shape} labels={labelsM ? labelsM[1] : ''} color={kv.color} />;
   }
   if (m.startsWith('[IMAGE:')) {
     return null; // handled separately as paste zone
@@ -1417,6 +1569,8 @@ const defaultChoices = () => LETTERS.slice(0, 4).map(l => ({ letter: l, text: ''
 const VISUAL_TYPES_LIST = [
   { id: 'none',        label: 'None' },
   { id: 'custom',      label: 'UPLOAD / PASTE IMAGE', color: '#b45309' },
+  { id: 'DRAW',        label: '✏ DRAW (freehand)', color: '#7c3aed' },
+  { id: 'SHAPE_2D',   label: '2D Shape (with labels)' },
   { id: 'AREA_MODEL',  label: 'Area Model (multi-digit)' },
   { id: 'ARRAY',       label: 'Array (dots)' },
   { id: 'BAR_MODEL',   label: 'Bar Model' },
@@ -1434,6 +1588,7 @@ const VISUAL_TYPES_LIST = [
   { id: 'PARTIAL_Q',   label: 'Partial Quotients' },
   { id: 'BASE10',      label: 'Place Value Blocks' },
   { id: 'TENS_FRAME',  label: 'Tens Frame' },
+  { id: 'VOL_3D',      label: 'Volume (3D Prism / Cube)' },
   { id: 'WORK_SPACE',  label: 'Work Space (blank box)' },
 ];
 
@@ -1448,6 +1603,8 @@ const VISUAL_TYPE_DEFAULTS = {
   FRAC_CIRCLE: { n: '3', d: '4' },
   BASE10:      { hundreds: '1', tens: '2', ones: '3' },
   BAR_MODEL:   { vals: '4,4,4,4', label: '?' },
+  VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
+  SHAPE_2D:    { shape: 'rectangle', labels: '', color: '#dbeafe' },
 };
 
 function VisualParamForm({ type, params, onChange }) {
@@ -1529,12 +1686,12 @@ function VisualParamForm({ type, params, onChange }) {
                 </div>
                 {inp('Amount / Factor', 'hop_size', { type: 'number', min: 0.01, step: 'any', placeholder: '= 1 step' })}
                 {inp('Start at', 'hop_start', { type: 'number', step: 'any', placeholder: 'auto' })}
-                <label className="text-xs flex flex-col gap-0.5">
-                  <span>Custom hops (from:to, ...)</span>
+                <label className="text-xs flex flex-col gap-0.5 w-full">
+                  <span className="font-medium">Custom hops (from:to, …)</span>
                   <input value={params.hops || ''} onChange={e => set('hops', e.target.value)}
-                    className="border rounded p-1 w-44 font-mono text-xs"
-                    placeholder="e.g. 0:0.5,0.5:1,1:1.5" />
-                  <span className="text-slate-400 text-xs">Overrides operation if filled</span>
+                    className="border rounded p-1 w-full font-mono text-xs"
+                    placeholder="e.g. 0:1/4, 1/4:1/2, 1/2:3/4" />
+                  <span className="text-slate-400 text-xs">Supports fractions (1/4), mixed numbers (1 1/2), and decimals (0.25). Overrides operation if filled.</span>
                 </label>
               </>
             )}
@@ -1813,12 +1970,102 @@ function VisualParamForm({ type, params, onChange }) {
         </div>
       );
     }
+    case 'VOL_3D':
+      return (
+        <div className="space-y-2">
+          <div className="flex gap-2 flex-wrap">
+            {inp('Length', 'l', { type: 'number', min: 1, max: 8 })}
+            {inp('Width', 'w', { type: 'number', min: 1, max: 8 })}
+            {inp('Height', 'h', { type: 'number', min: 1, max: 8 })}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {inp('Label L', 'lbl_l', { placeholder: 'e.g. 5 cm' })}
+            {inp('Label W', 'lbl_w', { placeholder: 'e.g. 3 cm' })}
+            {inp('Label H', 'lbl_h', { placeholder: 'e.g. 2 cm' })}
+          </div>
+          <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={params.formula !== 'no'}
+              onChange={e => set('formula', e.target.checked ? 'yes' : 'no')} />
+            Show volume formula
+          </label>
+        </div>
+      );
+    case 'SHAPE_2D': {
+      const SHAPE_OPTS = [
+        { v: 'equilateral', l: 'Equilateral Triangle', n: 3 },
+        { v: 'right',       l: 'Right Triangle',       n: 3 },
+        { v: 'isosceles',   l: 'Isosceles Triangle',   n: 3 },
+        { v: 'square',      l: 'Square',                n: 4 },
+        { v: 'rectangle',   l: 'Rectangle',             n: 4 },
+        { v: 'rhombus',     l: 'Rhombus',               n: 4 },
+        { v: 'parallelogram',l:'Parallelogram',          n: 4 },
+        { v: 'quadrilateral',l:'Quadrilateral',          n: 4 },
+        { v: 'pentagon',    l: 'Pentagon',               n: 5 },
+        { v: 'hexagon',     l: 'Hexagon',                n: 6 },
+        { v: 'octagon',     l: 'Octagon',                n: 8 },
+        { v: 'circle',      l: 'Circle',                 n: 1 },
+        { v: 'oval',        l: 'Oval',                   n: 2 },
+      ];
+      const SIDE_NAMES = {
+        equilateral: ['Side A','Side B','Side C'],
+        right:       ['Base','Height','Hypotenuse'],
+        isosceles:   ['Base','Leg B','Leg C'],
+        square:      ['Side A','Side B','Side C','Side D'],
+        rectangle:   ['Length (top)','Width (right)','Length (bottom)','Width (left)'],
+        rhombus:     ['Side A','Side B','Side C','Side D'],
+        parallelogram:['Side A','Side B','Side C','Side D'],
+        quadrilateral:['Side A','Side B','Side C','Side D'],
+        pentagon:    ['Side 1','Side 2','Side 3','Side 4','Side 5'],
+        hexagon:     ['Side 1','Side 2','Side 3','Side 4','Side 5','Side 6'],
+        octagon:     ['Side 1','Side 2','Side 3','Side 4','Side 5','Side 6','Side 7','Side 8'],
+        circle:      ['Radius / Label'],
+        oval:        ['Width label','Height label'],
+      };
+      const currentShape = params.shape || 'rectangle';
+      const shapeInfo = SHAPE_OPTS.find(s => s.v === currentShape) || SHAPE_OPTS[4];
+      const nSides = shapeInfo.n;
+      const sideNames = SIDE_NAMES[currentShape] || Array.from({ length: nSides }, (_, i) => `Side ${i+1}`);
+      const lblArr = String(params.labels || '').split(',');
+      while (lblArr.length < nSides) lblArr.push('');
+      const updateLabel = (i, val) => {
+        const next = [...lblArr]; next[i] = val;
+        set('labels', next.slice(0, nSides).join(','));
+      };
+      return (
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1">
+            Shape
+            <select value={currentShape}
+              onChange={e => { set('shape', e.target.value); set('labels', ''); }}
+              className="border rounded p-1 text-xs ml-1 flex-1">
+              {SHAPE_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </select>
+          </label>
+          <label className="text-xs flex items-center gap-2">
+            Fill color
+            <input type="color" value={params.color || '#dbeafe'}
+              onChange={e => set('color', e.target.value)}
+              className="w-8 h-6 border rounded cursor-pointer" />
+          </label>
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500 font-medium">Side labels (optional):</p>
+            {sideNames.map((name, i) => (
+              <label key={i} className="text-xs flex items-center gap-1">
+                <span className="w-28 shrink-0 text-gray-500">{name}</span>
+                <input value={lblArr[i] || ''} onChange={e => updateLabel(i, e.target.value)}
+                  placeholder="e.g. 5 cm" className="border rounded p-1 w-20 text-xs" />
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    }
     default: return null;
   }
 }
 
 function paramsToMarker(type, params) {
-  if (!type || type === 'none' || type === 'custom') return null;
+  if (!type || type === 'none' || type === 'custom' || type === 'DRAW') return null;
   if (type === 'WORK_SPACE') return '[WORK_SPACE]';
   if (type === 'ARRAY') return `[ARRAY: rows=${params.rows || 3} cols=${params.cols || 4}]`;
   if (type === 'NUM_LINE') {
@@ -1826,7 +2073,7 @@ function paramsToMarker(type, params) {
     if (params.jumps === 'yes') {
       m += ' jumps=yes';
       if (params.hops && String(params.hops).trim()) {
-        m += ` hops=${String(params.hops).replace(/\s/g, '')}`;
+        m += ` hops=${String(params.hops).trim()}`;
       } else {
         if (params.hop_op && params.hop_op !== '+') m += ` hop_op=${params.hop_op}`;
         if (params.hop_size) m += ` hop_size=${params.hop_size}`;
@@ -1892,6 +2139,21 @@ function paramsToMarker(type, params) {
     let m = `[PARTIAL_Q: dividend=${params.dividend || 0}`;
     if (params.divisor) m += ` divisor=${params.divisor}`;
     if (params.steps) m += ` steps=${params.steps}`;
+    return m + ']';
+  }
+  if (type === 'VOL_3D') {
+    const enc = s => String(s || '').replace(/\s+/g, '_');
+    let m = `[VOL_3D: l=${params.l || 3} w=${params.w || 2} h=${params.h || 2} formula=${params.formula || 'yes'}`;
+    if (params.lbl_l) m += ` lbl_l=${enc(params.lbl_l)}`;
+    if (params.lbl_w) m += ` lbl_w=${enc(params.lbl_w)}`;
+    if (params.lbl_h) m += ` lbl_h=${enc(params.lbl_h)}`;
+    return m + ']';
+  }
+  if (type === 'SHAPE_2D') {
+    const enc = s => String(s || '').replace(/\s+/g, '_');
+    let m = `[SHAPE_2D: shape=${params.shape || 'rectangle'}`;
+    if (params.labels) m += ` labels=${enc(params.labels)}`;
+    if (params.color && params.color !== '#dbeafe') m += ` color=${params.color}`;
     return m + ']';
   }
   return null;
@@ -2064,7 +2326,11 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
     return () => document.removeEventListener('paste', onDocPaste);
   }, [visualType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const marker = visualType === 'custom' ? (customImg ? '[IMAGE: custom]' : null) : paramsToMarker(visualType, visualParams);
+  const marker = visualType === 'DRAW'
+    ? (customImg ? '[IMAGE: draw]' : null)
+    : visualType === 'custom'
+      ? (customImg ? '[IMAGE: custom]' : null)
+      : paramsToMarker(visualType, visualParams);
   const hasChoices = qType === 'mc' || qType === 'multiselect';
   const addChoice = () => {
     if (choices.length >= 8) return;
@@ -2178,7 +2444,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
           {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id} style={vt.color ? { color: vt.color, fontWeight: 'bold' } : {}}>{vt.label}</option>)}
         </select>
 
-        {visualType !== 'none' && visualType !== 'custom' && (
+        {visualType !== 'none' && visualType !== 'custom' && visualType !== 'DRAW' && (
           <div className="bg-gray-50 rounded p-2 space-y-2">
             <VisualParamForm type={visualType} params={visualParams} onChange={setVisualParams} />
             {marker && (
@@ -2225,6 +2491,13 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
                   onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
               </>
             )}
+          </div>
+        )}
+
+        {/* Freehand draw */}
+        {visualType === 'DRAW' && (
+          <div className="bg-gray-50 rounded p-2">
+            <DrawingCanvas existingImg={customImg} onCapture={setCustomImg} />
           </div>
         )}
       </div>
@@ -2274,7 +2547,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         <div className="border rounded p-3 bg-gray-50">
           <p className="text-xs text-gray-400 mb-1">Preview:</p>
           <ErrorBoundary>
-            <AssessmentPreviewSingle q={previewQ} customImg={visualType === 'custom' ? customImg : null} />
+            <AssessmentPreviewSingle q={previewQ} customImg={(visualType === 'custom' || visualType === 'DRAW') ? customImg : null} />
           </ErrorBoundary>
         </div>
       )}
@@ -2739,6 +3012,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
 // ─── Parse a marker string back into { type, params } for editing ─────────────
 function markerToTypeParams(marker) {
   if (!marker) return { type: 'none', params: {} };
+  if (marker.startsWith('[IMAGE: draw')) return { type: 'DRAW', params: {} };
   if (marker.startsWith('[IMAGE:')) return { type: 'custom', params: {} };
   const typeMatch = marker.match(/^\[(\w+)/);
   if (!typeMatch) return { type: 'none', params: {} };
@@ -2748,7 +3022,7 @@ function markerToTypeParams(marker) {
   let params = {};
   if (type === 'ARRAY') { params = { rows: kv('rows','3'), cols: kv('cols','4') }; }
   else if (type === 'NUM_LINE') {
-    const hopsM = inner.match(/\bhops=([\d.\-:,]+)/);
+    const hopsM = inner.match(/\bhops=([\d.\/\-:, ]+?)(?=\s+\w+=|\])/);
     const labelAtM = inner.match(/\blabelat=([\d.,/]+)/);
     params = { min: kv('min','0'), max: kv('max','20'), step: kv('step','1'),
       jumps: kv('jumps',''), hop_op: kv('hop_op','+'),
@@ -2791,12 +3065,172 @@ function markerToTypeParams(marker) {
   else if (type === 'FRAC_STRIPS') {
     params = { aw: kv('aw','1'), an: kv('an','3'), d: kv('d','4'),
       op: kv('op','+'), bw: kv('bw','1'), bn: kv('bn','3'),
-      d2: kv('bd',''), cross: kv('cross','0') };
+      d2: kv('bd',''), cross: kv('cross','0'), crossWh: kv('crossWh','0') };
+  }
+  else if (type === 'VOL_3D') {
+    const lblLM = inner.match(/\blbl_l=(\S+)/);
+    const lblWM = inner.match(/\blbl_w=(\S+)/);
+    const lblHM = inner.match(/\blbl_h=(\S+)/);
+    params = { l: kv('l','3'), w: kv('w','2'), h: kv('h','2'), formula: kv('formula','yes'),
+      lbl_l: lblLM ? lblLM[1].replace(/_/g,' ') : '',
+      lbl_w: lblWM ? lblWM[1].replace(/_/g,' ') : '',
+      lbl_h: lblHM ? lblHM[1].replace(/_/g,' ') : '' };
+  }
+  else if (type === 'SHAPE_2D') {
+    const labelsM = inner.match(/\blabels=(\S+)/);
+    params = { shape: kv('shape','rectangle'),
+      labels: labelsM ? labelsM[1].replace(/_/g,' ') : '',
+      color: kv('color','#dbeafe') };
   }
   return { type, params };
 }
 
-// ─── Model Editor ─────────────────────────────────────────────────────────────
+// ─── Drawing Canvas ────────────────────────────────────────────────────────────
+function DrawingCanvas({ existingImg, onCapture }) {
+  const canvasRef = useRef(null);
+  const [color, setColor] = useState('#111111');
+  const [size, setSize] = useState(4);
+  const [eraser, setEraser] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const lastPos = useRef(null);
+
+  // Load existingImg when provided (on mount only)
+  useEffect(() => {
+    if (!existingImg || !canvasRef.current) return;
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    };
+    img.src = existingImg;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getPos = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    if (e.touches && e.touches[0]) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    setDrawing(true);
+    const pos = getPos(e);
+    lastPos.current = pos;
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.globalCompositeOperation = eraser ? 'destination-out' : 'source-over';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const draw = (e) => {
+    e.preventDefault();
+    if (!drawing || !lastPos.current) return;
+    const pos = getPos(e);
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.globalCompositeOperation = eraser ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPos.current = pos;
+    setSaved(false);
+  };
+
+  const endDraw = (e) => {
+    e.preventDefault();
+    setDrawing(false);
+    lastPos.current = null;
+  };
+
+  const clearCanvas = () => {
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    setSaved(false);
+  };
+
+  const useDrawing = () => {
+    onCapture(canvasRef.current.toDataURL('image/png'));
+    setSaved(true);
+  };
+
+  const COLORS = [
+    { val: '#111111', label: 'Black' },
+    { val: '#dc2626', label: 'Red' },
+    { val: '#2563eb', label: 'Blue' },
+    { val: '#16a34a', label: 'Green' },
+    { val: '#ea580c', label: 'Orange' },
+    { val: '#7c3aed', label: 'Purple' },
+    { val: '#ffffff', label: 'White', outline: true },
+  ];
+  const SIZES = [{ label: 'S', val: 2 }, { label: 'M', val: 4 }, { label: 'L', val: 8 }, { label: 'XL', val: 16 }];
+
+  return (
+    <div className="space-y-2">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-gray-100">
+        {/* Color swatches */}
+        <div className="flex gap-1 items-center">
+          {COLORS.map(c => (
+            <button key={c.val} type="button" title={c.label}
+              onClick={() => { setColor(c.val); setEraser(false); }}
+              style={{
+                backgroundColor: c.val,
+                border: color === c.val && !eraser ? '2.5px solid #7c3aed' : c.outline ? '1.5px solid #d1d5db' : '1.5px solid transparent',
+                boxShadow: color === c.val && !eraser ? '0 0 0 1px #7c3aed' : 'none',
+              }}
+              className="w-6 h-6 rounded-full transition-transform hover:scale-110 shrink-0" />
+          ))}
+        </div>
+        {/* Size buttons */}
+        <div className="flex gap-1">
+          {SIZES.map(s => (
+            <button key={s.label} type="button"
+              onClick={() => { setSize(s.val); setEraser(false); }}
+              className={`text-xs border rounded px-1.5 py-0.5 transition-colors font-medium ${size === s.val && !eraser ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {/* Eraser */}
+        <button type="button" onClick={() => setEraser(v => !v)}
+          className={`text-xs border rounded px-2 py-0.5 transition-colors ${eraser ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+          🧹 Eraser
+        </button>
+        {/* Clear */}
+        <button type="button" onClick={clearCanvas}
+          className="text-xs border border-red-200 rounded px-2 py-0.5 text-red-500 hover:bg-red-50 transition-colors ml-auto">
+          🗑 Clear
+        </button>
+      </div>
+
+      {/* Canvas */}
+      <canvas ref={canvasRef} width={400} height={220}
+        style={{ cursor: eraser ? 'cell' : 'crosshair', touchAction: 'none' }}
+        className="border-2 border-gray-200 rounded-lg w-full bg-white"
+        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
+
+      {/* Use Drawing button */}
+      <button type="button" onClick={useDrawing}
+        className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${saved ? 'bg-green-600 text-white' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>
+        {saved ? '✓ Drawing Saved! (click Save below to apply)' : '✓ Use This Drawing'}
+      </button>
+    </div>
+  );
+}
+
 function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClose }) {
   const init = markerToTypeParams(marker);
   const [visualType, setVisualType] = useState(init.type);
@@ -2851,17 +3285,20 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
     return () => document.removeEventListener('paste', onDocPaste);
   }, [visualType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const builtMarker = visualType === 'custom'
-    ? (customImg ? '[IMAGE: custom]' : null)
-    : paramsToMarker(visualType, visualParams);
+  const isImgType = visualType === 'custom' || visualType === 'DRAW';
+  const builtMarker = visualType === 'DRAW'
+    ? (customImg ? '[IMAGE: draw]' : null)
+    : visualType === 'custom'
+      ? (customImg ? '[IMAGE: custom]' : null)
+      : paramsToMarker(visualType, visualParams);
 
   const previewEl = (() => {
-    if (visualType === 'custom') return null;
+    if (isImgType) return null;
     try { return builtMarker ? parseVisualModel(builtMarker) : null; } catch { return null; }
   })();
 
   const handleSave = () => {
-    onSave({ marker: builtMarker, customImg: visualType === 'custom' ? customImg : null, imgScale: visualType === 'custom' ? imgScale : 1 });
+    onSave({ marker: builtMarker, customImg: isImgType ? customImg : null, imgScale: isImgType ? imgScale : 1 });
   };
 
   return (
@@ -2881,7 +3318,7 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
         </div>
 
         {/* Param form for preset visual types */}
-        {visualType !== 'none' && visualType !== 'custom' && (
+        {visualType !== 'none' && visualType !== 'custom' && visualType !== 'DRAW' && (
           <div className="bg-gray-50 rounded p-3 space-y-2 mb-3">
             <VisualParamForm type={visualType} params={visualParams} onChange={setVisualParams} />
             {previewEl && (
@@ -2932,6 +3369,13 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
                   onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
               </>
             )}
+          </div>
+        )}
+
+        {/* Freehand draw */}
+        {visualType === 'DRAW' && (
+          <div className="mb-3">
+            <DrawingCanvas existingImg={customImg} onCapture={setCustomImg} />
           </div>
         )}
 
