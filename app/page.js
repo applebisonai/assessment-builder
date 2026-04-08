@@ -4233,9 +4233,10 @@ export default function AssessmentBuilder() {
   const [loadingMode, setLoadingMode] = useState(''); // 'extract' | 'parallel' — shown in button label
   const [error, setError] = useState('');
   const [rawText, setRawText] = useState('');
+  const [pendingRawText, setPendingRawText] = useState(''); // extracted text awaiting user review/edit before parsing
   const [questions, setQuestions] = useState([]);
   const [customVisuals, setCustomVisuals] = useState({});
-  const [resultMode, setResultMode] = useState(''); // 'extract' | 'parallel' — what produced current result
+  const [resultMode, setResultMode] = useState(''); // 'review' | 'extract' | 'parallel' — what produced current result
   const [editingVisual, setEditingVisual] = useState(null); // {qId, marker, customImg, imgScale}
   const [regenningIdx, setRegenningIdx] = useState(null);
   const [aiFormsScript, setAiFormsScript] = useState(null);
@@ -4285,6 +4286,7 @@ export default function AssessmentBuilder() {
     setLoadingMode(generateMode);
     setError('');
     setRawText('');
+    setPendingRawText('');
     setQuestions([]);
     setCustomVisuals({});
     setResultMode('');
@@ -4316,16 +4318,24 @@ export default function AssessmentBuilder() {
       }
       const data = await response.json();
       if (data.error) { setError(data.error); return; }
-      setRawText(data.result);
-      // Strip any AI-generated visual markers — user adds visuals manually via "+ Add Visual/Model"
-      setQuestions(parseAssessment(data.result).map(q => ({ ...q, marker: null, _customImg: null })));
-      setResultMode(generateMode);
+      // Show extracted text for review/edit before parsing into questions
+      setPendingRawText(data.result);
+      setResultMode('review');
     } catch (e) {
       setError(e.message || 'Request failed');
     } finally {
       setLoading(false);
       setLoadingMode('');
     }
+  };
+
+  // Parse questions from the reviewed/edited raw text
+  const handleParseFromRaw = () => {
+    const text = pendingRawText;
+    setRawText(text);
+    setQuestions(parseAssessment(text).map(q => ({ ...q, marker: null, _customImg: null })));
+    setPendingRawText('');
+    setResultMode('extract');
   };
 
   // Generate a parallel form from the already-extracted text (Step 2 of the two-step flow)
@@ -4414,7 +4424,7 @@ export default function AssessmentBuilder() {
 
   const handlePrint = () => window.print();
 
-  const hasResult = questions.length > 0;
+  const hasResult = questions.length > 0 || resultMode === 'review';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -4633,18 +4643,30 @@ export default function AssessmentBuilder() {
                 ⬇ Download Text
               </button>
               <button
-                onClick={() => { setQuestions([]); setRawText(''); setCustomVisuals({}); setFile(null); }}
+                onClick={() => { setQuestions([]); setRawText(''); setPendingRawText(''); setCustomVisuals({}); setFile(null); setResultMode(''); }}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-400 hover:bg-gray-50 transition-colors">
                 ✕ Clear
               </button>
             </div>
           )}
 
-          {/* Raw text toggle */}
+          {/* Raw text — editable, with re-parse button */}
           {rawText && (
             <details className="text-xs">
-              <summary className="cursor-pointer text-gray-400 hover:text-gray-600">View raw output</summary>
-              <pre className="mt-2 bg-gray-100 rounded p-2 whitespace-pre-wrap text-gray-600 max-h-64 overflow-y-auto">{rawText}</pre>
+              <summary className="cursor-pointer text-gray-400 hover:text-gray-600">Edit raw text / Re-parse</summary>
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={rawText}
+                  onChange={e => setRawText(e.target.value)}
+                  className="w-full h-48 border border-gray-200 rounded p-2 font-mono text-xs text-gray-700 bg-gray-50 resize-y focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  spellCheck={false}
+                />
+                <button
+                  onClick={() => setQuestions(parseAssessment(rawText).map(q => ({ ...q, marker: null, _customImg: null })))}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
+                  ↻ Re-parse Questions from Edited Text
+                </button>
+              </div>
             </details>
           )}
         </div>
@@ -4669,12 +4691,48 @@ export default function AssessmentBuilder() {
 
           {!loading && hasResult && (
             <div>
-              {/* Step banner — shown after extraction, prompts Step 2 */}
+              {/* ── Review & Edit step — shown immediately after extraction ── */}
+              {resultMode === 'review' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3 no-print">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">📋 Review Extracted Text</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Check the text below for accuracy. Fix any missing content (e.g. incomplete questions) before parsing into questions.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleParseFromRaw}
+                      className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap">
+                      Parse Questions →
+                    </button>
+                  </div>
+                  <textarea
+                    value={pendingRawText}
+                    onChange={e => setPendingRawText(e.target.value)}
+                    className="w-full h-96 border border-amber-200 rounded-lg p-3 text-xs font-mono bg-white text-gray-800 resize-y focus:outline-none focus:ring-2 focus:ring-amber-300"
+                    spellCheck={false}
+                    placeholder="Extracted text will appear here..."
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-amber-600">
+                      Tip: Look for incomplete questions (e.g. "14. ____") and fill them in before parsing.
+                    </p>
+                    <button
+                      onClick={handleParseFromRaw}
+                      className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm">
+                      Parse Questions →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step banner — shown after parsing, prompts Step 2 */}
               {resultMode === 'extract' && (
                 <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-center justify-between gap-4 no-print">
                   <div>
-                    <p className="text-sm font-semibold text-indigo-800">✅ Exact copy extracted</p>
-                    <p className="text-xs text-indigo-600 mt-0.5">Review and edit below. When ready, create a parallel version with new numbers.</p>
+                    <p className="text-sm font-semibold text-indigo-800">✅ Questions parsed</p>
+                    <p className="text-xs text-indigo-600 mt-0.5">Edit any question below. When ready, create a parallel version with new numbers.</p>
                   </div>
                   <button
                     onClick={handleCreateParallel}
@@ -4695,13 +4753,16 @@ export default function AssessmentBuilder() {
                   </button>
                 </div>
               )}
+              {resultMode !== 'review' && (
               <div className="flex justify-end mb-2">
                 <button
-                  onClick={() => { if (window.confirm('Clear this assessment and start over?')) { setQuestions([]); setCustomVisuals({}); setRawText(''); setResultMode(''); localStorage.removeItem('ab-ai'); } }}
+                  onClick={() => { if (window.confirm('Clear this assessment and start over?')) { setQuestions([]); setCustomVisuals({}); setRawText(''); setPendingRawText(''); setResultMode(''); localStorage.removeItem('ab-ai'); } }}
                   className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded-lg px-3 py-1.5 transition-colors no-print">
                   ✕ New Assessment
                 </button>
               </div>
+              )}
+              {resultMode !== 'review' && (
               <div id="print-area" className="bg-white rounded-xl border border-gray-100 p-8 shadow-md">
                 {/* Pull title out so Name/Date can go between title and questions */}
                 {questions[0]?.type === 'header' && (
@@ -4735,6 +4796,7 @@ export default function AssessmentBuilder() {
                   );
                 })()}
               </div>
+              )}
             </div>
           )}
         </div>
