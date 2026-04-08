@@ -579,69 +579,162 @@ function PartialQuotients({ dividend, divisor, steps }) {
   const dvd = parseFloat(dividend) || 0;
   const dvs = parseFloat(divisor) || 0;
 
-  // Parse "1560:10,1248:8" → [{sub, pq}, ...]
-  const stepList = steps ? String(steps).split(',').map(s => {
-    const [a, b] = s.split(':');
-    return { sub: parseFloat(a) || 0, pq: parseFloat(b) || 0 };
-  }).filter(s => s.sub > 0) : [];
+  // Parse steps — filter truly empty/zero pairs
+  const stepList = steps
+    ? String(steps).split(',').map(s => {
+        const [a, b] = s.split(':');
+        return { sub: parseFloat(a) || 0, pq: parseFloat(b) || 0 };
+      }).filter(s => s.sub > 0)
+    : [];
 
-  // Running remainders
+  // Build rows with running remainder
   let running = dvd;
   const rows = stepList.map(({ sub, pq }) => {
-    const before = running;
     running -= sub;
-    return { before, sub, pq, after: running };
+    return { sub, pq, rem: running };
   });
   const quotient = stepList.reduce((s, r) => s + r.pq, 0);
-  const remainder = running;
+  const finalRem = running;
 
-  // Geometry — monospace ~8px/char at 13px font
-  const ch = 8, fs = 13, rowH = 22, pad = 12;
-  const leftNums = [dvd, ...rows.map(r => r.sub), ...rows.map(r => r.after)];
-  const maxLeft = Math.max(...leftNums.map(n => String(Math.abs(Math.round(n))).length), 1);
-  const numX = pad + ch + maxLeft * ch + 4; // right edge of left column
-  const pqNums = [...rows.map(r => r.pq), quotient];
-  const maxPq = Math.max(...pqNums.map(n => String(Math.round(n)).length), 1);
-  const pqX = numX + 18;
-  const totalW = pqX + maxPq * ch + pad + 4;
-  const sepX = numX + 10;
-  const lineX1 = pad, lineX2 = numX + 4;
+  // ── Layout constants ──
+  const FS = 13;      // font-size px
+  const CW = 7.8;     // char width (monospace @ FS=13)
+  const RH = 28;      // row height
+  const PAD = 12;     // outer padding
+  const RG = 5;       // vertical gap around horizontal rules
+  const IND = 8;      // indent inside bracket for minus sign
 
-  let y = pad;
-  const els = [];
+  // ── Column width measurements ──
+  const allLeft = [dvd, ...rows.flatMap(r => [r.sub, r.rem])];
+  const maxLD = Math.max(...allLeft.map(n => String(Math.round(Math.abs(n))).length), 1);
+  const allPQ  = [...rows.map(r => r.pq), quotient];
+  const maxPQD = Math.max(...allPQ.map(n => String(Math.round(n)).length), 1);
+  const dvsDigits = dvs > 0 ? String(Math.round(dvs)).length : 0;
+  const dvsW = dvsDigits > 0 ? dvsDigits * CW + 14 : 0;
 
-  // Row: divisor label + dividend
-  if (dvs > 0) els.push(<text key="dvs" x={lineX1} y={y + fs} fontSize={10} fill="#64748b" fontFamily="monospace">÷ {dvs}</text>);
-  els.push(<text key="dvd" x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{dvd}</text>);
-  y += rowH;
+  // ── X positions ──
+  const bracketX = PAD + dvsW;                          // left edge of bracket (vertical wall)
+  const numEndX  = bracketX + IND + (maxLD + 1) * CW;  // right-align working numbers here
+  const sepX     = numEndX + 18;                        // dashed column separator
+  const pqX      = sepX + 10;                           // left edge of PQ numbers
+  const totalW   = pqX + maxPQD * CW + PAD;
 
-  rows.forEach(({ sub, pq, after }, i) => {
-    // − sub   pq
-    els.push(<text key={`mi${i}`} x={lineX1} y={y + fs} fontSize={fs} fill="#1e293b" fontFamily="monospace">−</text>);
-    els.push(<text key={`su${i}`} x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{sub}</text>);
-    els.push(<text key={`pq${i}`} x={pqX} y={y + fs} fontSize={fs} fill="#2563eb" fontFamily="monospace">{pq}</text>);
-    y += rowH;
-    // Horizontal rule
-    els.push(<line key={`ln${i}`} x1={lineX1} y1={y - 2} x2={lineX2} y2={y - 2} stroke="#334155" strokeWidth={1.5} />);
-    y += 4;
-    // Remainder
-    els.push(<text key={`re${i}`} x={numX} y={y + fs} textAnchor="end" fontSize={fs} fill="#1e293b" fontFamily="monospace">{Math.round(after * 10000) / 10000}</text>);
-    y += rowH;
+  // ── Y positions (built sequentially) ──
+  let y = PAD + 2;
+  const roofY = y;              // top of the bracket "roof"
+
+  const dvdTextY = y + FS + 2; // dividend baseline
+  y += RH;
+
+  // Build step items
+  const stepItems = [];
+  rows.forEach(({ sub, pq, rem }, i) => {
+    // subtraction row
+    stepItems.push({ type: 'sub', y: y + FS + 2, sub, pq });
+    y += RH;
+    // rule
+    stepItems.push({ type: 'rule', y: y - RG });
+    // remainder
+    stepItems.push({ type: 'rem', y: y + FS + 2, rem });
+    y += RH;
   });
 
-  // Separator above total
-  els.push(<line key="sep" x1={sepX} y1={y - 2} x2={totalW - pad} y2={y - 2} stroke="#334155" strokeWidth={1.5} />);
-  y += 4;
-  els.push(<text key="tot" x={pqX} y={y + fs} fontSize={fs} fill="#1e293b" fontFamily="monospace" fontWeight="700">{quotient}</text>);
-  if (remainder !== 0) {
-    els.push(<text key="rem" x={pqX + maxPq * ch + 4} y={y + fs} fontSize={10} fill="#64748b" fontFamily="monospace">r {Math.round(remainder * 10000) / 10000}</text>);
-  }
-  y += rowH + pad;
+  // PQ column total
+  const pqLineY  = y - RG;
+  const pqTotY   = y + FS + 2;
+  y += RH;
 
+  // Remainder note
+  let remNoteY = null;
+  if (Math.abs(finalRem) > 0.0001) {
+    remNoteY = y + FS + 2;
+    y += RH;
+  }
+
+  y += PAD;
+  const bracketBotY = y - PAD + 2;
+
+  // ── Render ──
   return (
-    <svg width={totalW} height={y} style={{ display: 'block' }}>
-      <line x1={sepX} y1={pad - 2} x2={sepX} y2={y - pad} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,2" />
-      {els}
+    <svg width={totalW} height={y} style={{ display: 'block', overflow: 'visible' }}>
+      {/* ── BRACKET ── */}
+      {/* Vertical left wall */}
+      <line x1={bracketX} y1={roofY} x2={bracketX} y2={bracketBotY}
+        stroke="#1e293b" strokeWidth={2.5} strokeLinecap="square" />
+      {/* Horizontal roof over dividend */}
+      <line x1={bracketX} y1={roofY} x2={numEndX + 6} y2={roofY}
+        stroke="#1e293b" strokeWidth={2.5} strokeLinecap="square" />
+
+      {/* ── DIVISOR (left of bracket) ── */}
+      {dvs > 0 && (
+        <text x={bracketX - 6} y={dvdTextY}
+          textAnchor="end" fontSize={FS} fontFamily="monospace" fontWeight="700" fill="#1e293b">
+          {Math.round(dvs)}
+        </text>
+      )}
+
+      {/* ── DIVIDEND ── */}
+      <text x={numEndX} y={dvdTextY}
+        textAnchor="end" fontSize={FS} fontFamily="monospace" fill="#1e293b">
+        {Math.round(dvd)}
+      </text>
+
+      {/* ── STEP ROWS ── */}
+      {stepItems.map((item, i) => {
+        if (item.type === 'rule') {
+          return <line key={i} x1={bracketX + IND - 2} y1={item.y} x2={numEndX + 4} y2={item.y}
+            stroke="#475569" strokeWidth={1.3} />;
+        }
+        if (item.type === 'sub') {
+          return (
+            <g key={i}>
+              {/* minus sign */}
+              <text x={bracketX + IND} y={item.y}
+                fontSize={FS} fontFamily="monospace" fill="#475569">−</text>
+              {/* subtracted amount */}
+              <text x={numEndX} y={item.y}
+                textAnchor="end" fontSize={FS} fontFamily="monospace" fill="#1e293b">
+                {Math.round(item.sub)}
+              </text>
+              {/* partial quotient in right column */}
+              <text x={pqX} y={item.y}
+                fontSize={FS} fontFamily="monospace" fontWeight="700" fill="#2563eb">
+                {Math.round(item.pq)}
+              </text>
+            </g>
+          );
+        }
+        if (item.type === 'rem') {
+          return (
+            <text key={i} x={numEndX} y={item.y}
+              textAnchor="end" fontSize={FS} fontFamily="monospace" fill="#1e293b">
+              {String(Math.round(item.rem * 10000) / 10000)}
+            </text>
+          );
+        }
+        return null;
+      })}
+
+      {/* ── PQ COLUMN ── */}
+      {/* Dashed vertical separator */}
+      <line x1={sepX} y1={roofY} x2={sepX} y2={pqLineY + 2}
+        stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,3" />
+      {/* Underline above quotient total */}
+      <line x1={pqX - 2} y1={pqLineY} x2={pqX + maxPQD * CW + 6} y2={pqLineY}
+        stroke="#1e293b" strokeWidth={1.5} />
+      {/* Quotient total */}
+      <text x={pqX} y={pqTotY}
+        fontSize={FS} fontFamily="monospace" fontWeight="700" fill="#1e293b">
+        {Math.round(quotient)}
+      </text>
+
+      {/* ── REMAINDER NOTE ── */}
+      {remNoteY !== null && (
+        <text x={bracketX + IND} y={remNoteY}
+          fontSize={FS - 1} fontFamily="monospace" fill="#64748b">
+          r {Math.round(finalRem * 10000) / 10000}
+        </text>
+      )}
     </svg>
   );
 }
@@ -955,6 +1048,24 @@ function parseVisualModel(marker) {
 }
 
 // ─── Parse assessment text → question objects ──────────────────────────────────
+// Split a text string that contains inline choices appended to the question,
+// e.g. "Which is closest? A) 2 B) 20 C) 200 D) 2,000"
+// Returns { qText, choices } or null if no inline choices detected.
+function tryExtractInlineChoices(text) {
+  // Must start with "A)" or "A." (case-insensitive) somewhere after the question text
+  const choicesStart = text.search(/\s+[Aa][.)]\s/);
+  if (choicesStart < 0) return null;
+  const qText = text.slice(0, choicesStart).trim();
+  const choicesStr = text.slice(choicesStart).trim();
+  // Split at whitespace before each letter-choice marker
+  const parts = choicesStr.split(/\s+(?=[A-Fa-f][.)]\s)/);
+  const choices = parts.map(p => {
+    const m = p.trim().match(/^([A-Fa-f])[.)]\s+(.+)$/);
+    return m ? { letter: m[1].toUpperCase(), text: m[2].trim() } : null;
+  }).filter(Boolean);
+  return choices.length >= 2 ? { qText, choices } : null;
+}
+
 function parseAssessment(text) {
   if (!text) return [];
   const lines = text.split('\n');
@@ -1005,20 +1116,42 @@ function parseAssessment(text) {
       if (current && !current.qNum) {
         // Marker was the line before — attach number to it
         current.qNum = qMatch[1];
-        current.text = qMatch[2];
+        // Check if question text has inline choices appended: "What is 2+2? A) 3 B) 4 C) 5 D) 6"
+        const inlined = tryExtractInlineChoices(qMatch[2]);
+        if (inlined) { current.text = inlined.qText; current.choices = inlined.choices; }
+        else current.text = qMatch[2];
         if (/select all|choose all/i.test(qMatch[2])) current.qType = 'multiselect';
         continue;
       }
       flush();
       const isMulti = /select all|choose all/i.test(qMatch[2]);
-      current = { id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null, text: qMatch[2], choices: [], lines: [], vb: inVersionB, qType: isMulti ? 'multiselect' : 'mc' };
+      // Check if question text has inline choices appended on the same line
+      const inlined = tryExtractInlineChoices(qMatch[2]);
+      current = {
+        id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null,
+        text: inlined ? inlined.qText : qMatch[2],
+        choices: inlined ? inlined.choices : [],
+        lines: [], vb: inVersionB,
+        qType: isMulti ? 'multiselect' : 'mc',
+      };
       continue;
     }
 
     // MC / multi-select choice: A) B) C) D) E) F)...
+    // Handles both single "A) text" lines and inline "A) text B) text C) text D) text" lines
     const choiceMatch = trimmed.match(/^([A-Fa-f])[.)]\s+(.*)$/);
     if (choiceMatch && current) {
-      current.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
+      // Check if multiple choices are squished on this one line
+      const parts = trimmed.split(/\s+(?=[A-Fa-f][.)]\s)/);
+      if (parts.length >= 2) {
+        // Multiple inline choices — split and add each
+        for (const part of parts) {
+          const m = part.trim().match(/^([A-Fa-f])[.)]\s+(.+)$/);
+          if (m) current.choices.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
+        }
+      } else {
+        current.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
+      }
       continue;
     }
 
@@ -1306,17 +1439,22 @@ function VisualParamForm({ type, params, onChange }) {
       });
       if (stepRows.length === 0) stepRows.push({ sub: '', pq: '' });
 
-      const rebuildSteps = rows =>
-        rows.filter(r => r.sub !== '' || r.pq !== '').map(r => `${r.sub}:${r.pq}`).join(',');
+      // Serialize rows to steps string — empties stay as ":" so UI keeps them visible
+      const serializeRows = rows => rows.map(r => `${r.sub}:${r.pq}`).join(',');
+      // For the marker we strip truly empty rows (handled in PartialQuotients filter)
 
       const updateRow = (i, field, val) => {
         const next = stepRows.map((r, j) => j === i ? { ...r, [field]: val } : r);
-        onChange({ ...params, steps: rebuildSteps(next) });
+        onChange({ ...params, steps: serializeRows(next) });
       };
-      const addRow = () => onChange({ ...params, steps: rebuildSteps([...stepRows, { sub: '', pq: '' }]) });
+      // addRow: add a blank row (stored as ":" which the SVG's filter(sub>0) safely ignores)
+      const addRow = () => {
+        const next = [...stepRows, { sub: '', pq: '' }];
+        onChange({ ...params, steps: serializeRows(next) });
+      };
       const removeRow = i => {
         const next = stepRows.filter((_, j) => j !== i);
-        onChange({ ...params, steps: rebuildSteps(next.length ? next : [{ sub: '', pq: '' }]) });
+        onChange({ ...params, steps: serializeRows(next.length ? next : [{ sub: '', pq: '' }]) });
       };
 
       // Live remainder preview
@@ -1834,13 +1972,44 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
   const [editingVisual, setEditingVisual] = useState(null);
   const [includeAnswerKey, setIncludeAnswerKey] = useState(false);
 
+  // Sync _customImg from question objects → customVisuals so images always render in preview
+  useEffect(() => {
+    const allQsNow = [...(title ? [{ id: 'title', type: 'header', text: title }] : []), ...questions];
+    let changed = false;
+    const next = { ...customVisuals };
+    allQsNow.forEach((q, idx) => {
+      if (q._customImg && next[idx]?.customImg !== q._customImg) {
+        next[idx] = { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg };
+        changed = true;
+      }
+    });
+    if (changed) setCustomVisuals(next);
+  }, [questions, title]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSave = q => {
+    let newQuestions;
     if (editingQ) {
-      setQuestions(prev => prev.map(pq => pq.id === editingQ.id ? q : pq));
+      newQuestions = questions.map(pq => pq.id === editingQ.id ? q : pq);
     } else {
       const num = questions.filter(x => x.type === 'question').length + 1;
-      setQuestions(prev => [...prev, { ...q, qNum: String(num) }]);
+      newQuestions = [...questions, { ...q, qNum: String(num) }];
     }
+    setQuestions(newQuestions);
+
+    // Immediately sync _customImg → customVisuals so the image shows right away.
+    // This avoids a render cycle where hasCvOverride=true with a stale null cv.customImg.
+    if (q._customImg) {
+      const headerCount = title ? 1 : 0;
+      const allQsNew = [...(title ? [{ id: 'title', type: 'header', text: title }] : []), ...newQuestions];
+      const qIdx = allQsNew.findIndex(aq => aq.id === q.id);
+      if (qIdx >= 0) {
+        setCustomVisuals(prev => ({
+          ...prev,
+          [qIdx]: { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg },
+        }));
+      }
+    }
+
     setShowForm(false);
     setEditingQ(null);
   };
@@ -1966,7 +2135,7 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
             <AssessmentPreview
               questions={allQs}
               customVisuals={customVisuals}
-              onEdit={(idx, marker) => setEditingVisual({ idx, marker })}
+              onEdit={(idx, marker, customImg) => setEditingVisual({ idx, marker, customImg })}
               onQuestionEdit={(idx, uq) => setQuestions(prev => prev.map((q, i) => {
                 const qIdx = questions.indexOf(prev.filter(x => x.type === 'question')[i]);
                 return q.id === uq.id ? uq : q;
@@ -1979,8 +2148,17 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
       {editingVisual && (
         <ModelEditor
           marker={editingVisual.marker}
+          initialCustomImg={editingVisual.customImg}
           onSave={({ marker, customImg }) => {
-            setCustomVisuals(prev => ({ ...prev, [editingVisual.idx]: { marker, customImg } }));
+            const idx = editingVisual.idx;
+            setCustomVisuals(prev => ({ ...prev, [idx]: { marker, customImg } }));
+            // Write back into questions so the change persists (look up by ID via allQs)
+            const editedQ = allQs[idx];
+            if (editedQ && editedQ.type === 'question') {
+              setQuestions(prev => prev.map(q =>
+                q.id === editedQ.id ? { ...q, marker: marker || null, _customImg: customImg || null } : q
+              ));
+            }
             setEditingVisual(null);
           }}
           onClose={() => setEditingVisual(null)}
@@ -1990,10 +2168,64 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
   );
 }
 
+// ─── Parse a marker string back into { type, params } for editing ─────────────
+function markerToTypeParams(marker) {
+  if (!marker) return { type: 'none', params: {} };
+  if (marker.startsWith('[IMAGE:')) return { type: 'custom', params: {} };
+  const typeMatch = marker.match(/^\[(\w+)/);
+  if (!typeMatch) return { type: 'none', params: {} };
+  const type = typeMatch[1];
+  const inner = marker.replace(/^\[\w+\s*:?\s*/, '').replace(/\]$/, '').trim();
+  const kv = (key, def = '') => { const m = inner.match(new RegExp(`\\b${key}=([^\\s\\]]+)`)); return m ? m[1] : def; };
+  let params = {};
+  if (type === 'ARRAY') { params = { rows: kv('rows','3'), cols: kv('cols','4') }; }
+  else if (type === 'NUM_LINE') {
+    const hopsM = inner.match(/\bhops=([\d.\-:,]+)/);
+    params = { min: kv('min','0'), max: kv('max','20'), step: kv('step','1'),
+      jumps: kv('jumps',''), hop_op: kv('hop_op','+'),
+      hop_size: kv('hop_size',''), hop_start: kv('hop_start',''),
+      hops: hopsM ? hopsM[1] : '', show: kv('show','') };
+  }
+  else if (type === 'GROUPS') { params = { groups: kv('groups','3'), items: kv('items','4') }; }
+  else if (type === 'TENS_FRAME') { params = { filled: kv('filled','5'), total: kv('total','10') }; }
+  else if (type === 'NUM_BOND') { params = { whole: kv('whole',''), part1: kv('part1',''), part2: kv('part2','?') }; }
+  else if (type === 'FRACTION' || type === 'FRAC_CIRCLE') {
+    const fm = inner.match(/(\d+)\/(\d+)/);
+    params = { n: fm ? fm[1] : '1', d: fm ? fm[2] : '4' };
+  }
+  else if (type === 'MIXED_NUM' || type === 'MIXED_CIRCLE') {
+    params = { whole: kv('whole','1'), n: kv('n','1'), d: kv('d','3') };
+  }
+  else if (type === 'MIXED_NUM_BOX') { params = { whole: kv('whole',''), n: kv('n',''), d: kv('d','') }; }
+  else if (type === 'FRACTION_BOX') { params = { n: kv('n',''), d: kv('d','') }; }
+  else if (type === 'BASE10') {
+    params = { thousands: kv('thousands','0'), hundreds: kv('hundreds','0'), tens: kv('tens','0'), ones: kv('ones','0') };
+  }
+  else if (type === 'AREA_MODEL') { params = { cols: kv('cols','20,7'), rows: kv('rows','10,4'), vals: kv('vals','') }; }
+  else if (type === 'BAR_MODEL') {
+    const bmM = inner.match(/^([\d,]+)/);
+    const labelM = inner.match(/\|\s*label=(.+)/);
+    params = { vals: bmM ? bmM[1] : '5,3', label: labelM ? labelM[1].trim() : '' };
+  }
+  else if (type === 'DATA_TABLE') {
+    const headerM = inner.match(/header=([^|]+)/);
+    const rest = inner.replace(/header=[^|]+\|?\s*/, '');
+    params = { header: headerM ? headerM[1].trim() : 'Category,Count',
+      rowsText: rest.split('|').map(s => s.trim()).filter(Boolean).join('\n') };
+  }
+  else if (type === 'PARTIAL_Q') {
+    const stepsM = inner.match(/\bsteps=([\d.:\-,]+)/);
+    params = { dividend: kv('dividend','0'), divisor: kv('divisor',''), steps: stepsM ? stepsM[1] : '' };
+  }
+  return { type, params };
+}
+
 // ─── Model Editor ─────────────────────────────────────────────────────────────
-function ModelEditor({ marker, onSave, onClose }) {
-  const [val, setVal] = useState(marker || '');
-  const [pastedImg, setPastedImg] = useState(null);
+function ModelEditor({ marker, initialCustomImg, onSave, onClose }) {
+  const init = markerToTypeParams(marker);
+  const [visualType, setVisualType] = useState(init.type);
+  const [visualParams, setVisualParams] = useState(init.params);
+  const [customImg, setCustomImg] = useState(initialCustomImg || null);
   const [clipMsg, setClipMsg] = useState('');
   const fileRef = useRef();
   const imgDropRef = useRef();
@@ -2001,7 +2233,7 @@ function ModelEditor({ marker, onSave, onClose }) {
   const loadBlob = blob => {
     if (!blob) return;
     const reader = new FileReader();
-    reader.onload = ev => setPastedImg(ev.target.result);
+    reader.onload = ev => setCustomImg(ev.target.result);
     reader.readAsDataURL(blob);
   };
 
@@ -2031,77 +2263,148 @@ function ModelEditor({ marker, onSave, onClose }) {
     if (file) loadBlob(file);
   };
 
-  // Fallback: document paste event
+  // Fallback: document paste event (when 'custom' type is active)
   useEffect(() => {
+    if (visualType !== 'custom') return;
     const onDocPaste = e => {
       const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image'));
       if (item) { e.preventDefault(); loadBlob(item.getAsFile()); }
     };
     document.addEventListener('paste', onDocPaste);
     return () => document.removeEventListener('paste', onDocPaste);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visualType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const preview = (() => {
-    try { return parseVisualModel(val); } catch { return null; }
+  const builtMarker = visualType === 'custom'
+    ? (customImg ? '[IMAGE: custom]' : null)
+    : paramsToMarker(visualType, visualParams);
+
+  const previewEl = (() => {
+    if (visualType === 'custom') return null;
+    try { return builtMarker ? parseVisualModel(builtMarker) : null; } catch { return null; }
   })();
+
+  const handleSave = () => {
+    onSave({ marker: builtMarker, customImg: visualType === 'custom' ? customImg : null });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-[480px] max-h-[90vh] overflow-y-auto"
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-[520px] max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
-        <h3 className="font-semibold text-gray-800 mb-3">Edit Visual</h3>
+        <h3 className="font-semibold text-gray-800 mb-3">Edit Visual / Model</h3>
 
-        {pastedImg ? (
-          <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-1">Custom image:</p>
-            <img src={pastedImg} alt="custom" className="max-w-full border rounded" />
-            <button onClick={() => setPastedImg(null)}
-              className="mt-2 text-xs text-red-600 hover:underline">Remove image</button>
-          </div>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500 mb-1">Marker code:</p>
-            <textarea value={val} onChange={e => setVal(e.target.value)}
-              className="w-full border rounded p-2 font-mono text-sm h-20 mb-3" />
-            {preview && (
-              <div className="mb-3 p-2 bg-gray-50 rounded border overflow-x-auto">
+        {/* Visual type selector */}
+        <div className="mb-3">
+          <p className="text-xs text-gray-500 mb-1">Visual Type</p>
+          <select value={visualType}
+            onChange={e => { setVisualType(e.target.value); setVisualParams({}); setCustomImg(null); setClipMsg(''); }}
+            className="border rounded p-1.5 text-sm w-full">
+            {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+          </select>
+        </div>
+
+        {/* Param form for preset visual types */}
+        {visualType !== 'none' && visualType !== 'custom' && (
+          <div className="bg-gray-50 rounded p-3 space-y-2 mb-3">
+            <VisualParamForm type={visualType} params={visualParams} onChange={setVisualParams} />
+            {previewEl && (
+              <div className="overflow-x-auto pt-1 border-t border-gray-200 mt-2">
                 <p className="text-xs text-gray-400 mb-1">Preview:</p>
-                <ErrorBoundary><div>{preview}</div></ErrorBoundary>
+                <ErrorBoundary><div>{previewEl}</div></ErrorBoundary>
               </div>
             )}
-            {/* Primary: clipboard API button */}
-            <button type="button" onClick={pasteFromClipboard}
-              className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors mb-2">
-              📋 Paste Image from Clipboard
-            </button>
-            {clipMsg && <p className="text-xs text-amber-600 mb-2">{clipMsg}</p>}
-
-            {/* Drag-and-drop fallback */}
-            <div ref={imgDropRef}
-              className="border-2 border-dashed border-gray-200 rounded p-3 text-center text-xs text-gray-400 mb-2"
-              onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
-              or drag and drop an image here
-            </div>
-
-            {/* File browse fallback */}
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50 mb-3">
-              📁 Browse for image file…
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={e => loadBlob(e.target.files[0])} />
-          </>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm rounded border border-gray-300 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave({ marker: val, customImg: pastedImg })}
-            className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+        {/* Custom image upload / paste */}
+        {visualType === 'custom' && (
+          <div className="space-y-2 mb-3">
+            {customImg ? (
+              <div className="text-center">
+                <img src={customImg} alt="custom" className="max-w-full max-h-40 mx-auto border rounded mb-1" />
+                <button type="button" onClick={() => setCustomImg(null)}
+                  className="text-xs text-red-500 hover:underline">Remove image</button>
+              </div>
+            ) : (
+              <>
+                <button type="button" onClick={pasteFromClipboard}
+                  className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors">
+                  📋 Paste Image from Clipboard
+                </button>
+                {clipMsg && <p className="text-xs text-amber-600">{clipMsg}</p>}
+                <div ref={imgDropRef}
+                  className="border-2 border-dashed border-gray-200 rounded p-3 text-center text-xs text-gray-400"
+                  onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+                  or drag and drop an image here
+                </div>
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
+                  📁 Browse for image file…
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-between items-center">
+          {/* Remove visual — only shown when there's something to remove */}
+          {(marker || initialCustomImg) ? (
+            <button type="button"
+              onClick={() => onSave({ marker: null, customImg: null })}
+              className="px-3 py-2 text-sm rounded border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-colors">
+              🗑 Remove Visual
+            </button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose}
+              className="px-4 py-2 text-sm rounded border border-gray-300 hover:bg-gray-50">Cancel</button>
+            <button onClick={handleSave}
+              className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+// ─── Math line splitter ────────────────────────────────────────────────────────
+// Detects lines that are rows of math items (fractions, mixed numbers, blanks)
+// and splits them into an array for spaced rendering. Returns null for prose.
+const UNICODE_FRAC = '½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞⅐⅑⅒';
+const MATH_ITEM_RE = new RegExp(
+  `\\d+\\s+[${UNICODE_FRAC}]` +   // mixed number with unicode fraction: "2 ⅖"
+  `|\\d+\\s*\\/\\s*\\d+` +         // fraction: "11/4" or "11 / 4"
+  `|_{3,}` +                        // answer blank: "______"
+  `|[${UNICODE_FRAC}]` +           // lone unicode fraction character
+  `|\\d+`,                          // standalone number
+  'g'
+);
+function splitMathItems(text) {
+  if (!text) return null;
+  const matches = [...text.matchAll(MATH_ITEM_RE)];
+  if (matches.length < 2) return null;
+  // Only split if math items cover most of the non-space content (not prose with incidental numbers)
+  const covered = matches.reduce((s, m) => s + m[0].replace(/\s/g, '').length, 0);
+  const total = text.replace(/\s/g, '').length;
+  if (total === 0 || covered / total < 0.65) return null;
+  return matches.map(m => m[0]);
+}
+
+// Renders a single line — if it's a row of math items, spaces them out; otherwise plain text.
+function MathLine({ text, className = '' }) {
+  const items = splitMathItems(text);
+  if (items) {
+    return (
+      <div className={`flex flex-wrap items-baseline gap-x-10 gap-y-2 py-0.5 ${className}`}>
+        {items.map((item, i) => (
+          <span key={i} className="font-serif text-base tracking-wide">{item}</span>
+        ))}
+      </div>
+    );
+  }
+  return <div className={className}>{text}</div>;
 }
 
 // ─── Assessment Preview ────────────────────────────────────────────────────────
@@ -2141,7 +2444,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-8">
         {visibleQs.map((q, vIdx) => {
           const idx = origIdxMap[vIdx];
 
@@ -2162,13 +2465,18 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
           }
 
           const cv = customVisuals?.[idx];
-          const markerToUse = cv?.marker || q.marker;
-          const visualComponent = cv?.customImg
-            ? <img src={cv.customImg} alt="custom" className="max-h-32 border rounded" />
+          // If cv exists (user has edited/set this visual), use cv values exclusively.
+          // This ensures selecting "None" / removing a visual actually clears it,
+          // rather than falling back to the original question marker.
+          const hasCvOverride = cv !== undefined;
+          const customImgSrc = hasCvOverride ? cv.customImg : q._customImg;
+          const markerToUse = hasCvOverride ? cv.marker : q.marker;
+          const visualComponent = customImgSrc
+            ? <img src={customImgSrc} alt="custom" className="max-h-32 border rounded" />
             : markerToUse
               ? (markerToUse.startsWith('[IMAGE:')
                 ? <div className="border-2 border-dashed border-orange-300 rounded p-3 text-xs text-orange-600 bg-orange-50">
-                    ⚠ Paste your own image here — click Edit Visual
+                    ⚠ Paste your own image here — click ✏ Edit Visual
                   </div>
                 : <ErrorBoundary>{parseVisualModel(markerToUse)}</ErrorBoundary>)
               : null;
@@ -2181,18 +2489,24 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
                   {q.standard}
                 </div>
               )}
-              {visualComponent && (
+              {visualComponent ? (
                 <div className="mb-1 relative">
                   {visualComponent}
                   {onEdit && (
                     <button
-                      onClick={() => onEdit(idx, markerToUse)}
-                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-xs bg-white border border-gray-300 rounded px-2 py-0.5 shadow text-gray-600 hover:bg-gray-50 transition-opacity no-print">
-                      Edit Visual
+                      onClick={() => onEdit(idx, markerToUse, customImgSrc)}
+                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-xs bg-white border border-blue-200 rounded px-2 py-0.5 shadow text-blue-600 hover:bg-blue-50 transition-opacity no-print">
+                      ✏ Edit Visual
                     </button>
                   )}
                 </div>
-              )}
+              ) : onEdit ? (
+                <button
+                  onClick={() => onEdit(idx, null, null)}
+                  className="mb-2 text-xs border border-dashed border-blue-300 text-blue-400 rounded px-2 py-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-print inline-flex items-center gap-1">
+                  <span>+</span> Add Visual / Model
+                </button>
+              ) : null}
 
               <div className="flex gap-1">
                 {q.qNum && <span className="font-semibold text-gray-700 shrink-0">{q.qNum}.</span>}
@@ -2210,16 +2524,22 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
                     <span className="cursor-pointer hover:bg-yellow-50 rounded px-0.5 transition-colors"
                       onClick={() => startEdit(idx, q.text)} title="Click to edit">
                       {q.text}
-                      {q.lines?.map((l, li) => <span key={li}><br />{l}</span>)}
                     </span>
+                  )}
+                  {q.lines?.length > 0 && (
+                    <div className="mt-2 space-y-3 ml-0.5">
+                      {q.lines.map((l, li) => (
+                        <MathLine key={li} text={l} className="text-gray-800" />
+                      ))}
+                    </div>
                   )}
 
                   {q.choices?.length > 0 && (() => {
                     const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
                     return (
-                      <div className="mt-1 ml-2 space-y-0.5">
+                      <div className="mt-2 ml-2 space-y-1.5">
                         {q.choices.map((ch, ci) => (
-                          <div key={ci} className="text-sm flex items-start gap-1.5">
+                          <div key={ci} className="text-sm flex items-start gap-2">
                             {isMultiselect
                               ? <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-sm inline-block" />
                               : <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-full inline-block" />}
@@ -2915,8 +3235,10 @@ async function copyToGoogleDocs(questions) {
       // Wrap each question in a page-break-safe container with extra top spacing
       html += `<div style="page-break-inside:avoid;margin-top:28px">`;
 
-      // Visual — use captured PNG if available, else fallback to table HTML
-      if (q.marker) {
+      // Visual — use custom uploaded image first, then captured PNG, then table HTML
+      if (q._customImg) {
+        html += `<p style="margin:0 0 4px 0"><img src="${q._customImg}" style="display:block;max-width:100%;max-height:200px;border:none"></p>`;
+      } else if (q.marker && !q.marker.startsWith('[IMAGE:')) {
         const png = visualPngs[q.marker];
         if (png) {
           html += `<p style="margin:0 0 4px 0"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
@@ -2936,8 +3258,20 @@ async function copyToGoogleDocs(questions) {
         html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
       }
 
-      // Sub-lines
-      q.lines?.forEach(l => { html += `<p style="margin:1px 0 1px 20px">${l}</p>`; });
+      // Sub-lines — math item rows get letter-spaced cells; prose stays plain
+      q.lines?.forEach(l => {
+        const items = splitMathItems(l);
+        if (items) {
+          // Render as a table row with each item in its own cell for spacing
+          html += `<table style="border-collapse:collapse;margin:6px 0 6px 20px;border:none"><tbody><tr>`;
+          items.forEach(item => {
+            html += `<td style="border:none;padding:0 28px 0 0;font-family:Georgia,serif;font-size:13pt;white-space:nowrap">${item}</td>`;
+          });
+          html += `</tr></tbody></table>`;
+        } else {
+          html += `<p style="margin:4px 0 4px 20px">${l}</p>`;
+        }
+      });
 
       // Choices
       if (q.choices?.length) {
@@ -3076,12 +3410,18 @@ export default function AssessmentBuilder() {
     }
   };
 
-  const handleEditVisual = (idx, marker) => {
-    setEditingVisual({ idx, marker });
+  const handleEditVisual = (idx, marker, customImg) => {
+    setEditingVisual({ idx, marker, customImg });
   };
 
   const handleSaveVisual = ({ marker, customImg }) => {
-    setCustomVisuals(prev => ({ ...prev, [editingVisual.idx]: { marker, customImg } }));
+    const idx = editingVisual.idx;
+    // Update the override map so AssessmentPreview uses this exclusively
+    setCustomVisuals(prev => ({ ...prev, [idx]: { marker, customImg } }));
+    // Also write back into questions state so print/export and re-mounts stay in sync
+    setQuestions(prev => prev.map((q, i) =>
+      i === idx ? { ...q, marker: marker || null, _customImg: customImg || null } : q
+    ));
     setEditingVisual(null);
   };
 
@@ -3331,6 +3671,7 @@ export default function AssessmentBuilder() {
       {editingVisual && (
         <ModelEditor
           marker={editingVisual.marker}
+          initialCustomImg={editingVisual.customImg}
           onSave={handleSaveVisual}
           onClose={() => setEditingVisual(null)}
         />
