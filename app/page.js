@@ -17,6 +17,39 @@ class ErrorBoundary extends Component {
   }
 }
 
+// ─── Fraction Utilities ────────────────────────────────────────────────────────
+function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; }
+
+/** Convert a decimal value to a fraction/mixed-number string, e.g. 0.75 → "3/4", 1.5 → "1 1/2" */
+function toFrac(v, maxDenom = 16) {
+  const val = parseFloat(v);
+  if (isNaN(val)) return String(v);
+  const sign = val < 0 ? '-' : '';
+  const absV = Math.abs(val);
+  const whole = Math.floor(absV);
+  const frac = parseFloat((absV - whole).toFixed(8));
+  if (frac < 0.0001) return `${sign}${whole}`;
+  for (let d = 2; d <= maxDenom; d++) {
+    const n = Math.round(frac * d);
+    if (Math.abs(n / d - frac) < 0.0001) {
+      const g = gcd(n, d);
+      const sn = n / g, sd = d / g;
+      return whole > 0 ? `${sign}${whole} ${sn}/${sd}` : `${sign}${sn}/${sd}`;
+    }
+  }
+  return String(parseFloat(val.toFixed(3)));
+}
+
+/** Parse a string like "1/2", "1 1/4", or "0.5" to a float */
+function parseFracStr(s) {
+  const t = String(s).trim();
+  const fracM = t.match(/^(-?\d+)\s*\/\s*(\d+)$/);
+  if (fracM) return parseInt(fracM[1]) / parseInt(fracM[2]);
+  const mixM = t.match(/^(-?\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixM) return parseInt(mixM[1]) + parseInt(mixM[2]) / parseInt(mixM[3]);
+  return parseFloat(t);
+}
+
 // ─── Vector Visual Components ─────────────────────────────────────────────────
 
 function ArrayViz({ rows, cols }) {
@@ -41,7 +74,8 @@ function ArrayViz({ rows, cols }) {
 }
 
 function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = false,
-  hopSize = null, hopStart = null, hops = null, hopOp = '+' }) {
+  hopSize = null, hopStart = null, hops = null, hopOp = '+',
+  labelFmt = 'decimal', labelAt = null }) {
   const mn = parseFloat(min) || 0, mx = parseFloat(max) || 10;
   const st = Math.max(parseFloat(step) || 1, 0.0001); // guard against 0-step infinite loop
 
@@ -51,6 +85,14 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
   for (let v = mn; v <= mx + st * 0.001 && ticks.length < maxTicks; v = parseFloat((v + st).toFixed(6))) {
     ticks.push(parseFloat(v.toFixed(6)));
   }
+
+  // Parse custom label positions (supports fractions: "0, 1/4, 1/2, 3/4, 1")
+  const customLabelVals = labelAt
+    ? String(labelAt).split(',').map(s => parseFracStr(s)).filter(v => !isNaN(v))
+    : null;
+
+  // Format a tick value as a label string
+  const fmtLabel = v => labelFmt === 'fraction' ? toFrac(v) : String(parseFloat(v.toFixed(4)));
 
   const hasArcs = jumps === true || jumps === 'true' || jumps === 'yes';
   const W = 340, pad = 28, lineY = hasArcs ? 58 : 38;
@@ -136,14 +178,25 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
       {ticks.map((v, i) => {
         const x = toX(v);
         const isEnd = Math.abs(v - mn) < st * 0.01 || Math.abs(v - mx) < st * 0.01;
-        const showLabel = showAll || isEnd;
-        // Display: trim trailing zeros (e.g. 1.50 → 1.5, 2.00 → 2)
-        const label = parseFloat(v.toFixed(4));
+        const showLabel = customLabelVals
+          ? customLabelVals.some(cv => Math.abs(cv - v) < st * 0.01)
+          : (showAll || isEnd);
+        const label = fmtLabel(v);
+        // Fraction labels may contain a space (mixed number): render on two lines
+        const isMixed = label.includes(' ') && labelFmt === 'fraction';
+        const [fracWhole, fracPart] = isMixed ? label.split(' ') : [null, null];
         return (
           <g key={i}>
             <line x1={x} y1={lineY - 7} x2={x} y2={lineY + 7} stroke="#334155" strokeWidth={1.5} />
             {showLabel && (
-              <text x={x} y={lineY + 20} textAnchor="middle" fontSize={11} fill="#334155">{label}</text>
+              isMixed ? (
+                <text x={x} textAnchor="middle" fill="#334155">
+                  <tspan x={x} dy={lineY + 14} fontSize={10}>{fracWhole}</tspan>
+                  <tspan x={x} dy={11} fontSize={9}>{fracPart}</tspan>
+                </text>
+              ) : (
+                <text x={x} y={lineY + 20} textAnchor="middle" fontSize={11} fill="#334155">{label}</text>
+              )
             )}
           </g>
         );
@@ -792,6 +845,107 @@ function BarModel({ segments, label }) {
   );
 }
 
+// ─── Fraction Strips ──────────────────────────────────────────────────────────
+// Shows stacked fraction strips for addition (two colored groups) or
+// subtraction (one group with ✕ marks on crossed-out sections).
+function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
+                      op = '+', cross = 0 }) {
+  const dA  = Math.max(2, Math.min(parseInt(d)   || 4,  24));
+  const dB  = d2 ? Math.max(2, Math.min(parseInt(d2) || dA, 24)) : dA;
+  const aWh = Math.max(0, Math.min(parseInt(aw)  || 0,  10));
+  const aFr = Math.max(0, Math.min(parseInt(an)  || 0,  dA));
+  const bWh = Math.max(0, Math.min(parseInt(bw)  || 0,  10));
+  const bFr = Math.max(0, Math.min(parseInt(bn)  || 0,  dB));
+  const xN  = Math.max(0, Math.min(parseInt(cross)|| 0, dA));
+  const isAdd  = String(op).trim() === '+';
+  const showB  = bWh > 0 || bFr > 0;
+  const hasRHS = isAdd || showB;
+
+  const SW = 220, SH = 26, GY = 3, PAD = 10, OPW = hasRHS ? 34 : 0;
+
+  const aRows  = aWh + 1;
+  const bRows  = hasRHS ? bWh + 1 : 0;
+  const maxRows = Math.max(aRows, bRows, 1);
+  const svgW = PAD + SW + (hasRHS ? OPW + SW : 0) + PAD;
+  const svgH = PAD + maxRows * (SH + GY) - GY + PAD;
+
+  // Color palettes
+  const CA = { fill: '#bfdbfe', stroke: '#3b82f6', text: '#1e40af' }; // blue
+  const CB = { fill: '#fde68a', stroke: '#d97706', text: '#92400e' }; // amber
+  const CX = { fill: '#fecaca', stroke: '#dc2626', text: '#991b1b' }; // red (crossed)
+  const CE = { fill: '#f1f5f9', stroke: '#cbd5e1', text: '#94a3b8' }; // empty
+
+  // Adaptive fraction label size based on section width
+  const secFS = (den) => {
+    const w = SW / den;
+    return w >= 28 ? 9 : w >= 20 ? 8 : w >= 14 ? 7 : 6;
+  };
+
+  // Render one group: wholes + fraction strip
+  // xStart: index from which filled sections become crossed (−1 = no crossing)
+  const renderGroup = (ox, oy, wholes, num, den, col, xStart) => {
+    const els = [];
+    // Whole strips
+    for (let i = 0; i < wholes; i++) {
+      const y = oy + i * (SH + GY);
+      els.push(
+        <g key={`w${i}`}>
+          <rect x={ox} y={y} width={SW} height={SH} fill={col.fill} stroke={col.stroke} strokeWidth={1.5} rx={2} />
+          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={col.text}>1</text>
+        </g>
+      );
+    }
+    // Fraction row (always shown — empty sections are white)
+    const fy  = oy + wholes * (SH + GY);
+    const secW = SW / den;
+    const fSize = secFS(den);
+    for (let i = 0; i < den; i++) {
+      const sx      = ox + i * secW;
+      const filled  = i < num;
+      const crossed = xStart >= 0 && i >= xStart && i < num;
+      const bg  = crossed ? CX.fill : filled ? col.fill : CE.fill;
+      const bdr = crossed ? CX.stroke : filled ? col.stroke : CE.stroke;
+      els.push(
+        <g key={`f${i}`}>
+          <rect x={sx} y={fy} width={secW} height={SH} fill={bg} stroke={bdr} strokeWidth={1} />
+          {filled && (
+            <text x={sx + secW / 2} y={fy + SH / 2 + 3} textAnchor="middle"
+              fontSize={fSize} fill={crossed ? CX.text : col.text}>
+              {`1/${den}`}
+            </text>
+          )}
+          {crossed && (
+            <>
+              <line x1={sx+3} y1={fy+3} x2={sx+secW-3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+              <line x1={sx+secW-3} y1={fy+3} x2={sx+3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+            </>
+          )}
+        </g>
+      );
+    }
+    return els;
+  };
+
+  // For subtraction: cross out the last xN filled sections
+  const crossStart = !isAdd && xN > 0 ? aFr - xN : -1;
+
+  return (
+    <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block', maxWidth: '100%' }}>
+      {/* Group A */}
+      {renderGroup(PAD, PAD, aWh, aFr, dA, CA, crossStart)}
+      {/* Operator */}
+      {hasRHS && (
+        <text x={PAD + SW + OPW / 2} y={svgH / 2 + 7}
+          textAnchor="middle" fontSize={24} fontWeight="800" fill="#475569">
+          {isAdd ? '+' : '−'}
+        </text>
+      )}
+      {/* Group B (addition, or subtraction showing subtrahend) */}
+      {hasRHS && renderGroup(PAD + SW + OPW, PAD, bWh, bFr, dB, CB, -1)}
+    </svg>
+  );
+}
+
 function FuncTable({ pairs, rule }) {
   const rows = (pairs || '1:3,2:6,3:?,4:?').split(',').map(p => {
     const [a, b] = p.split(':');
@@ -947,13 +1101,17 @@ function parseVisualModel(marker) {
 
   if (m.startsWith('[ARRAY:')) return <ArrayViz rows={kv.rows} cols={kv.cols} />;
   if (m.startsWith('[NUM_LINE:')) {
-    // Use dedicated regex for hops= since it contains commas (breaks kv parser)
+    // Use dedicated regexes for params that may contain commas (breaks kv parser)
     const hopsM = m.match(/\bhops=([\d.\-:,]+)/);
     const hops = hopsM ? hopsM[1] : null;
+    const labelAtM = m.match(/\blabelat=([\d.,/\s]+?)(?=\s+\w+=|\])/);
+    const labelAt = labelAtM ? labelAtM[1].trim() : null;
     return <NumberLine min={kv.min} max={kv.max} step={kv.step}
       showAll={kv.show === 'all'} jumps={kv.jumps === 'yes'}
       hopSize={kv.hop_size} hopStart={kv.hop_start} hops={hops}
-      hopOp={kv.hop_op || '+'} />;
+      hopOp={kv.hop_op || '+'}
+      labelFmt={kv.labelfmt || 'decimal'}
+      labelAt={kv.show === 'custom' ? labelAt : null} />;
   }
   if (m.startsWith('[GROUPS:')) return <Groups groups={kv.groups} items={kv.items} />;
   if (m.startsWith('[TENS_FRAME:')) return <TensFrame filled={kv.filled} total={kv.total} />;
@@ -996,8 +1154,12 @@ function parseVisualModel(marker) {
   if (m.startsWith('[BAR_MODEL:')) {
     const pipeIdx = kvPart.indexOf('|');
     const segPart = pipeIdx >= 0 ? kvPart.slice(0, pipeIdx).trim() : kvPart.trim();
-    const labelMatch = kvPart.match(/label=(.+?)(\s|$)/);
+    const labelMatch = kvPart.match(/label=(.+)/);
     return <BarModel segments={segPart} label={labelMatch ? labelMatch[1] : null} />;
+  }
+  if (m.startsWith('[FRAC_STRIPS:')) {
+    return <FracStrips aw={kv.aw} an={kv.an} d={kv.d} bw={kv.bw} bn={kv.bn} d2={kv.bd}
+      op={kv.op || '+'} cross={kv.cross} />;
   }
   if (m.startsWith('[TAPE:')) {
     const pipeIdx = kvPart.indexOf('|');
@@ -1073,13 +1235,59 @@ function parseAssessment(text) {
   let current = null;
   let inVersionB = false;
   let inAnswerKey = false;
-  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|PARTIAL_Q|WORK_SPACE|IMAGE)\s*[:|\]]/i;
+  const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|FRAC_STRIPS|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|PARTIAL_Q|WORK_SPACE|IMAGE)\s*[:|\]]/i;
 
-  const flush = () => { if (current) { questions.push(current); current = null; } };
+  // Google Forms / quiz-platform metadata — silently skip these lines everywhere
+  const GFORM_NOISE = [
+    // Question type + point value labels (e.g. "Multiple Choice 1 pt * Required", "Numeric 1 pt ✱ Required")
+    /^(multiple\s+choice|short\s+answer|paragraph(\s+text)?|linear\s+scale|checkbox(\s+grid)?|dropdown|date|time|file\s+upload|numeric|true\s*\/\s*false|matching)\s*[\d.]*\s*(pt|pts|point|points)?\s*[*✱]?\s*(required)?\.?$/i,
+    // Bare point values: "1 pt", "2 pts * Required", "1 pt ✱ Required"
+    /^\d+(\.\d+)?\s*(pt|pts|point|points)\s*[*✱]?\s*(required)?\.?$/i,
+    // Form UI chrome — including Unicode heavy asterisk (✱ U+2731)
+    /^[*✱]\s*required\.?$/i,
+    /^mark\s+the\s+correct\s+answer\.?$/i,
+    /^your\s+answer(s)?\.?$/i,
+    /^(this\s+form\s+was\s+created|never\s+submit\s+passwords|page\s+\d+\s+of\s+\d+|powered\s+by\s+google)/i,
+    /^(add\s+a\s+comment|submit|next|back|clear\s+form)\s*$/i,
+    // Student info field labels — NOT real questions
+    /^(name|your\s+name|student'?s?\s+name|first\s+name|last\s+name|full\s+name)\s*[*]?\.?$/i,
+    /^(class|class\s*(\/|and)?\s*period|period|course)\s*[*]?\.?$/i,
+    /^(date|today'?s?\s+date|test\s+date)\s*[*]?\.?$/i,
+    /^(email(\s+address)?)\s*[*]?\.?$/i,
+    /^(teacher'?s?\s+name|teacher)\s*[*]?\.?$/i,
+    /^(grade|grade\s+level|student\s+(id|number|#))\s*[*]?\.?$/i,
+  ];
+  const isNoise = s => GFORM_NOISE.some(re => re.test(s));
+
+  // Degenerate question text: a bare instruction word with no math content.
+  // When this is the entire q.text, treat it the same as an empty text and
+  // promote the first continuation line (the actual equation/problem) instead.
+  const DEGENERATE_TEXT = /^(solve|compute|calculate|find|evaluate|simplify|answer)\.?$/i;
+
+  const flush = () => {
+    if (current) {
+      // If text is empty OR is a bare instruction word (e.g. "Solve"),
+      // promote the first continuation line to text.
+      // Handles Google Form computation style: "10. Solve" with "24 ÷ 6 = ___" on next line.
+      if (
+        (!current.text?.trim() || DEGENERATE_TEXT.test(current.text.trim())) &&
+        current.lines?.length
+      ) {
+        current.text = current.lines.shift();
+      }
+      // Drop fully empty shells (no text, no choices, no marker, no lines — Name/Email fields etc.)
+      const hasContent = current.text?.trim() || current.choices?.length || current.marker || current.lines?.length;
+      if (hasContent) questions.push(current);
+      current = null;
+    }
+  };
 
   for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
+    // Normalize Unicode asterisk variants (✱ ⁎ ＊ ✶ etc.) → plain * so noise regex matches
+    const trimmed = lines[i].trim().replace(/[✱⁎＊✶✴✵✷✸✹❋＊]/g, '*');
     if (!trimmed) continue;
+    // Skip Google Forms metadata noise
+    if (isNoise(trimmed)) continue;
 
     // Version B boundary — must not match numbered questions like "1. Version B..."
     if (/^-*\s*version\s*b\s*-*$/i.test(trimmed)) {
@@ -1110,26 +1318,30 @@ function parseAssessment(text) {
       continue;
     }
 
-    // Question number: "1." or "1)"
-    const qMatch = trimmed.match(/^(\d+)[.)]\s+(.*)$/);
-    if (qMatch) {
-      if (current && !current.qNum) {
+    // Question number with text: "1. text" or "1) text"
+    const qMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+    // Bare question number alone on its line: "10." or "10)" — Google Form computation style
+    const bareMatch = !qMatch && trimmed.match(/^(\d+)[.)]\s*$/);
+
+    if (qMatch || bareMatch) {
+      const qNum = qMatch ? qMatch[1] : bareMatch[1];
+      const qText = qMatch ? qMatch[2] : '';
+
+      if (qMatch && current && !current.qNum) {
         // Marker was the line before — attach number to it
-        current.qNum = qMatch[1];
-        // Check if question text has inline choices appended: "What is 2+2? A) 3 B) 4 C) 5 D) 6"
-        const inlined = tryExtractInlineChoices(qMatch[2]);
+        current.qNum = qNum;
+        const inlined = tryExtractInlineChoices(qText);
         if (inlined) { current.text = inlined.qText; current.choices = inlined.choices; }
-        else current.text = qMatch[2];
-        if (/select all|choose all/i.test(qMatch[2])) current.qType = 'multiselect';
+        else current.text = qText;
+        if (/select all|choose all/i.test(qText)) current.qType = 'multiselect';
         continue;
       }
       flush();
-      const isMulti = /select all|choose all/i.test(qMatch[2]);
-      // Check if question text has inline choices appended on the same line
-      const inlined = tryExtractInlineChoices(qMatch[2]);
+      const isMulti = /select all|choose all/i.test(qText);
+      const inlined = qMatch ? tryExtractInlineChoices(qText) : null;
       current = {
-        id: `q-${i}`, type: 'question', qNum: qMatch[1], marker: null,
-        text: inlined ? inlined.qText : qMatch[2],
+        id: `q-${i}`, type: 'question', qNum, marker: null,
+        text: inlined ? inlined.qText : qText,
         choices: inlined ? inlined.choices : [],
         lines: [], vb: inVersionB,
         qType: isMulti ? 'multiselect' : 'mc',
@@ -1204,11 +1416,25 @@ const VISUAL_TYPES_LIST = [
   { id: 'AREA_MODEL', label: 'Area Model (multi-digit)' },
   { id: 'BASE10', label: 'Place Value Blocks' },
   { id: 'BAR_MODEL', label: 'Bar Model' },
+  { id: 'FRAC_STRIPS', label: 'Fraction Strips (add / subtract)' },
   { id: 'DATA_TABLE', label: 'Data Table' },
   { id: 'PARTIAL_Q', label: 'Partial Quotients' },
   { id: 'WORK_SPACE', label: 'Work Space (blank box)' },
   { id: 'custom', label: 'Upload / Paste Image' },
 ];
+
+// Default params for visual types that need values to render a visible preview
+const VISUAL_TYPE_DEFAULTS = {
+  FRAC_STRIPS: { aw: '0', an: '3', d: '4', op: '+', bw: '0', bn: '3', d2: '', cross: '0' },
+  ARRAY:       { rows: '3', cols: '4' },
+  NUM_LINE:    { min: '0', max: '10', step: '1' },
+  GROUPS:      { groups: '3', each: '4' },
+  TENS_FRAME:  { filled: '7' },
+  FRACTION:    { n: '3', d: '4' },
+  FRAC_CIRCLE: { n: '3', d: '4' },
+  BASE10:      { hundreds: '1', tens: '2', ones: '3' },
+  BAR_MODEL:   { vals: '4,4,4,4', label: '?' },
+};
 
 function VisualParamForm({ type, params, onChange }) {
   const set = (k, v) => onChange({ ...params, [k]: v });
@@ -1229,10 +1455,40 @@ function VisualParamForm({ type, params, onChange }) {
             {inp('Min', 'min', { type: 'number', step: 'any' })}
             {inp('Max', 'max', { type: 'number', step: 'any' })}
             {inp('Step', 'step', { type: 'number', min: 0.01, step: 'any', placeholder: '1' })}
-            <label className="text-xs flex items-center gap-1">
-              <input type="checkbox" checked={params.show === 'all'} onChange={e => set('show', e.target.checked ? 'all' : '')} />
-              All labels
-            </label>
+          </div>
+          {/* Label positions */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-600">Show labels at:</p>
+            <div className="flex gap-3 flex-wrap">
+              {[['', 'Endpoints only'], ['all', 'All ticks'], ['custom', 'Custom positions']].map(([val, lbl]) => (
+                <label key={val} className="text-xs flex items-center gap-1 cursor-pointer">
+                  <input type="radio" checked={(params.show || '') === val}
+                    onChange={() => set('show', val)} />
+                  {lbl}
+                </label>
+              ))}
+            </div>
+            {params.show === 'custom' && (
+              <div className="flex flex-col gap-0.5">
+                <input value={params.labelAt || ''} onChange={e => set('labelAt', e.target.value)}
+                  className="border rounded p-1 w-full font-mono text-xs"
+                  placeholder="e.g. 0, 1/4, 1/2, 3/4, 1  or  0, 0.5, 1" />
+                <span className="text-xs text-slate-400">Comma-separated — fractions like 1/4 and mixed numbers like 1 1/2 are supported</span>
+              </div>
+            )}
+          </div>
+          {/* Label format */}
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium text-gray-600">Label format:</p>
+            <div className="flex gap-3">
+              {[['decimal', 'Decimal (0.5, 1.25…)'], ['fraction', 'Fraction (1/2, 1 1/4…)']].map(([val, lbl]) => (
+                <label key={val} className="text-xs flex items-center gap-1 cursor-pointer">
+                  <input type="radio" checked={(params.labelFmt || 'decimal') === val}
+                    onChange={() => set('labelFmt', val)} />
+                  {lbl}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <label className="text-xs flex items-center gap-1">
@@ -1416,10 +1672,57 @@ function VisualParamForm({ type, params, onChange }) {
     case 'BAR_MODEL':
       return (
         <div className="space-y-1">
-          <label className="text-xs block">Segment values (comma-sep) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 4,4,4,4" className="border rounded p-1 w-32 ml-1" /></label>
-          <label className="text-xs block">Label (optional) <input value={params.label || ''} onChange={e => set('label', e.target.value)} className="border rounded p-1 w-24 ml-1" /></label>
+          <div className="text-xs block"><span>Segment values (comma-sep) </span><input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 4,4,4,4" className="border rounded p-1 w-32 ml-1" /></div>
+          <div className="text-xs block"><span>Label (optional) </span><input value={params.label || ''} onChange={e => set('label', e.target.value)} className="border rounded p-1 w-24 ml-1" /></div>
         </div>
       );
+    case 'FRAC_STRIPS': {
+      const fsOp = params.op || '+';
+      const isAddOp = fsOp === '+';
+      return (
+        <div className="space-y-3">
+          {/* Operation */}
+          <div className="flex gap-4 items-center">
+            <span className="text-xs font-medium text-gray-700">Operation:</span>
+            {[{v:'+', l:'＋ Addition'}, {v:'-', l:'− Subtraction'}].map(({v,l}) => (
+              <label key={v} className="text-xs flex items-center gap-1 cursor-pointer">
+                <input type="radio" checked={fsOp === v} onChange={() => set('op', v)} />
+                {l}
+              </label>
+            ))}
+          </div>
+          {/* Group A */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-blue-700">Group A (blue strips):</p>
+            <div className="flex gap-2 flex-wrap">
+              {inp('Whole #', 'aw', { type:'number', min:0, max:10, placeholder:'0' })}
+              {inp('Numerator', 'an', { type:'number', min:0, placeholder:'0' })}
+              {inp('Denominator', 'd', { type:'number', min:2, max:24 })}
+            </div>
+          </div>
+          {/* Group B */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-amber-700">
+              {isAddOp ? 'Group B (gold strips — second addend):' : 'Group B (gold strips — optional subtrahend):'}
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {inp('Whole #', 'bw', { type:'number', min:0, max:10, placeholder:'0' })}
+              {inp('Numerator', 'bn', { type:'number', min:0, placeholder:'0' })}
+              {inp('Denom', 'd2', { type:'number', min:2, max:24, placeholder:'same' })}
+            </div>
+            {!isAddOp && <p className="text-xs text-slate-400">Leave at 0 to hide Group B; set values to show the subtrahend separately.</p>}
+          </div>
+          {/* Cross out (subtraction only) */}
+          {!isAddOp && (
+            <div className="space-y-1 bg-red-50 rounded p-2">
+              <p className="text-xs font-semibold text-red-700">Cross out (subtraction):</p>
+              {inp('Sections to ✕', 'cross', { type:'number', min:0 })}
+              <p className="text-xs text-slate-500">Crosses out the last N filled sections of Group A with red ✕ marks. Set to 0 for none.</p>
+            </div>
+          )}
+        </div>
+      );
+    }
     case 'DATA_TABLE':
       return (
         <div className="space-y-1">
@@ -1514,6 +1817,10 @@ function paramsToMarker(type, params) {
       }
     }
     if (params.show === 'all') m += ' show=all';
+    if (params.show === 'custom' && params.labelAt?.trim()) {
+      m += ` show=custom labelat=${params.labelAt.replace(/\s+/g, '')}`;
+    }
+    if (params.labelFmt === 'fraction') m += ' labelfmt=fraction';
     return m + ']';
   }
   if (type === 'GROUPS') return `[GROUPS: groups=${params.groups || 3} items=${params.items || 4}]`;
@@ -1545,6 +1852,18 @@ function paramsToMarker(type, params) {
   if (type === 'BAR_MODEL') {
     let m = `[BAR_MODEL: ${params.vals || '5,3'}`;
     if (params.label) m += ` | label=${params.label}`;
+    return m + ']';
+  }
+  if (type === 'FRAC_STRIPS') {
+    const isAdd = (params.op || '+') === '+';
+    let m = `[FRAC_STRIPS: aw=${params.aw || 0} an=${params.an || 0} d=${params.d || 4} op=${params.op || '+'}`;
+    if (isAdd) {
+      m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
+      if (params.d2 && params.d2 !== params.d) m += ` bd=${params.d2}`;
+    } else {
+      if (params.cross && parseInt(params.cross) > 0) m += ` cross=${params.cross}`;
+      if (params.bw || params.bn) m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
+    }
     return m + ']';
   }
   if (type === 'DATA_TABLE') {
@@ -1660,6 +1979,9 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const [choices, setChoices] = useState(question?.choices?.length ? question.choices : defaultChoices());
   const [standard, setStandard] = useState(question?.standard || '');
   const [answer, setAnswer] = useState(question?.answer || '');
+  const [points, setPoints] = useState(question?.points ?? 1);
+  const DEFAULT_LINES = { fill: 2, open: 4, compute: 3, word: 5 };
+  const [lineCount, setLineCount] = useState(question?.lineCount ?? null); // null = use default
   const [visualType, setVisualType] = useState(question?._visualType || 'none');
   const [visualParams, setVisualParams] = useState(question?._visualParams || {});
   const [customImg, setCustomImg] = useState(question?._customImg || null);
@@ -1752,6 +2074,8 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
       text: qType === 'multiselect' && !/select all|choose all/i.test(qText) ? qText + ' (Select all that apply.)' : qText,
       choices: hasChoices ? choices.filter(c => c.text) : [],
       lines: [], marker, standard, answer,
+      points: Math.max(1, parseInt(points) || 1),
+      lineCount: lineCount !== null && lineCount !== '' ? Math.max(1, Math.min(20, parseInt(lineCount) || 1)) : undefined,
       _visualType: visualType, _visualParams: visualParams, _customImg: customImg,
       vb: false,
     });
@@ -1831,7 +2155,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
       {/* Visual */}
       <div>
         <p className="text-xs text-gray-500 mb-1">Visual / Model</p>
-        <select value={visualType} onChange={e => { setVisualType(e.target.value); setVisualParams({}); setCustomImg(null); }}
+        <select value={visualType} onChange={e => { const t = e.target.value; setVisualType(t); setVisualParams(VISUAL_TYPE_DEFAULTS[t] || {}); setCustomImg(null); }}
           className="border rounded p-1.5 text-sm w-full mb-2">
           {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
         </select>
@@ -1840,8 +2164,11 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
           <div className="bg-gray-50 rounded p-2 space-y-2">
             <VisualParamForm type={visualType} params={visualParams} onChange={setVisualParams} />
             {marker && (
-              <div className="overflow-x-auto pt-1">
-                <ErrorBoundary><div>{parseVisualModel(marker)}</div></ErrorBoundary>
+              <div className="border-t border-gray-200 pt-2 mt-1">
+                <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                <div className="overflow-x-auto">
+                  <ErrorBoundary><div>{parseVisualModel(marker)}</div></ErrorBoundary>
+                </div>
               </div>
             )}
           </div>
@@ -1884,11 +2211,18 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         )}
       </div>
 
-      {/* Answer Key */}
-      <div>
-        <label className="text-xs font-medium text-gray-600 block mb-1">
-          Correct Answer <span className="text-gray-400 font-normal">(for answer key — optional)</span>
-        </label>
+      {/* Points + Answer Key row */}
+      <div className="flex gap-3 items-start">
+        <div className="shrink-0 w-24">
+          <label className="text-xs font-medium text-gray-600 block mb-1">Points</label>
+          <input type="number" min="1" max="100" value={points}
+            onChange={e => setPoints(e.target.value)}
+            className="w-full border rounded p-1.5 text-sm text-center" />
+        </div>
+        <div className="flex-1">
+          <label className="text-xs font-medium text-gray-600 block mb-1">
+            Correct Answer <span className="text-gray-400 font-normal">(for answer key — optional)</span>
+          </label>
         {hasChoices && choices.filter(c => c.text).length > 0 ? (
           <select value={answer} onChange={e => setAnswer(e.target.value)}
             className="w-full border rounded p-1.5 text-sm">
@@ -1902,7 +2236,20 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
             className="w-full border rounded p-1.5 text-sm"
             placeholder="e.g. 42, 3/4, Sample response..." />
         )}
+        </div>
       </div>
+
+      {/* Answer lines — only for non-MC types */}
+      {!hasChoices && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-gray-600 shrink-0">Answer lines</label>
+          <input type="number" min="1" max="20"
+            value={lineCount ?? DEFAULT_LINES[qType] ?? 3}
+            onChange={e => setLineCount(e.target.value)}
+            className="w-16 border rounded p-1.5 text-sm text-center" />
+          <span className="text-xs text-gray-400">(default: {DEFAULT_LINES[qType] ?? 3})</span>
+        </div>
+      )}
 
       {/* Preview */}
       {qText && (
@@ -1963,23 +2310,65 @@ function AssessmentPreviewSingle({ q, customImg }) {
 }
 
 // ─── Manual Builder ───────────────────────────────────────────────────────────
-function ManualBuilder({ onPrint, onCopyGdoc }) {
+function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
   const [questions, setQuestions] = useState([]);
   const [title, setTitle] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingQ, setEditingQ] = useState(null);
   const [customVisuals, setCustomVisuals] = useState({});
   const [editingVisual, setEditingVisual] = useState(null);
+  const [editingSectionId, setEditingSectionId] = useState(null);
+  const [editingSectionText, setEditingSectionText] = useState('');
   const [includeAnswerKey, setIncludeAnswerKey] = useState(false);
+  const [showNameLine, setShowNameLine] = useState(true);
+  const [showDateLine, setShowDateLine] = useState(true);
+  const [showClassLine, setShowClassLine] = useState(false);
+  const [showScoreLine, setShowScoreLine] = useState(true);
+  const [fontSize, setFontSize] = useState('normal');   // 'normal' | 'large' | 'xl'
+  const [twoColChoices, setTwoColChoices] = useState(false);
+  const [formsScript, setFormsScript] = useState(null);
+
+  // Restore from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ab-manual');
+      if (saved) {
+        const d = JSON.parse(saved);
+        if (d.questions?.length) {
+          setQuestions(d.questions);
+          setTitle(d.title || '');
+          setCustomVisuals(d.customVisuals || {});
+          setIncludeAnswerKey(d.includeAnswerKey || false);
+          if (d.showNameLine !== undefined) setShowNameLine(d.showNameLine);
+          if (d.showDateLine !== undefined) setShowDateLine(d.showDateLine);
+          if (d.showClassLine !== undefined) setShowClassLine(d.showClassLine);
+          if (d.showScoreLine !== undefined) setShowScoreLine(d.showScoreLine);
+          if (d.fontSize) setFontSize(d.fontSize);
+          if (d.twoColChoices !== undefined) setTwoColChoices(d.twoColChoices);
+        }
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save to localStorage on every meaningful change
+  useEffect(() => {
+    try {
+      localStorage.setItem('ab-manual', JSON.stringify({
+        questions, title, customVisuals, includeAnswerKey,
+        showNameLine, showDateLine, showClassLine, showScoreLine,
+        fontSize, twoColChoices,
+      }));
+    } catch {} // quota exceeded (large images) — silently ignore
+  }, [questions, title, customVisuals, includeAnswerKey, showNameLine, showDateLine, showClassLine, showScoreLine, fontSize, twoColChoices]);
 
   // Sync _customImg from question objects → customVisuals so images always render in preview
   useEffect(() => {
     const allQsNow = [...(title ? [{ id: 'title', type: 'header', text: title }] : []), ...questions];
     let changed = false;
     const next = { ...customVisuals };
-    allQsNow.forEach((q, idx) => {
-      if (q._customImg && next[idx]?.customImg !== q._customImg) {
-        next[idx] = { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg };
+    allQsNow.forEach((q) => {
+      if (q._customImg && next[q.id]?.customImg !== q._customImg) {
+        next[q.id] = { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg };
         changed = true;
       }
     });
@@ -1999,32 +2388,51 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
     // Immediately sync _customImg → customVisuals so the image shows right away.
     // This avoids a render cycle where hasCvOverride=true with a stale null cv.customImg.
     if (q._customImg) {
-      const headerCount = title ? 1 : 0;
-      const allQsNew = [...(title ? [{ id: 'title', type: 'header', text: title }] : []), ...newQuestions];
-      const qIdx = allQsNew.findIndex(aq => aq.id === q.id);
-      if (qIdx >= 0) {
-        setCustomVisuals(prev => ({
-          ...prev,
-          [qIdx]: { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg },
-        }));
-      }
+      setCustomVisuals(prev => ({
+        ...prev,
+        [q.id]: { marker: q.marker || '[IMAGE: custom]', customImg: q._customImg },
+      }));
     }
 
     setShowForm(false);
     setEditingQ(null);
   };
 
-  const deleteQ = id => setQuestions(prev => prev.filter(q => q.id !== id));
-  const moveQ = (id, dir) => {
+  const deleteQ = id => setQuestions(prev => prev.filter(q => q.id !== id).map((q, i) => ({ ...q, qNum: String(i + 1) })));
+
+  const addSection = () => {
+    const id = `section-${Date.now()}`;
+    setQuestions(prev => [...prev, { id, type: 'section', text: 'Section Title' }]);
+    setEditingSectionId(id);
+    setEditingSectionText('Section Title');
+    setShowForm(false);
+  };
+  const saveSectionEdit = id => {
+    setQuestions(prev => prev.map(q => q.id === id ? { ...q, text: editingSectionText || q.text } : q));
+    setEditingSectionId(null);
+  };
+
+  const duplicateQ = id => {
     setQuestions(prev => {
       const idx = prev.findIndex(q => q.id === id);
       if (idx < 0) return prev;
-      const next = [...prev];
-      const swapIdx = idx + dir;
-      if (swapIdx < 0 || swapIdx >= next.length) return prev;
-      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      return next.map((q, i) => ({ ...q, qNum: q.type === 'question' ? String(i + 1) : q.qNum }));
+      const copy = { ...prev[idx], id: `manual-${Date.now()}` };
+      const next = [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+      return next.map((q, i) => ({ ...q, qNum: String(i + 1) }));
     });
+  };
+  const dragIdx = useRef(null);
+  const reorderByDrag = toIdx => {
+    const fromIdx = dragIdx.current;
+    dragIdx.current = null;
+    if (fromIdx === null || fromIdx === toIdx) return;
+    setQuestions(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next.map((q, i) => ({ ...q, qNum: String(i + 1) }));
+    });
+    setCustomVisuals({});
   };
 
   const headerQ = title ? [{ id: 'title', type: 'header', text: title }] : [];
@@ -2047,23 +2455,74 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
     ? [{ id: 'ak-div', type: 'ak-divider' }, ...answerKeyRows]
     : [];
   const allQs = [...headerQ, ...questions, ...akSection];
+  const totalPoints = questions.filter(q => q.type === 'question').reduce((sum, q) => sum + (parseInt(q.points) || 1), 0);
 
   return (
     <div className="flex gap-6">
       {/* Left — question list */}
       <div className="w-80 shrink-0 space-y-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assessment Title</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assessment Title</p>
           <input value={title} onChange={e => setTitle(e.target.value)}
             placeholder="e.g. 3.OA.1 Multiplication Check-In"
             className="w-full border rounded p-2 text-sm" />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+        {/* Student header — always visible, right below title */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1.5 shadow-sm">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Student Header</p>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={showNameLine} onChange={e => setShowNameLine(e.target.checked)} />
+            <span className="text-gray-700">Name line</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={showDateLine} onChange={e => setShowDateLine(e.target.checked)} />
+            <span className="text-gray-700">Date line</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={showScoreLine} onChange={e => setShowScoreLine(e.target.checked)} />
+            <span className="text-gray-700">Score line</span>
+          </label>
+        </div>
+
+        {/* Layout panel */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2.5 shadow-sm">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Layout</p>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Font Size</p>
+            <div className="flex gap-1">
+              {[['normal','Normal'],['large','Large'],['xl','X-Large']].map(([val, label]) => (
+                <button key={val} onClick={() => setFontSize(val)}
+                  className={`flex-1 text-xs py-1 rounded border transition-colors font-medium ${fontSize === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={twoColChoices} onChange={e => setTwoColChoices(e.target.checked)} />
+            <span className="text-gray-700">2-column answer choices</span>
+          </label>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Questions ({qCount})</p>
-            <button onClick={() => { setEditingQ(null); setShowForm(!showForm); }}
-              className="text-xs bg-blue-600 text-white rounded px-2 py-1 hover:bg-blue-700">+ Add</button>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Questions ({qCount})</p>
+            <div className="flex items-center gap-1.5">
+              {questions.length > 0 && (
+                <button
+                  onClick={() => { if (window.confirm('Clear all questions and start a new assessment?')) { setQuestions([]); setTitle(''); setCustomVisuals({}); setIncludeAnswerKey(false); setEditingSectionId(null); localStorage.removeItem('ab-manual'); } }}
+                  className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded-md px-2 py-1 transition-colors">
+                  Clear
+                </button>
+              )}
+              <button onClick={addSection}
+                className="text-xs text-gray-600 border border-gray-300 rounded-md px-2 py-1 hover:bg-gray-50 font-medium transition-colors" title="Add section divider">
+                ─ Section
+              </button>
+              <button onClick={() => { setEditingQ(null); setShowForm(!showForm); setEditingSectionId(null); }}
+                className="text-xs bg-blue-600 text-white rounded-md px-2.5 py-1 hover:bg-blue-700 shadow-sm font-medium transition-colors">+ Add</button>
+            </div>
           </div>
 
           {questions.length === 0 && (
@@ -2071,18 +2530,60 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
           )}
 
           <div className="space-y-1 max-h-80 overflow-y-auto">
-            {questions.map((q, idx) => q.type === 'question' && (
-              <div key={q.id} className="flex items-center gap-1 bg-gray-50 rounded p-1.5 group">
-                <span className="text-xs text-gray-400 w-5 shrink-0">{q.qNum}.</span>
-                <span className="flex-1 text-xs text-gray-700 truncate">{q.text}</span>
-                <div className="opacity-0 group-hover:opacity-100 flex gap-0.5">
-                  <button onClick={() => moveQ(q.id, -1)} className="text-gray-400 hover:text-gray-700 px-0.5">↑</button>
-                  <button onClick={() => moveQ(q.id, 1)} className="text-gray-400 hover:text-gray-700 px-0.5">↓</button>
-                  <button onClick={() => { setEditingQ(q); setShowForm(true); }} className="text-blue-500 hover:text-blue-700 px-0.5">✎</button>
-                  <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5">✕</button>
+            {questions.map((q, idx) => {
+              if (q.type === 'section') {
+                return (
+                  <div key={q.id}
+                    draggable
+                    onDragStart={() => { dragIdx.current = idx; }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => reorderByDrag(idx)}
+                    className="group cursor-default select-none">
+                    {editingSectionId === q.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={editingSectionText}
+                          onChange={e => setEditingSectionText(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveSectionEdit(q.id); if (e.key === 'Escape') setEditingSectionId(null); }}
+                          className="flex-1 border rounded px-1.5 py-1 text-xs font-semibold"
+                          placeholder="e.g. Part I: Multiple Choice"
+                        />
+                        <button onClick={() => saveSectionEdit(q.id)} className="text-green-600 text-xs px-1">✓</button>
+                        <button onClick={() => setEditingSectionId(null)} className="text-gray-400 text-xs px-0.5">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 border-t border-gray-200 pt-1.5 mt-0.5">
+                        <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">⠿</span>
+                        <span className="flex-1 text-xs font-semibold text-gray-600 truncate">{q.text}</span>
+                        <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 shrink-0">
+                          <button onClick={() => { setEditingSectionId(q.id); setEditingSectionText(q.text); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">✎</button>
+                          <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">✕</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              if (q.type !== 'question') return null;
+              return (
+                <div key={q.id}
+                  draggable
+                  onDragStart={() => { dragIdx.current = idx; }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => reorderByDrag(idx)}
+                  className="flex items-center gap-1 bg-gray-50 rounded p-1.5 group cursor-default select-none">
+                  <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">⠿</span>
+                  <span className="text-xs text-gray-400 w-5 shrink-0">{q.qNum}.</span>
+                  <span className="flex-1 text-xs text-gray-700 truncate">{q.text}</span>
+                  <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 shrink-0">
+                    <button onClick={() => duplicateQ(q.id)} title="Duplicate" className="text-gray-400 hover:text-indigo-600 px-0.5 text-xs">⧉</button>
+                    <button onClick={() => { setEditingQ(q); setShowForm(true); setEditingSectionId(null); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">✎</button>
+                    <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">✕</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -2098,7 +2599,7 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
         {qCount > 0 && (
           <div className="space-y-2">
             {/* Answer key toggle */}
-            <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1 shadow-sm">
               <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                 <input type="checkbox" checked={includeAnswerKey}
                   onChange={e => setIncludeAnswerKey(e.target.checked)} />
@@ -2112,34 +2613,85 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
               )}
             </div>
             <button onClick={onPrint}
-              className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+              className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
               🖨 Print / Export PDF
             </button>
             <button onClick={() => onCopyGdoc(allQs)}
-              className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+              className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
               📋 Copy to Google Docs
+            </button>
+            <button onClick={() => onExportDocx({ questions: allQs, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices })}
+              className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+              📄 Export as Word (.docx)
+            </button>
+            <button onClick={() => setFormsScript(generateFormsScript(allQs, title))}
+              className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+              📝 Export to Google Forms
             </button>
           </div>
         )}
       </div>
+      {formsScript && <FormsScriptModal script={formsScript} onClose={() => setFormsScript(null)} />}
 
       {/* Right — preview */}
       <div className="flex-1 min-w-0">
         {allQs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-300">
-            <p className="text-4xl mb-3">✏️</p>
-            <p className="text-sm">Add questions to build your assessment</p>
+          <div className="flex flex-col items-center justify-center h-80 rounded-xl border-2 border-dashed border-gray-200 bg-white text-center px-8">
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">✏️</div>
+            <p className="text-sm font-semibold text-gray-600 mb-1">No questions yet</p>
+            <p className="text-xs text-gray-400 leading-relaxed">Click "+ Add" in the panel on the left to start building your assessment</p>
           </div>
         ) : (
-          <div id="print-area" className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
+          <div id="print-area" className={`bg-white rounded-xl border border-gray-100 p-8 shadow-md ${{ normal: 'text-sm', large: 'text-base', xl: 'text-lg' }[fontSize]}`}>
+            {/* Assessment title — top of page */}
+            {title && (
+              <div className="text-center font-bold text-lg mb-4 font-serif text-gray-800">{title}</div>
+            )}
+            {/* Student header lines — below title, above questions */}
+            {(showNameLine || showDateLine || showClassLine || showScoreLine) && (
+              <div className="mb-6 font-serif text-sm text-gray-900">
+                {(showNameLine || showDateLine) && (
+                  <div className="flex gap-8 mb-2">
+                    {showNameLine && (
+                      <div className="flex-1 flex items-baseline gap-2">
+                        <span className="shrink-0">Name</span>
+                        <span className="flex-1 border-b border-gray-800 inline-block" style={{minWidth:'8rem'}} />
+                      </div>
+                    )}
+                    {showDateLine && (
+                      <div className="w-48 flex items-baseline gap-2">
+                        <span className="shrink-0">Date</span>
+                        <span className="flex-1 border-b border-gray-800 inline-block" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(showClassLine || showScoreLine) && (
+                  <div className="flex items-center gap-8">
+                    {showClassLine && (
+                      <div className="flex-1 flex items-baseline gap-2">
+                        <span className="shrink-0">Class/Period</span>
+                        <span className="flex-1 border-b border-gray-800 inline-block" style={{minWidth:'6rem'}} />
+                      </div>
+                    )}
+                    {showScoreLine && qCount > 0 && (
+                      <div className="ml-auto whitespace-nowrap">
+                        Score: <span className="inline-block border-b border-gray-900 w-16 ml-1 mr-1 align-bottom" /> / {totalPoints} {totalPoints === 1 ? 'pt' : 'pts'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Pass allQs WITHOUT the title row so the title is never rendered inside AssessmentPreview.
+                customVisuals is keyed by question ID so no index shift is needed. */}
             <AssessmentPreview
-              questions={allQs}
+              questions={title ? allQs.slice(1) : allQs}
               customVisuals={customVisuals}
-              onEdit={(idx, marker, customImg) => setEditingVisual({ idx, marker, customImg })}
-              onQuestionEdit={(idx, uq) => setQuestions(prev => prev.map((q, i) => {
-                const qIdx = questions.indexOf(prev.filter(x => x.type === 'question')[i]);
-                return q.id === uq.id ? uq : q;
-              }))}
+              onEdit={(qId, marker, customImg, imgScale) =>
+                setEditingVisual({ qId, marker, customImg, imgScale })}
+              onQuestionEdit={(idx, uq) => setQuestions(prev => prev.map(q => q.id === uq.id ? uq : q))}
+              twoColChoices={twoColChoices}
             />
           </div>
         )}
@@ -2149,16 +2701,14 @@ function ManualBuilder({ onPrint, onCopyGdoc }) {
         <ModelEditor
           marker={editingVisual.marker}
           initialCustomImg={editingVisual.customImg}
-          onSave={({ marker, customImg }) => {
-            const idx = editingVisual.idx;
-            setCustomVisuals(prev => ({ ...prev, [idx]: { marker, customImg } }));
-            // Write back into questions so the change persists (look up by ID via allQs)
-            const editedQ = allQs[idx];
-            if (editedQ && editedQ.type === 'question') {
-              setQuestions(prev => prev.map(q =>
-                q.id === editedQ.id ? { ...q, marker: marker || null, _customImg: customImg || null } : q
-              ));
-            }
+          initialImgScale={editingVisual.imgScale}
+          onSave={({ marker, customImg, imgScale }) => {
+            const qId = editingVisual.qId;
+            setCustomVisuals(prev => ({ ...prev, [qId]: { marker, customImg, imgScale } }));
+            // Write back into questions so the change persists (match by question ID)
+            setQuestions(prev => prev.map(q =>
+              q.id === qId ? { ...q, marker: marker || null, _customImg: customImg || null, _imgScale: imgScale ?? 1 } : q
+            ));
             setEditingVisual(null);
           }}
           onClose={() => setEditingVisual(null)}
@@ -2181,10 +2731,13 @@ function markerToTypeParams(marker) {
   if (type === 'ARRAY') { params = { rows: kv('rows','3'), cols: kv('cols','4') }; }
   else if (type === 'NUM_LINE') {
     const hopsM = inner.match(/\bhops=([\d.\-:,]+)/);
+    const labelAtM = inner.match(/\blabelat=([\d.,/]+)/);
     params = { min: kv('min','0'), max: kv('max','20'), step: kv('step','1'),
       jumps: kv('jumps',''), hop_op: kv('hop_op','+'),
       hop_size: kv('hop_size',''), hop_start: kv('hop_start',''),
-      hops: hopsM ? hopsM[1] : '', show: kv('show','') };
+      hops: hopsM ? hopsM[1] : '', show: kv('show',''),
+      labelAt: labelAtM ? labelAtM[1] : '',
+      labelFmt: kv('labelfmt','decimal') };
   }
   else if (type === 'GROUPS') { params = { groups: kv('groups','3'), items: kv('items','4') }; }
   else if (type === 'TENS_FRAME') { params = { filled: kv('filled','5'), total: kv('total','10') }; }
@@ -2217,15 +2770,21 @@ function markerToTypeParams(marker) {
     const stepsM = inner.match(/\bsteps=([\d.:\-,]+)/);
     params = { dividend: kv('dividend','0'), divisor: kv('divisor',''), steps: stepsM ? stepsM[1] : '' };
   }
+  else if (type === 'FRAC_STRIPS') {
+    params = { aw: kv('aw','1'), an: kv('an','3'), d: kv('d','4'),
+      op: kv('op','+'), bw: kv('bw','1'), bn: kv('bn','3'),
+      d2: kv('bd',''), cross: kv('cross','0') };
+  }
   return { type, params };
 }
 
 // ─── Model Editor ─────────────────────────────────────────────────────────────
-function ModelEditor({ marker, initialCustomImg, onSave, onClose }) {
+function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClose }) {
   const init = markerToTypeParams(marker);
   const [visualType, setVisualType] = useState(init.type);
   const [visualParams, setVisualParams] = useState(init.params);
   const [customImg, setCustomImg] = useState(initialCustomImg || null);
+  const [imgScale, setImgScale] = useState(initialImgScale ?? 1);
   const [clipMsg, setClipMsg] = useState('');
   const fileRef = useRef();
   const imgDropRef = useRef();
@@ -2284,7 +2843,7 @@ function ModelEditor({ marker, initialCustomImg, onSave, onClose }) {
   })();
 
   const handleSave = () => {
-    onSave({ marker: builtMarker, customImg: visualType === 'custom' ? customImg : null });
+    onSave({ marker: builtMarker, customImg: visualType === 'custom' ? customImg : null, imgScale: visualType === 'custom' ? imgScale : 1 });
   };
 
   return (
@@ -2297,7 +2856,7 @@ function ModelEditor({ marker, initialCustomImg, onSave, onClose }) {
         <div className="mb-3">
           <p className="text-xs text-gray-500 mb-1">Visual Type</p>
           <select value={visualType}
-            onChange={e => { setVisualType(e.target.value); setVisualParams({}); setCustomImg(null); setClipMsg(''); }}
+            onChange={e => { const t = e.target.value; setVisualType(t); setVisualParams(VISUAL_TYPE_DEFAULTS[t] || {}); setCustomImg(null); setClipMsg(''); }}
             className="border rounded p-1.5 text-sm w-full">
             {VISUAL_TYPES_LIST.map(vt => <option key={vt.id} value={vt.id}>{vt.label}</option>)}
           </select>
@@ -2320,8 +2879,18 @@ function ModelEditor({ marker, initialCustomImg, onSave, onClose }) {
         {visualType === 'custom' && (
           <div className="space-y-2 mb-3">
             {customImg ? (
-              <div className="text-center">
-                <img src={customImg} alt="custom" className="max-w-full max-h-40 mx-auto border rounded mb-1" />
+              <div className="text-center space-y-2">
+                <img src={customImg} alt="custom"
+                  style={{ maxWidth: `${Math.round(imgScale * 100)}%` }}
+                  className="max-h-48 mx-auto border rounded" />
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs text-gray-400 shrink-0">Size</span>
+                  <input type="range" min="20" max="100" step="5"
+                    value={Math.round(imgScale * 100)}
+                    onChange={e => setImgScale(Number(e.target.value) / 100)}
+                    className="flex-1 h-1.5 accent-blue-600" />
+                  <span className="text-xs text-gray-500 shrink-0 w-8 text-right">{Math.round(imgScale * 100)}%</span>
+                </div>
                 <button type="button" onClick={() => setCustomImg(null)}
                   className="text-xs text-red-500 hover:underline">Remove image</button>
               </div>
@@ -2408,7 +2977,7 @@ function MathLine({ text, className = '' }) {
 }
 
 // ─── Assessment Preview ────────────────────────────────────────────────────────
-function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit }) {
+function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, onRegen, regenningIdx, twoColChoices = false }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [editText, setEditText] = useState('');
   const [activeVersion, setActiveVersion] = useState('A');
@@ -2423,10 +2992,19 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
     return !q.vb && q.type !== 'answer-key'; // Version A
   });
 
-  const startEdit = (idx, text) => { setEditingIdx(idx); setEditText(text); };
+  const startEdit = (idx, text) => { setEditingIdx(idx); setEditText(text); setEditingChoiceIdx(null); };
   const saveEdit = (idx, q) => { onQuestionEdit(idx, { ...q, text: editText }); setEditingIdx(null); };
+  // Choice editing
+  const [editingChoiceIdx, setEditingChoiceIdx] = useState(null); // { qIdx, cIdx }
+  const [editChoiceText, setEditChoiceText] = useState('');
+  const startChoiceEdit = (qIdx, cIdx, text) => { setEditingChoiceIdx({ qIdx, cIdx }); setEditChoiceText(text); setEditingIdx(null); };
+  const saveChoiceEdit = (qIdx, q) => {
+    const newChoices = q.choices.map((ch, ci) => ci === editingChoiceIdx.cIdx ? { ...ch, text: editChoiceText } : ch);
+    onQuestionEdit(qIdx, { ...q, choices: newChoices });
+    setEditingChoiceIdx(null);
+  };
 
-  // Map from visibleQs index to original questions index (for customVisuals keying)
+  // Map from visibleQs index to original questions index (used for onQuestionEdit/onRegen callbacks)
   const origIdxMap = visibleQs.map(vq => questions.indexOf(vq));
 
   return (
@@ -2445,13 +3023,30 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
       )}
 
       <div className="space-y-8">
-        {visibleQs.map((q, vIdx) => {
+        {(() => {
+          // Single-pass sequential numbering. Any item that isn't a structural
+          // non-question type gets the next question number.
+          const NON_Q = new Set(['header', 'section', 'answer-key', 'vb-divider', 'ak-divider']);
+          let qSeq = 0;
+          return visibleQs.map((q, vIdx) => {
           const idx = origIdxMap[vIdx];
+          // Count inline so there's no index mismatch between two separate maps
+          const displayNum = !NON_Q.has(q.type) ? ++qSeq : null;
 
           if (q.type === 'header') {
             return (
               <div key={q.id} className="text-center font-bold text-base mt-4 mb-1 text-gray-800">
                 {q.text}
+              </div>
+            );
+          }
+
+          if (q.type === 'section') {
+            return (
+              <div key={q.id} className="pt-2 pb-1">
+                <div className="border-t-2 border-gray-300 pt-2 text-center font-bold text-sm text-gray-700 tracking-wide">
+                  {q.text}
+                </div>
               </div>
             );
           }
@@ -2464,97 +3059,159 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit })
             );
           }
 
-          const cv = customVisuals?.[idx];
-          // If cv exists (user has edited/set this visual), use cv values exclusively.
-          // This ensures selecting "None" / removing a visual actually clears it,
-          // rather than falling back to the original question marker.
+          const cv = customVisuals?.[q.id];
           const hasCvOverride = cv !== undefined;
-          const customImgSrc = hasCvOverride ? cv.customImg : q._customImg;
+          const customImgSrc = hasCvOverride ? (cv.customImg || null) : (q._customImg || null);
+          const imgScale = hasCvOverride ? (cv.imgScale ?? 1) : (q._imgScale ?? 1);
           const markerToUse = hasCvOverride ? cv.marker : q.marker;
           const visualComponent = customImgSrc
-            ? <img src={customImgSrc} alt="custom" className="max-h-32 border rounded" />
+            ? <img src={customImgSrc} alt="custom"
+                style={{ maxWidth: `${Math.round(imgScale * 100)}%` }}
+                className="max-h-48 border rounded" />
             : markerToUse
               ? (markerToUse.startsWith('[IMAGE:')
                 ? <div className="border-2 border-dashed border-orange-300 rounded p-3 text-xs text-orange-600 bg-orange-50">
-                    ⚠ Paste your own image here — click ✏ Edit Visual
+                    ⚠ Click "Edit Visual" below to paste your own image
                   </div>
                 : <ErrorBoundary>{parseVisualModel(markerToUse)}</ErrorBoundary>)
               : null;
 
           return (
-            <div key={q.id} className="group relative">
+            <div key={q.id} className="relative">
               {/* Standard tag — top-right corner */}
               {q.standard && (
                 <div className="absolute top-0 right-0 text-xs text-blue-500 font-medium bg-white/90 px-1.5 py-0.5 rounded-bl border border-blue-200 no-print-border leading-tight">
                   {q.standard}
                 </div>
               )}
-              {visualComponent ? (
-                <div className="mb-1 relative">
-                  {visualComponent}
-                  {onEdit && (
-                    <button
-                      onClick={() => onEdit(idx, markerToUse, customImgSrc)}
-                      className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-xs bg-white border border-blue-200 rounded px-2 py-0.5 shadow text-blue-600 hover:bg-blue-50 transition-opacity no-print">
-                      ✏ Edit Visual
-                    </button>
-                  )}
-                </div>
-              ) : onEdit ? (
-                <button
-                  onClick={() => onEdit(idx, null, null)}
-                  className="mb-2 text-xs border border-dashed border-blue-300 text-blue-400 rounded px-2 py-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors no-print inline-flex items-center gap-1">
-                  <span>+</span> Add Visual / Model
-                </button>
-              ) : null}
 
-              <div className="flex gap-1">
-                {q.qNum && <span className="font-semibold text-gray-700 shrink-0">{q.qNum}.</span>}
-                <div className="flex-1">
-                  {editingIdx === idx ? (
-                    <div className="flex gap-2 items-start">
-                      <textarea value={editText} onChange={e => setEditText(e.target.value)}
-                        className="flex-1 border rounded p-1 text-sm font-sans" rows={2} />
-                      <div className="flex flex-col gap-1">
-                        <button onClick={() => saveEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-1">✓</button>
-                        <button onClick={() => setEditingIdx(null)} className="text-xs border rounded px-2 py-1">✕</button>
-                      </div>
+              {/* ① Number + question text on the same line */}
+              {editingIdx === idx ? (
+                <div className="mb-1.5">
+                  <span className="font-bold text-gray-800 mr-1.5">
+                    {displayNum != null ? `${displayNum}.` : (q.qNum ? `${q.qNum}.` : '')}
+                    {q.points != null ? <span className="font-normal text-xs text-gray-500 ml-1">({q.points} {q.points === 1 ? 'pt' : 'pts'})</span> : null}
+                  </span>
+                  <div className="flex gap-2 items-start mt-1 pl-4">
+                    <textarea value={editText} onChange={e => setEditText(e.target.value)}
+                      className="flex-1 border border-blue-300 rounded p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-200" rows={2} autoFocus />
+                    <div className="flex flex-col gap-1">
+                      <button type="button" onClick={() => saveEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-1 hover:bg-green-700 font-medium">Save</button>
+                      <button type="button" onClick={() => setEditingIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-2 py-1 hover:bg-red-200">Cancel</button>
                     </div>
-                  ) : (
-                    <span className="cursor-pointer hover:bg-yellow-50 rounded px-0.5 transition-colors"
-                      onClick={() => startEdit(idx, q.text)} title="Click to edit">
-                      {q.text}
-                    </span>
-                  )}
-                  {q.lines?.length > 0 && (
-                    <div className="mt-2 space-y-3 ml-0.5">
-                      {q.lines.map((l, li) => (
-                        <MathLine key={li} text={l} className="text-gray-800" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-1 leading-snug">
+                  <span className="font-bold text-gray-800">
+                    {displayNum != null ? `${displayNum}.` : (q.qNum ? `${q.qNum}.` : '')}
+                    {q.points != null ? <span className="font-normal text-xs text-gray-500 ml-1">({q.points} {q.points === 1 ? 'pt' : 'pts'})</span> : null}
+                  </span>
+                  {q.text && <span className="ml-1.5">{q.text}</span>}
+                </div>
+              )}
+
+              {/* ② Content — indented below the number+text row */}
+              <div className="pl-4">
+                {/* Math continuation lines */}
+                {q.lines?.length > 0 && (
+                  <div className="mt-1 space-y-3 ml-0.5">
+                    {q.lines.map((l, li) => (
+                      <MathLine key={li} text={l} className="text-gray-800" />
+                    ))}
+                  </div>
+                )}
+
+                {/* Visual model — shown below question number/text */}
+                {visualComponent && (
+                  <div className="my-2">{visualComponent}</div>
+                )}
+
+                {/* Choices */}
+                {q.choices?.length > 0 && (() => {
+                  const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
+                  const use2Col = twoColChoices && !isMultiselect && q.choices.length >= 3;
+                  return (
+                    <div className={`mt-2 ml-2 ${use2Col ? 'grid grid-cols-2 gap-x-4 gap-y-1.5' : 'space-y-1.5'}`}>
+                      {q.choices.map((ch, ci) => (
+                        <div key={ci} className="text-sm flex items-start gap-2">
+                          {isMultiselect
+                            ? <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-sm inline-block" />
+                            : <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-full inline-block" />}
+                          {editingChoiceIdx?.qIdx === idx && editingChoiceIdx?.cIdx === ci ? (
+                            <span className="flex-1 flex gap-1 items-center">
+                              <span className="font-medium">{ch.letter})</span>
+                              <input value={editChoiceText} onChange={e => setEditChoiceText(e.target.value)}
+                                className="flex-1 border border-blue-300 rounded px-1 py-0.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-200" autoFocus
+                                onKeyDown={e => { if (e.key === 'Enter') saveChoiceEdit(idx, q); if (e.key === 'Escape') setEditingChoiceIdx(null); }} />
+                              <button type="button" onClick={() => saveChoiceEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-1.5 py-0.5">Save</button>
+                              <button type="button" onClick={() => setEditingChoiceIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-1.5 py-0.5">✕</button>
+                            </span>
+                          ) : (
+                            <span className="group/ch">
+                              <span className="font-medium">{ch.letter})</span> {ch.text}
+                              {onQuestionEdit && (
+                                <button type="button"
+                                  onClick={() => startChoiceEdit(idx, ci, ch.text)}
+                                  className="ml-1 opacity-0 group-hover/ch:opacity-60 text-xs text-blue-500 no-print hover:opacity-100">✏</button>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       ))}
                     </div>
-                  )}
+                  );
+                })()}
 
-                  {q.choices?.length > 0 && (() => {
-                    const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
-                    return (
-                      <div className="mt-2 ml-2 space-y-1.5">
-                        {q.choices.map((ch, ci) => (
-                          <div key={ci} className="text-sm flex items-start gap-2">
-                            {isMultiselect
-                              ? <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-sm inline-block" />
-                              : <span className="mt-0.5 shrink-0 w-3.5 h-3.5 border border-gray-500 rounded-full inline-block" />}
-                            <span><span className="font-medium">{ch.letter})</span> {ch.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                {/* Answer lines for non-MC */}
+                {!q.choices?.length && ['fill', 'open', 'compute', 'word'].includes(q.qType) && (() => {
+                  const ansDefaults = { fill: 2, open: 4, compute: 3, word: 5 };
+                  const n = q.lineCount ?? ansDefaults[q.qType] ?? 3;
+                  return (
+                    <div className="mt-3 space-y-4">
+                      {Array.from({ length: n }, (_, i) => (
+                        <div key={i} className="border-b border-gray-400 w-full" style={{ height: '1.4rem' }} />
+                      ))}
+                    </div>
+                  );
+                })()}
 
-                </div>
+                {/* Action toolbar — no-print, always visible (not hover-dependent) */}
+                {(onEdit || onQuestionEdit || onRegen) && editingIdx !== idx && (
+                  <div className="flex gap-1.5 mt-3 flex-wrap no-print">
+                    {onEdit && (
+                      <button type="button"
+                        onClick={() => onEdit(q.id, markerToUse, customImgSrc, imgScale)}
+                        className="text-xs border rounded px-2 py-0.5 text-blue-600 border-blue-200 bg-white hover:bg-blue-50 transition-colors">
+                        {visualComponent ? '✏ Edit Visual' : '+ Add Visual / Model'}
+                      </button>
+                    )}
+                    {onQuestionEdit && (
+                      <button type="button"
+                        onClick={() => startEdit(idx, q.text)}
+                        className="text-xs border rounded px-2 py-0.5 text-gray-600 border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+                        ✏ Edit Text
+                      </button>
+                    )}
+                    {onRegen && (
+                      <button type="button"
+                        onClick={() => onRegen(idx)}
+                        disabled={regenningIdx !== null}
+                        className={`text-xs border rounded px-2 py-0.5 transition-colors ${
+                          regenningIdx === idx
+                            ? 'text-indigo-500 border-indigo-300 bg-indigo-50 cursor-wait'
+                            : 'text-gray-400 border-gray-200 bg-white hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50'
+                        }`}>
+                        {regenningIdx === idx ? '↺ Regenerating…' : '↺ Regenerate'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
-        })}
+        });
+        })()}
       </div>
     </div>
   );
@@ -3115,6 +3772,230 @@ function visualToHtml(marker) {
   return `<p style="border:1px dashed #94a3b8;padding:4px 8px;color:#64748b;font-size:9pt;margin:4px 0">[${m}]</p>`;
 }
 
+// ─── Export as Word (.docx) helper ────────────────────────────────────────────
+
+async function exportAsDocx(questions, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize = 'normal', twoColChoices = false) {
+  // 1. Render SVG markers → PNG data URLs (same canvas technique as Google Docs export)
+  const visualPngs = {};
+  const markersNeeded = [...new Set(
+    questions.filter(q => q.marker && !q.marker.startsWith('[IMAGE:')).map(q => q.marker)
+  )];
+
+  if (markersNeeded.length) {
+    try {
+      const { createRoot } = await import('react-dom/client');
+      const renderContainer = document.createElement('div');
+      renderContainer.style.cssText = 'position:fixed;top:-9999px;left:-9999px;background:white;pointer-events:none;';
+      document.body.appendChild(renderContainer);
+
+      await Promise.all(markersNeeded.map(async marker => {
+        const div = document.createElement('div');
+        renderContainer.appendChild(div);
+        const root = createRoot(div);
+        try {
+          root.render(parseVisualModel(marker));
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const svgEl = div.querySelector('svg');
+          if (!svgEl) return;
+          const w = parseFloat(svgEl.getAttribute('width')) || 300;
+          const h = parseFloat(svgEl.getAttribute('height')) || 100;
+          const serializer = new XMLSerializer();
+          let svgStr = serializer.serializeToString(svgEl);
+          if (!svgStr.includes('xmlns='))
+            svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+          const dataUrl = await new Promise(res => {
+            const img = new Image();
+            img.onload = () => {
+              const scale = 2;
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.ceil(w * scale);
+              canvas.height = Math.ceil(h * scale);
+              const ctx = canvas.getContext('2d');
+              ctx.fillStyle = 'white';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(scale, scale);
+              ctx.drawImage(img, 0, 0, w, h);
+              res(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => res(null);
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+          });
+          if (dataUrl) visualPngs[marker] = { dataUrl, w: Math.ceil(w), h: Math.ceil(h) };
+        } catch {}
+        try { root.unmount(); } catch {}
+      }));
+
+      document.body.removeChild(renderContainer);
+    } catch {}
+  }
+
+  // 2. Annotate questions with pre-rendered PNG data URLs for the server
+  const annotated = questions.map(q => {
+    if (!q || !q.marker || q.marker.startsWith('[IMAGE:')) return q;
+    const png = visualPngs[q.marker];
+    if (!png) return q;
+    return { ...q, _svgPng: png.dataUrl, _svgW: png.w / 2, _svgH: png.h / 2 };
+  });
+
+  // 3. POST to server and download response
+  const res = await fetch('/api/export-docx', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ questions: annotated, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (title || 'assessment').replace(/[^a-zA-Z0-9 _-]/g, '').trim() + '.docx';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ─── Google Forms Script generator ───────────────────────────────────────────
+
+function generateFormsScript(questions, title) {
+  const safeTitle = (title || 'Assessment').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const lines = [];
+  lines.push('/**');
+  lines.push(' * Auto-generated by Assessment Builder');
+  lines.push(' * 1. Open https://script.google.com/create');
+  lines.push(' * 2. Paste this code and click Run ▶');
+  lines.push(' * 3. Check the Logs (View → Logs) for your form URL');
+  lines.push(' */');
+  lines.push('function createAssessment() {');
+  lines.push(`  var form = FormApp.create('${safeTitle}');`);
+  lines.push("  form.setIsQuiz(true);");
+  lines.push("  form.setShuffleQuestions(false);");
+  lines.push('');
+
+  let qNum = 0;
+  for (const q of questions) {
+    if (!q || !q.type) continue;
+    if (['vb-divider', 'ak-divider', 'answer-key'].includes(q.type)) continue;
+    // Skip the title header row (id === 'title')
+    if (q.type === 'header' && q.id === 'title') continue;
+
+    if (q.type === 'section') {
+      const safeText = (q.text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      lines.push(`  // ── Section ──────────────────────────────────`);
+      lines.push(`  var sec = form.addPageBreakItem();`);
+      lines.push(`  sec.setTitle('${safeText}');`);
+      lines.push('');
+      continue;
+    }
+
+    if (q.type !== 'question') continue;
+    qNum++;
+    const v = `q${qNum}`;
+    const pts = q.points || 1;
+    const safeText = (q.text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    if (q.qType === 'multiselect') {
+      lines.push(`  var ${v} = form.addCheckboxItem();`);
+      lines.push(`  ${v}.setTitle('${safeText}');`);
+      if (q.choices?.length) {
+        const choiceStr = q.choices.map(c => {
+          const ct = (c.text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `    ${v}.createChoice('${ct}')`;
+        }).join(',\n');
+        lines.push(`  ${v}.setChoices([\n${choiceStr}\n  ]);`);
+      }
+      lines.push(`  ${v}.setPoints(${pts});`);
+
+    } else if (q.choices?.length) {
+      // Multiple choice
+      lines.push(`  var ${v} = form.addMultipleChoiceItem();`);
+      lines.push(`  ${v}.setTitle('${safeText}');`);
+      const choiceStr = q.choices.map(c => {
+        const ct = (c.text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const correct = q.answer && c.letter === q.answer;
+        return `    ${v}.createChoice('${ct}', ${correct})`;
+      }).join(',\n');
+      lines.push(`  ${v}.setChoices([\n${choiceStr}\n  ]);`);
+      lines.push(`  ${v}.setPoints(${pts});`);
+
+    } else if (q.qType === 'fill' || q.qType === 'compute' || q.qType === 'computation') {
+      lines.push(`  var ${v} = form.addShortAnswerItem();`);
+      lines.push(`  ${v}.setTitle('${safeText}');`);
+      lines.push(`  ${v}.setPoints(${pts});`);
+
+    } else {
+      // open, word, default
+      lines.push(`  var ${v} = form.addParagraphTextItem();`);
+      lines.push(`  ${v}.setTitle('${safeText}');`);
+      lines.push(`  ${v}.setPoints(${pts});`);
+    }
+    lines.push('');
+  }
+
+  lines.push("  Logger.log('✅ Form created!');");
+  lines.push("  Logger.log('Edit URL: ' + form.getEditUrl());");
+  lines.push("  Logger.log('Student URL: ' + form.getPublishedUrl());");
+  lines.push('}');
+  return lines.join('\n');
+}
+
+// ─── Google Forms Script Modal ────────────────────────────────────────────────
+
+function FormsScriptModal({ script, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(script);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // fallback: select all in textarea
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-900">Export to Google Forms</h3>
+            <p className="text-xs text-gray-500 mt-0.5">3-step process — no sign-in required here</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+
+        {/* Steps */}
+        <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
+          <ol className="text-xs text-blue-800 space-y-1 list-none">
+            <li><span className="font-bold">1.</span> Copy the script below</li>
+            <li><span className="font-bold">2.</span> Open <a href="https://script.google.com/create" target="_blank" rel="noreferrer" className="underline font-semibold">script.google.com/create</a> → paste → click <strong>Run ▶</strong></li>
+            <li><span className="font-bold">3.</span> Check <strong>View → Logs</strong> for your form link</li>
+          </ol>
+        </div>
+
+        {/* Script box */}
+        <div className="flex-1 overflow-auto px-6 py-4">
+          <textarea
+            readOnly
+            value={script}
+            className="w-full h-64 font-mono text-xs border border-gray-200 rounded-lg p-3 bg-gray-50 resize-none focus:outline-none"
+          />
+        </div>
+
+        <div className="flex gap-3 px-6 pb-5 pt-1">
+          <button
+            onClick={copy}
+            className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
+            {copied ? '✓ Copied!' : '📋 Copy Script'}
+          </button>
+          <a href="https://script.google.com/create" target="_blank" rel="noreferrer"
+            className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-gray-200 text-gray-700 hover:bg-gray-50 text-center transition-colors">
+            Open script.google.com ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Google Docs copy helper ──────────────────────────────────────────────────
 
 function gdocPlainText(questions) {
@@ -3323,6 +4204,13 @@ export default function AssessmentBuilder() {
     });
   };
 
+  const handleExportDocx = ({ questions: qs, title = '', showNameLine = true, showDateLine = true, showClassLine = false, showScoreLine = true, totalPoints = null, fontSize = 'normal', twoColChoices = false }) => {
+    showToast('Building Word document…');
+    exportAsDocx(qs, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices)
+      .then(() => showToast('Downloaded! Open in Word or upload to Google Drive.'))
+      .catch(() => showToast('Export failed — please try again'));
+  };
+
   // Input mode
   const [inputMode, setInputMode] = useState('file'); // file | paste | url | scratch
   const [gradeLevel, setGradeLevel] = useState('3');
@@ -3342,21 +4230,45 @@ export default function AssessmentBuilder() {
 
   // Generation state
   const [loading, setLoading] = useState(false);
+  const [loadingMode, setLoadingMode] = useState(''); // 'extract' | 'parallel' — shown in button label
   const [error, setError] = useState('');
   const [rawText, setRawText] = useState('');
   const [questions, setQuestions] = useState([]);
   const [customVisuals, setCustomVisuals] = useState({});
-  const [editingVisual, setEditingVisual] = useState(null); // {idx, marker}
+  const [resultMode, setResultMode] = useState(''); // 'extract' | 'parallel' — what produced current result
+  const [editingVisual, setEditingVisual] = useState(null); // {qId, marker, customImg, imgScale}
+  const [regenningIdx, setRegenningIdx] = useState(null);
+  const [aiFormsScript, setAiFormsScript] = useState(null);
 
-  // Load API key from localStorage
+  // Load API key + restore AI mode state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('anthropic_api_key');
     if (saved) setApiKey(saved);
+    // Restore AI mode session
+    try {
+      const aiSaved = localStorage.getItem('ab-ai');
+      if (aiSaved) {
+        const d = JSON.parse(aiSaved);
+        if (d.questions?.length) {
+          setQuestions(d.questions);
+          setCustomVisuals(d.customVisuals || {});
+          setRawText(d.rawText || '');
+        }
+      }
+    } catch {}
     // inject print styles
     const style = document.createElement('style');
     style.textContent = PRINT_STYLE;
     document.head.appendChild(style);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save AI mode state to localStorage
+  useEffect(() => {
+    if (!questions.length) return;
+    try {
+      localStorage.setItem('ab-ai', JSON.stringify({ questions, customVisuals, rawText }));
+    } catch {} // quota exceeded — silently ignore
+  }, [questions, customVisuals, rawText]);
 
   const saveApiKey = key => {
     setApiKey(key);
@@ -3367,13 +4279,15 @@ export default function AssessmentBuilder() {
     setFile(e.target.files[0] || null);
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (generateMode = 'parallel') => {
     if (!apiKey) { setShowSettings(true); return; }
     setLoading(true);
+    setLoadingMode(generateMode);
     setError('');
     setRawText('');
     setQuestions([]);
     setCustomVisuals({});
+    setResultMode('');
 
     try {
       let response;
@@ -3386,6 +4300,7 @@ export default function AssessmentBuilder() {
         fd.append('customTitle', customTitle);
         fd.append('includeVersionB', String(includeVersionB));
         fd.append('includeAnswerKey', String(includeAnswerKey));
+        fd.append('generateMode', generateMode);
         fd.append('file', file);
         response = await fetch('/api/generate', { method: 'POST', body: fd });
       } else {
@@ -3394,7 +4309,7 @@ export default function AssessmentBuilder() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             apiKey, gradeLevel, subject, standard, customTitle,
-            includeVersionB, includeAnswerKey,
+            includeVersionB, includeAnswerKey, generateMode,
             inputMode, pastedText, url, scratchTopic, scratchInstructions,
           }),
         });
@@ -3402,31 +4317,99 @@ export default function AssessmentBuilder() {
       const data = await response.json();
       if (data.error) { setError(data.error); return; }
       setRawText(data.result);
-      setQuestions(parseAssessment(data.result));
+      // Strip any AI-generated visual markers — user adds visuals manually via "+ Add Visual/Model"
+      setQuestions(parseAssessment(data.result).map(q => ({ ...q, marker: null, _customImg: null })));
+      setResultMode(generateMode);
     } catch (e) {
       setError(e.message || 'Request failed');
     } finally {
       setLoading(false);
+      setLoadingMode('');
     }
   };
 
-  const handleEditVisual = (idx, marker, customImg) => {
-    setEditingVisual({ idx, marker, customImg });
+  // Generate a parallel form from the already-extracted text (Step 2 of the two-step flow)
+  const handleCreateParallel = async () => {
+    if (!apiKey) { setShowSettings(true); return; }
+    setLoading(true);
+    setLoadingMode('parallel');
+    setError('');
+    setQuestions([]);
+    setCustomVisuals({});
+    setResultMode('');
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey, gradeLevel, subject, standard, customTitle,
+          includeVersionB, includeAnswerKey,
+          generateMode: 'parallel',
+          inputMode: 'paste',
+          pastedText: rawText,
+        }),
+      });
+      const data = await response.json();
+      if (data.error) { setError(data.error); return; }
+      setRawText(data.result);
+      // Strip any AI-generated visual markers — user adds visuals manually via "+ Add Visual/Model"
+      setQuestions(parseAssessment(data.result).map(q => ({ ...q, marker: null, _customImg: null })));
+      setResultMode('parallel');
+    } catch (e) {
+      setError(e.message || 'Request failed');
+    } finally {
+      setLoading(false);
+      setLoadingMode('');
+    }
   };
 
-  const handleSaveVisual = ({ marker, customImg }) => {
-    const idx = editingVisual.idx;
-    // Update the override map so AssessmentPreview uses this exclusively
-    setCustomVisuals(prev => ({ ...prev, [idx]: { marker, customImg } }));
+  const handleEditVisual = (qId, marker, customImg, imgScale) => {
+    setEditingVisual({ qId, marker, customImg, imgScale });
+  };
+
+  const handleSaveVisual = ({ marker, customImg, imgScale }) => {
+    const qId = editingVisual.qId;
+    // Update the override map so AssessmentPreview uses this exclusively (keyed by question ID)
+    setCustomVisuals(prev => ({ ...prev, [qId]: { marker, customImg, imgScale: imgScale ?? 1 } }));
     // Also write back into questions state so print/export and re-mounts stay in sync
-    setQuestions(prev => prev.map((q, i) =>
-      i === idx ? { ...q, marker: marker || null, _customImg: customImg || null } : q
+    setQuestions(prev => prev.map(q =>
+      q.id === qId ? { ...q, marker: marker || null, _customImg: customImg || null, _imgScale: imgScale ?? 1 } : q
     ));
     setEditingVisual(null);
   };
 
-  const handleQuestionEdit = (idx, updatedQ) => {
-    setQuestions(prev => prev.map((q, i) => i === idx ? updatedQ : q));
+  const handleQuestionEdit = (updatedQ) => {
+    setQuestions(prev => prev.map(q => q.id === updatedQ.id ? updatedQ : q));
+  };
+
+  const handleRegenQuestion = async idx => {
+    if (!apiKey) { showToast('Add your API key first (⚙ API Key)'); return; }
+    setRegenningIdx(idx);
+    try {
+      const q = questions[idx];
+      const contextQuestions = questions.filter((_, i) => i !== idx).slice(0, 6);
+      const res = await fetch('/api/regen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, question: q, contextQuestions, gradeLevel, subject, standard }),
+      });
+      const data = await res.json();
+      if (data.error) { showToast(data.error); return; }
+      const parsed = parseAssessment(data.result);
+      if (parsed.length > 0) {
+        // Preserve original question's type, number, and version flag;
+        // qType MUST come from the original so MC stays MC, fill-in stays fill-in.
+        // Strip AI-generated marker — user adds visuals manually.
+        const newQ = { ...parsed[0], id: q.id, qNum: q.qNum, vb: q.vb, qType: q.qType, marker: null, _customImg: null };
+        setQuestions(prev => prev.map((pq, i) => i === idx ? newQ : pq));
+        // Clear stale customVisuals entry for this question so the new question renders cleanly
+        setCustomVisuals(prev => { const next = { ...prev }; delete next[q.id]; return next; });
+      }
+    } catch {
+      showToast('Regeneration failed — check your API key');
+    } finally {
+      setRegenningIdx(null);
+    }
   };
 
   const handlePrint = () => window.print();
@@ -3443,30 +4426,36 @@ export default function AssessmentBuilder() {
       )}
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between no-print">
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Assessment Builder</h1>
+      <header className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between no-print shadow-sm">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm">A</div>
+            <div>
+              <h1 className="text-sm font-bold text-gray-900 leading-tight">Assessment Builder</h1>
+              <p className="text-xs text-gray-400 leading-none mt-0.5">AI-powered parallel forms</p>
+            </div>
           </div>
           {/* App mode toggle */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
             {[['ai', '✦ AI Generate'], ['manual', '✏ Manual Build']].map(([mode, label]) => (
               <button key={mode} onClick={() => setAppMode(mode)}
-                className={`px-4 py-1.5 text-xs transition-colors ${appMode === mode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`px-4 py-1.5 text-xs rounded-md transition-all font-medium ${appMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                 {label}
               </button>
             ))}
           </div>
         </div>
         <button onClick={() => setShowSettings(true)}
-          className="text-gray-500 hover:text-gray-800 text-xl" title="Settings">⚙</button>
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors" title="Settings">
+          <span className="text-base leading-none">⚙</span><span className="font-medium">API Key</span>
+        </button>
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-6">
 
       {/* ── Manual Build mode ── */}
       {appMode === 'manual' && (
-        <ManualBuilder onPrint={() => window.print()} onCopyGdoc={handleCopyGdoc} />
+        <ManualBuilder onPrint={() => window.print()} onCopyGdoc={handleCopyGdoc} onExportDocx={handleExportDocx} />
       )}
 
       {/* ── AI Generate mode ── */}
@@ -3477,8 +4466,8 @@ export default function AssessmentBuilder() {
         <div className="w-80 shrink-0 space-y-4 no-print">
 
           {/* Mode tabs */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Input</p>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Input</p>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
               {[['file', 'Upload PDF'], ['paste', 'Paste Text'], ['url', 'URL'], ['scratch', 'From Scratch']].map(([mode, label]) => (
                 <button key={mode}
@@ -3528,8 +4517,8 @@ export default function AssessmentBuilder() {
           </div>
 
           {/* Options */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Options</p>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Options</p>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -3580,13 +4569,33 @@ export default function AssessmentBuilder() {
             </div>
           </div>
 
-          {/* Generate button */}
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm">
-            {loading ? 'Generating…' : '✦ Generate Assessment'}
-          </button>
+          {/* Generate buttons — two-step flow for file uploads */}
+          {inputMode === 'file' ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => handleGenerate('extract')}
+                disabled={loading || !file}
+                className="w-full py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 text-white font-semibold text-sm hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
+                {loading && loadingMode === 'extract' ? 'Extracting…' : '📄 Step 1: Extract from PDF'}
+              </button>
+              <button
+                onClick={() => handleGenerate('parallel')}
+                disabled={loading || !file}
+                className="w-full py-3 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 text-white font-semibold text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
+                {loading && loadingMode === 'parallel' ? 'Generating…' : '✦ Step 2: Generate Parallel'}
+              </button>
+              <p className="text-xs text-gray-400 text-center leading-relaxed">
+                Extract first to review the copy, then generate a parallel version
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleGenerate('parallel')}
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 text-white font-semibold text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
+              {loading ? 'Generating…' : '✦ Generate Assessment'}
+            </button>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
@@ -3597,12 +4606,20 @@ export default function AssessmentBuilder() {
           {hasResult && (
             <div className="space-y-2">
               <button onClick={handlePrint}
-                className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 🖨 Print / Export PDF
               </button>
               <button onClick={() => handleCopyGdoc(questions)}
-                className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 📋 Copy to Google Docs
+              </button>
+              <button onClick={() => handleExportDocx({ questions, title: customTitle })}
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+                📄 Export as Word (.docx)
+              </button>
+              <button onClick={() => setAiFormsScript(generateFormsScript(questions, customTitle))}
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
+                📝 Export to Google Forms
               </button>
               <button
                 onClick={() => {
@@ -3612,12 +4629,12 @@ export default function AssessmentBuilder() {
                   a.download = 'assessment.txt';
                   a.click();
                 }}
-                className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 ⬇ Download Text
               </button>
               <button
                 onClick={() => { setQuestions([]); setRawText(''); setCustomVisuals({}); setFile(null); }}
-                className="w-full py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-400 hover:bg-gray-50 transition-colors">
                 ✕ Clear
               </button>
             </div>
@@ -3635,29 +4652,89 @@ export default function AssessmentBuilder() {
         {/* Right panel — preview */}
         <div className="flex-1 min-w-0">
           {loading && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-              <div className="animate-spin text-3xl mb-3">⟳</div>
-              <p className="text-sm">Generating parallel form…</p>
-              <p className="text-xs mt-1 text-gray-300">This may take 20–40 seconds</p>
+            <div className="flex flex-col items-center justify-center h-80 rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+              <p className="text-sm font-medium text-gray-700">Generating parallel form…</p>
+              <p className="text-xs mt-1.5 text-gray-400">This may take 20–40 seconds</p>
             </div>
           )}
 
           {!loading && !hasResult && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-300">
-              <p className="text-4xl mb-3">📄</p>
-              <p className="text-sm">Upload a PDF to generate a parallel form</p>
-              <p className="text-xs mt-1">Visual models will be recreated as editable vector graphics</p>
+            <div className="flex flex-col items-center justify-center h-80 rounded-xl border-2 border-dashed border-gray-200 bg-white text-center px-8">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">📄</div>
+              <p className="text-sm font-semibold text-gray-600 mb-1">Ready to generate</p>
+              <p className="text-xs text-gray-400 max-w-xs leading-relaxed">Upload a PDF or enter your content on the left, then click Generate. Visuals will be recreated as editable vector graphics.</p>
             </div>
           )}
 
           {!loading && hasResult && (
-            <div id="print-area" className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
-              <AssessmentPreview
-                questions={questions}
-                customVisuals={customVisuals}
-                onEdit={handleEditVisual}
-                onQuestionEdit={handleQuestionEdit}
-              />
+            <div>
+              {/* Step banner — shown after extraction, prompts Step 2 */}
+              {resultMode === 'extract' && (
+                <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-center justify-between gap-4 no-print">
+                  <div>
+                    <p className="text-sm font-semibold text-indigo-800">✅ Exact copy extracted</p>
+                    <p className="text-xs text-indigo-600 mt-0.5">Review and edit below. When ready, create a parallel version with new numbers.</p>
+                  </div>
+                  <button
+                    onClick={handleCreateParallel}
+                    disabled={loading}
+                    className="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm">
+                    ✦ Create Parallel Version
+                  </button>
+                </div>
+              )}
+              {resultMode === 'parallel' && (
+                <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 flex items-center justify-between gap-4 no-print">
+                  <p className="text-xs text-blue-700 font-medium">✦ Parallel version generated — edit any question, visual, or choice below</p>
+                  <button
+                    onClick={handleCreateParallel}
+                    disabled={loading}
+                    className="shrink-0 px-3 py-1.5 rounded-lg border border-blue-300 bg-white text-blue-700 text-xs font-medium hover:bg-blue-50 transition-colors">
+                    Regenerate Parallel
+                  </button>
+                </div>
+              )}
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => { if (window.confirm('Clear this assessment and start over?')) { setQuestions([]); setCustomVisuals({}); setRawText(''); setResultMode(''); localStorage.removeItem('ab-ai'); } }}
+                  className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded-lg px-3 py-1.5 transition-colors no-print">
+                  ✕ New Assessment
+                </button>
+              </div>
+              <div id="print-area" className="bg-white rounded-xl border border-gray-100 p-8 shadow-md">
+                {/* Pull title out so Name/Date can go between title and questions */}
+                {questions[0]?.type === 'header' && (
+                  <div className="text-center font-bold text-lg mb-3 font-serif text-gray-800">
+                    {questions[0].text}
+                  </div>
+                )}
+                {/* Name / Date header — always shown below title */}
+                <div className="flex gap-8 mb-5 font-serif text-sm text-gray-900">
+                  <div className="flex-1 flex items-baseline gap-2">
+                    <span className="shrink-0">Name</span>
+                    <span className="flex-1 border-b border-gray-800 inline-block" style={{minWidth:'8rem'}} />
+                  </div>
+                  <div className="w-48 flex items-baseline gap-2">
+                    <span className="shrink-0">Date</span>
+                    <span className="flex-1 border-b border-gray-800 inline-block" />
+                  </div>
+                </div>
+                {(() => {
+                  const hasHeader = questions[0]?.type === 'header';
+                  const off = hasHeader ? 1 : 0;
+                  return (
+                    <AssessmentPreview
+                      questions={hasHeader ? questions.slice(1) : questions}
+                      customVisuals={customVisuals}
+                      onEdit={handleEditVisual}
+                      onQuestionEdit={(idx, updatedQ) => handleQuestionEdit(updatedQ)}
+                      onRegen={(idx) => handleRegenQuestion(idx + off)}
+                      regenningIdx={regenningIdx != null ? regenningIdx - off : null}
+                    />
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>
@@ -3672,10 +4749,12 @@ export default function AssessmentBuilder() {
         <ModelEditor
           marker={editingVisual.marker}
           initialCustomImg={editingVisual.customImg}
+          initialImgScale={editingVisual.imgScale}
           onSave={handleSaveVisual}
           onClose={() => setEditingVisual(null)}
         />
       )}
+      {aiFormsScript && <FormsScriptModal script={aiFormsScript} onClose={() => setAiFormsScript(null)} />}
       </div>
     </div>
   );
