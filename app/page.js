@@ -1107,47 +1107,82 @@ function NumberChart({ start = 1, end = 100, cols = 10, shaded = '' }) {
 }
 
 // ─── Volume 3D (Rectangular Prism) ────────────────────────────────────────────
-function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h }) {
+function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
   const L = Math.min(Math.max(parseInt(l) || 3, 1), 8);
   const W = Math.min(Math.max(parseInt(w) || 2, 1), 8);
   const H = Math.min(Math.max(parseInt(h) || 2, 1), 8);
   const showFormula = formula !== 'no';
+  const showCubeLines = cubelines !== 'no';
   const s = 22;
-  const off_x = W * s + 32;
-  const off_y = H * s + 18;
-  const X = (i, j) => (i - j) * s + off_x;
-  const Y = (i, j, k) => (i + j) * s * 0.5 - k * s + off_y;
-  const P = (i, j, k) => `${X(i, j)},${Y(i, j, k)}`;
-  const svgW = (L + W) * s + 64;
-  const svgH = H * s + (L + W) * s * 0.5 + 48 + (showFormula ? 22 : 0);
+  const c = Math.sqrt(3) / 2; // cos30° ≈ 0.866 for true isometric
+
+  // Offsets so the leftmost/topmost point stays inside the SVG
+  const pad = 38;
+  const ox = W * s * c + pad;
+  const oy = H * s + Math.round(pad * 0.55);
+
+  const X = (i, j) => ox + (i - j) * s * c;
+  const Y = (i, j, k) => oy + (i + j) * s * 0.5 - k * s;
+  const P = (i, j, k) => `${X(i,j).toFixed(1)},${Y(i,j,k).toFixed(1)}`;
+
+  const svgW = Math.ceil((L + W) * s * c + pad * 2);
+  const svgH = Math.ceil(H * s + (L + W) * s * 0.5 + pad * 1.4 + (showFormula ? 22 : 0));
+
+  // 3 visible faces
   const frontPts = `${P(0,0,0)} ${P(L,0,0)} ${P(L,0,H)} ${P(0,0,H)}`;
   const rightPts = `${P(L,0,0)} ${P(L,W,0)} ${P(L,W,H)} ${P(L,0,H)}`;
   const topPts   = `${P(0,0,H)} ${P(L,0,H)} ${P(L,W,H)} ${P(0,W,H)}`;
+
+  // Unit-cube grid lines on each face
   const gridLines = [];
-  let gk = 0;
-  for (let i = 1; i < L; i++) gridLines.push(<line key={gk++} x1={X(i,0)} y1={Y(i,0,0)} x2={X(i,0)} y2={Y(i,0,H)} stroke="#93c5fd" strokeWidth={0.8} />);
-  for (let k = 1; k < H; k++) gridLines.push(<line key={gk++} x1={X(0,0)} y1={Y(0,0,k)} x2={X(L,0)} y2={Y(L,0,k)} stroke="#93c5fd" strokeWidth={0.8} />);
-  for (let j = 1; j < W; j++) gridLines.push(<line key={gk++} x1={X(L,j)} y1={Y(L,j,0)} x2={X(L,j)} y2={Y(L,j,H)} stroke="#60a5fa" strokeWidth={0.8} />);
-  for (let k = 1; k < H; k++) gridLines.push(<line key={gk++} x1={X(L,0)} y1={Y(L,0,k)} x2={X(L,W)} y2={Y(L,W,k)} stroke="#60a5fa" strokeWidth={0.8} />);
-  for (let i = 1; i < L; i++) gridLines.push(<line key={gk++} x1={X(i,0)} y1={Y(i,0,H)} x2={X(i,W)} y2={Y(i,W,H)} stroke="#bfdbfe" strokeWidth={0.8} />);
-  for (let j = 1; j < W; j++) gridLines.push(<line key={gk++} x1={X(0,j)} y1={Y(0,j,H)} x2={X(L,j)} y2={Y(L,j,H)} stroke="#bfdbfe" strokeWidth={0.8} />);
+  if (showCubeLines) {
+    let gk = 0;
+    // Front face: length-direction verticals + height-direction horizontals
+    for (let i = 1; i < L; i++) gridLines.push(
+      <line key={gk++} x1={X(i,0).toFixed(1)} y1={Y(i,0,0).toFixed(1)} x2={X(i,0).toFixed(1)} y2={Y(i,0,H).toFixed(1)} stroke="#93c5fd" strokeWidth={0.8}/>);
+    for (let k = 1; k < H; k++) gridLines.push(
+      <line key={gk++} x1={X(0,0).toFixed(1)} y1={Y(0,0,k).toFixed(1)} x2={X(L,0).toFixed(1)} y2={Y(L,0,k).toFixed(1)} stroke="#93c5fd" strokeWidth={0.8}/>);
+    // Right face: depth-direction lines + height-direction horizontals
+    for (let j = 1; j < W; j++) gridLines.push(
+      <line key={gk++} x1={X(L,j).toFixed(1)} y1={Y(L,j,0).toFixed(1)} x2={X(L,j).toFixed(1)} y2={Y(L,j,H).toFixed(1)} stroke="#60a5fa" strokeWidth={0.8}/>);
+    for (let k = 1; k < H; k++) gridLines.push(
+      <line key={gk++} x1={X(L,0).toFixed(1)} y1={Y(L,0,k).toFixed(1)} x2={X(L,W).toFixed(1)} y2={Y(L,W,k).toFixed(1)} stroke="#60a5fa" strokeWidth={0.8}/>);
+    // Top face: length-direction lines + depth-direction lines
+    for (let i = 1; i < L; i++) gridLines.push(
+      <line key={gk++} x1={X(i,0).toFixed(1)} y1={Y(i,0,H).toFixed(1)} x2={X(i,W).toFixed(1)} y2={Y(i,W,H).toFixed(1)} stroke="#bfdbfe" strokeWidth={0.8}/>);
+    for (let j = 1; j < W; j++) gridLines.push(
+      <line key={gk++} x1={X(0,j).toFixed(1)} y1={Y(0,j,H).toFixed(1)} x2={X(L,j).toFixed(1)} y2={Y(L,j,H).toFixed(1)} stroke="#bfdbfe" strokeWidth={0.8}/>);
+  }
+
   const decLbl = s => String(s || '').replace(/_/g, ' ');
-  const lx = X(L/2, 0), ly = Y(L/2, 0, 0) + 15;
-  const wx = X(L, W/2) + 12, wy = Y(L, W/2, 0) + 4;
-  const hx = X(0, 0) - 10, hy = Y(0, 0, H/2);
+  const lx = (X(0,0) + X(L,0)) / 2;
+  const ly = (Y(0,0,0) + Y(L,0,0)) / 2 + 15;
+  const wx = (X(L,0) + X(L,W)) / 2 + 12;
+  const wy = (Y(L,0,0) + Y(L,W,0)) / 2;
+  const hx = X(0,0) - 10;
+  const hy = (Y(0,0,0) + Y(0,0,H)) / 2;
   const vol = L * W * H;
+
   return (
     <svg width={svgW} height={svgH} style={{ display: 'block' }}>
+      {/* Filled faces */}
       <polygon points={frontPts} fill="#dbeafe" stroke="none" />
       <polygon points={rightPts} fill="#bfdbfe" stroke="none" />
       <polygon points={topPts}   fill="#eff6ff" stroke="none" />
+      {/* Unit cube grid lines */}
       {gridLines}
-      <polygon points={frontPts} fill="none" stroke="#2563eb" strokeWidth={1.5} />
-      <polygon points={rightPts} fill="none" stroke="#1d4ed8" strokeWidth={1.5} />
-      <polygon points={topPts}   fill="none" stroke="#3b82f6" strokeWidth={1.5} />
-      <text x={lx} y={ly} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{decLbl(lbl_l) || `l = ${L}`}</text>
-      <text x={wx} y={wy} textAnchor="start" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_w) || `w = ${W}`}</text>
-      <text x={hx} y={hy} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>
+      {/* Face outlines — uniform dark blue for clean look */}
+      <polygon points={frontPts} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
+      <polygon points={rightPts} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
+      <polygon points={topPts}   fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
+      {/* Hidden back edges (dashed) — completes the 3D prism look */}
+      <line x1={X(0,0).toFixed(1)} y1={Y(0,0,0).toFixed(1)} x2={X(0,W).toFixed(1)} y2={Y(0,W,0).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
+      <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(L,W).toFixed(1)} y2={Y(L,W,0).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
+      <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(0,W).toFixed(1)} y2={Y(0,W,H).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
+      {/* Dimension labels */}
+      <text x={lx.toFixed(1)} y={ly.toFixed(1)} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{decLbl(lbl_l) || `l = ${L}`}</text>
+      <text x={wx.toFixed(1)} y={wy.toFixed(1)} textAnchor="start" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_w) || `w = ${W}`}</text>
+      <text x={hx.toFixed(1)} y={hy.toFixed(1)} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>
       {showFormula && (
         <text x={svgW / 2} y={svgH - 6} textAnchor="middle" fontSize={11} fill="#1e3a8a">
           {`V = ${L} × ${W} × ${H} = ${vol} cubic units`}
@@ -1314,7 +1349,7 @@ function parseVisualModel(marker) {
   }
   if (m.startsWith('[FRAC_STRIPS:')) {
     return <FracStrips aw={kv.aw} an={kv.an} d={kv.d} bw={kv.bw} bn={kv.bn} d2={kv.bd}
-      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crossWh} />;
+      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crosswh} />;
   }
   if (m.startsWith('[TAPE:')) {
     const pipeIdx = kvPart.indexOf('|');
@@ -1362,7 +1397,7 @@ function parseVisualModel(marker) {
     const lblLM = m.match(/\blbl_l=(\S+)/);
     const lblWM = m.match(/\blbl_w=(\S+)/);
     const lblHM = m.match(/\blbl_h=(\S+)/);
-    return <Volume3D l={kv.l} w={kv.w} h={kv.h} formula={kv.formula}
+    return <Volume3D l={kv.l} w={kv.w} h={kv.h} formula={kv.formula} cubelines={kv.cubelines}
       lbl_l={lblLM ? lblLM[1] : ''} lbl_w={lblWM ? lblWM[1] : ''} lbl_h={lblHM ? lblHM[1] : ''} />;
   }
   if (m.startsWith('[SHAPE_2D:')) {
@@ -1603,7 +1638,7 @@ const VISUAL_TYPE_DEFAULTS = {
   FRAC_CIRCLE: { n: '3', d: '4' },
   BASE10:      { hundreds: '1', tens: '2', ones: '3' },
   BAR_MODEL:   { vals: '4,4,4,4', label: '?' },
-  VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
+  VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', cubelines: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
   SHAPE_2D:    { shape: 'rectangle', labels: '', color: '#dbeafe' },
 };
 
@@ -1988,6 +2023,11 @@ function VisualParamForm({ type, params, onChange }) {
               onChange={e => set('formula', e.target.checked ? 'yes' : 'no')} />
             Show volume formula
           </label>
+          <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={params.cubelines !== 'no'}
+              onChange={e => set('cubelines', e.target.checked ? 'yes' : 'no')} />
+            Show cube unit lines
+          </label>
         </div>
       );
     case 'SHAPE_2D': {
@@ -2036,7 +2076,7 @@ function VisualParamForm({ type, params, onChange }) {
           <label className="text-xs flex items-center gap-1">
             Shape
             <select value={currentShape}
-              onChange={e => { set('shape', e.target.value); set('labels', ''); }}
+              onChange={e => onChange({ ...params, shape: e.target.value, labels: '' })}
               className="border rounded p-1 text-xs ml-1 flex-1">
               {SHAPE_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
@@ -2144,6 +2184,7 @@ function paramsToMarker(type, params) {
   if (type === 'VOL_3D') {
     const enc = s => String(s || '').replace(/\s+/g, '_');
     let m = `[VOL_3D: l=${params.l || 3} w=${params.w || 2} h=${params.h || 2} formula=${params.formula || 'yes'}`;
+    if (params.cubelines === 'no') m += ` cubelines=no`;
     if (params.lbl_l) m += ` lbl_l=${enc(params.lbl_l)}`;
     if (params.lbl_w) m += ` lbl_w=${enc(params.lbl_w)}`;
     if (params.lbl_h) m += ` lbl_h=${enc(params.lbl_h)}`;
@@ -3072,6 +3113,7 @@ function markerToTypeParams(marker) {
     const lblWM = inner.match(/\blbl_w=(\S+)/);
     const lblHM = inner.match(/\blbl_h=(\S+)/);
     params = { l: kv('l','3'), w: kv('w','2'), h: kv('h','2'), formula: kv('formula','yes'),
+      cubelines: kv('cubelines','yes'),
       lbl_l: lblLM ? lblLM[1].replace(/_/g,' ') : '',
       lbl_w: lblWM ? lblWM[1].replace(/_/g,' ') : '',
       lbl_h: lblHM ? lblHM[1].replace(/_/g,' ') : '' };
@@ -3088,11 +3130,14 @@ function markerToTypeParams(marker) {
 // ─── Drawing Canvas ────────────────────────────────────────────────────────────
 function DrawingCanvas({ existingImg, onCapture }) {
   const canvasRef = useRef(null);
+  const uploadRef = useRef(null);
   const [color, setColor] = useState('#111111');
   const [size, setSize] = useState(4);
   const [eraser, setEraser] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [copyMsg, setCopyMsg] = useState('');
+  const [pasteMsg, setPasteMsg] = useState('');
   const lastPos = useRef(null);
 
   // Load existingImg when provided (on mount only)
@@ -3165,6 +3210,85 @@ function DrawingCanvas({ existingImg, onCapture }) {
     setSaved(true);
   };
 
+  // Draw an image (from URL/dataURL) onto the canvas, scaled to fit
+  const drawImageOnCanvas = (src) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (canvas.width - w) / 2;
+      const y = (canvas.height - h) / 2;
+      ctx.drawImage(img, x, y, w, h);
+      setSaved(false);
+    };
+    img.src = src;
+  };
+
+  // Upload image from file input
+  const handleUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => drawImageOnCanvas(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Copy canvas to clipboard
+  const copyCanvas = () => {
+    canvasRef.current.toBlob(async (blob) => {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setCopyMsg('✓ Copied!');
+        setTimeout(() => setCopyMsg(''), 2000);
+      } catch {
+        setCopyMsg('Copy failed');
+        setTimeout(() => setCopyMsg(''), 2500);
+      }
+    }, 'image/png');
+  };
+
+  // Paste image from clipboard
+  const pasteCanvas = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imgType = item.types.find(t => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            const x = (canvas.width - w) / 2;
+            const y = (canvas.height - h) / 2;
+            ctx.drawImage(img, x, y, w, h);
+            setSaved(false);
+            URL.revokeObjectURL(url);
+            setPasteMsg('✓ Pasted!');
+            setTimeout(() => setPasteMsg(''), 2000);
+          };
+          img.src = url;
+          return;
+        }
+      }
+      setPasteMsg('No image in clipboard');
+      setTimeout(() => setPasteMsg(''), 2500);
+    } catch {
+      setPasteMsg('Paste failed – allow clipboard access');
+      setTimeout(() => setPasteMsg(''), 3000);
+    }
+  };
+
   const COLORS = [
     { val: '#111111', label: 'Black' },
     { val: '#dc2626', label: 'Red' },
@@ -3178,7 +3302,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
 
   return (
     <div className="space-y-2">
-      {/* Toolbar */}
+      {/* Toolbar row 1: colors, sizes, eraser, clear */}
       <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-gray-100">
         {/* Color swatches */}
         <div className="flex gap-1 items-center">
@@ -3213,6 +3337,28 @@ function DrawingCanvas({ existingImg, onCapture }) {
           className="text-xs border border-red-200 rounded px-2 py-0.5 text-red-500 hover:bg-red-50 transition-colors ml-auto">
           🗑 Clear
         </button>
+      </div>
+
+      {/* Toolbar row 2: upload, copy, paste */}
+      <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-gray-100">
+        {/* Upload image */}
+        <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+        <button type="button" onClick={() => uploadRef.current.click()}
+          className="text-xs border border-blue-200 rounded px-2 py-0.5 text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1">
+          📁 Upload Image
+        </button>
+        {/* Copy */}
+        <button type="button" onClick={copyCanvas}
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
+          📋 Copy
+        </button>
+        {copyMsg && <span className="text-xs text-green-600 font-medium">{copyMsg}</span>}
+        {/* Paste */}
+        <button type="button" onClick={pasteCanvas}
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
+          📌 Paste
+        </button>
+        {pasteMsg && <span className="text-xs text-blue-600 font-medium">{pasteMsg}</span>}
       </div>
 
       {/* Canvas */}
