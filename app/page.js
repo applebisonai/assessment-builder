@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useRef, useEffect, Component } from 'react';
 
@@ -1565,6 +1566,18 @@ function parseAssessment(text) {
       } else {
         current.choices.push({ letter: choiceMatch[1].toUpperCase(), text: choiceMatch[2] });
       }
+      continue;
+    }
+
+    // ELA-style bubble choices: "( ) text" or "○ text" or "◯ text"
+    // These appear in ELA assessments instead of A) B) C) D) labels.
+    // Auto-assign letters A, B, C, D based on the order they appear.
+    const elaChoiceMatch = current && !choiceMatch && trimmed.match(/^(?:\(\s*\)|[○◯⃝])\s+(.+)$/);
+    if (elaChoiceMatch) {
+      const text = elaChoiceMatch[1].trim();
+      const nextLetter = String.fromCharCode(65 + current.choices.length); // A, B, C, D ...
+      current.choices.push({ letter: nextLetter, text });
+      if (!current.qType || current.qType === 'mc') current.qType = 'mc';
       continue;
     }
 
@@ -3941,7 +3954,13 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
           const displayNum = !NON_Q.has(q.type) ? ++qSeq : null;
 
           if (q.type === 'header') {
-            return (
+            // Long text with mid-sentence periods = ELA passage paragraph; render as prose
+            const isPassage = q.text && (q.text.length > 110 || /\.\s+\S/.test(q.text));
+            return isPassage ? (
+              <div key={q.id} className="text-sm text-gray-800 leading-relaxed my-1.5 print-question">
+                {q.text}
+              </div>
+            ) : (
               <div key={q.id} className="text-center font-bold text-base mt-4 mb-1 text-gray-800">
                 {q.text}
               </div>
@@ -3984,7 +4003,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
               : null;
 
           return (
-            <div key={q.id} className="relative">
+            <div key={q.id} className="relative print-question">
               {/* Standard tag — top-right corner */}
               {q.standard && (
                 <div className="absolute top-0 right-0 text-xs text-blue-500 font-medium bg-white/90 px-1.5 py-0.5 rounded-bl border border-blue-200 no-print-border leading-tight">
@@ -4207,12 +4226,32 @@ function SettingsModal({ apiKey, onSave, onClose }) {
 
 // ─── Print styles injected once ───────────────────────────────────────────────
 const PRINT_STYLE = `
+@page {
+  size: letter portrait;
+  margin: 0.75in 1in;
+}
 @media print {
+  html, body { width: 100%; height: auto; }
   body * { visibility: hidden; }
   #print-area, #print-area * { visibility: visible; }
-  #print-area { position: absolute; top: 0; left: 0; width: 100%; }
+  #print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 24px 0 0 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: white !important;
+  }
   .no-print { display: none !important; }
+  .no-print-border { border: none !important; }
   button { display: none !important; }
+  .print-question {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 `;
 
@@ -5583,11 +5622,11 @@ export default function AssessmentBuilder() {
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 🖨 Print / Export PDF
               </button>
-              <button onClick={() => handleCopyGdoc(questions)}
+              <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'))}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 📋 Copy to Google Docs
               </button>
-              <button onClick={() => handleExportDocx({ questions, title: customTitle })}
+              <button onClick={() => handleExportDocx({ questions: questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'), title: customTitle })}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 📄 Export as Word (.docx)
               </button>
