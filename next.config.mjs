@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@anthropic-ai/sdk'],
-  experimental: { serverComponentsExternalPackages: ['@anthropic-ai/sdk'] }
+  experimental: { serverComponentsExternalPackages: ['@anthropic-ai/sdk', 'docx'] }
 };
 export default nextConfig;
