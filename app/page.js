@@ -3129,16 +3129,29 @@ function markerToTypeParams(marker) {
 
 // ─── Drawing Canvas ────────────────────────────────────────────────────────────
 function DrawingCanvas({ existingImg, onCapture }) {
+  const CANVAS_W = 480, CANVAS_H = 300;
+  const fontSizeMap = { 2: 12, 4: 18, 8: 28, 16: 42 };
+
   const canvasRef = useRef(null);
   const uploadRef = useRef(null);
+  const [tool, setTool] = useState('pen'); // 'pen'|'line'|'dot'|'text'|'eraser'|'select'
   const [color, setColor] = useState('#111111');
   const [size, setSize] = useState(4);
-  const [eraser, setEraser] = useState(false);
-  const [drawing, setDrawing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copyMsg, setCopyMsg] = useState('');
   const [pasteMsg, setPasteMsg] = useState('');
+  const [history, setHistory] = useState([]);
+  const [textPos, setTextPos] = useState(null);
+  const [textVal, setTextVal] = useState('');
+  const [sel, setSel] = useState(null); // {x,y,w,h}
+  const [copiedRegion, setCopiedRegion] = useState(null); // ImageData
+  const [selMsg, setSelMsg] = useState('');
+
+  const isDrawingRef = useRef(false);
   const lastPos = useRef(null);
+  const startPos = useRef(null);
+  const snapshot = useRef(null); // ImageData for line/select preview
+  const selClean = useRef(null); // ImageData snapshot before selection outline drawn
 
   // Load existingImg when provided (on mount only)
   useEffect(() => {
@@ -3146,41 +3159,72 @@ function DrawingCanvas({ existingImg, onCapture }) {
     const img = new Image();
     img.onload = () => {
       const ctx = canvasRef.current.getContext('2d');
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      ctx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
     };
     img.src = existingImg;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasRef.current.width / rect.width;
-    const scaleY = canvasRef.current.height / rect.height;
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
     if (e.touches && e.touches[0]) {
       return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
     }
     return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
   };
 
-  const startDraw = (e) => {
-    e.preventDefault();
-    setDrawing(true);
-    const pos = getPos(e);
-    lastPos.current = pos;
+  const pushHistory = () => {
+    if (!canvasRef.current) return;
+    const dataUrl = canvasRef.current.toDataURL();
+    setHistory(h => [...h.slice(-19), dataUrl]);
+  };
+
+  const undo = () => {
+    setHistory(h => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      const img = new Image();
+      img.onload = () => {
+        if (!canvasRef.current) return;
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = prev;
+      setSaved(false);
+      return h.slice(0, -1);
+    });
+    setSel(null);
+  };
+
+  const clearCanvas = () => {
+    pushHistory();
     const ctx = canvasRef.current.getContext('2d');
-    ctx.globalCompositeOperation = eraser ? 'destination-out' : 'source-over';
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    setSaved(false);
+    setSel(null);
+    setTextPos(null);
+  };
+
+  const useDrawing = () => {
+    onCapture(canvasRef.current.toDataURL('image/png'));
+    setSaved(true);
+  };
+
+  // ── Pen / Eraser ──────────────────────────────────────────────────
+  const penStart = (ctx, pos) => {
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
+    lastPos.current = pos;
   };
 
-  const draw = (e) => {
-    e.preventDefault();
-    if (!drawing || !lastPos.current) return;
-    const pos = getPos(e);
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.globalCompositeOperation = eraser ? 'destination-out' : 'source-over';
+  const penMove = (ctx, pos) => {
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
     ctx.strokeStyle = color;
     ctx.lineWidth = size;
     ctx.lineCap = 'round';
@@ -3190,45 +3234,205 @@ function DrawingCanvas({ existingImg, onCapture }) {
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
     lastPos.current = pos;
-    setSaved(false);
   };
 
-  const endDraw = (e) => {
+  // ── Line ──────────────────────────────────────────────────────────
+  const drawLinePreview = (ctx, from, to) => {
+    ctx.putImageData(snapshot.current, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  };
+
+  // ── Dot ───────────────────────────────────────────────────────────
+  const placeDot = (ctx, pos) => {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, size * 2, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  // ── Text ──────────────────────────────────────────────────────────
+  const placeText = (txt) => {
+    if (!txt.trim() || !textPos) return;
+    pushHistory();
+    const ctx = canvasRef.current.getContext('2d');
+    const fs = fontSizeMap[size] || 18;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = color;
+    ctx.font = `${fs}px sans-serif`;
+    ctx.fillText(txt, textPos.x, textPos.y);
+    setSaved(false);
+    setTextPos(null);
+    setTextVal('');
+  };
+
+  // ── Select ────────────────────────────────────────────────────────
+  const drawSelRect = (ctx, from, to) => {
+    const x = Math.min(from.x, to.x);
+    const y = Math.min(from.y, to.y);
+    const w = Math.abs(to.x - from.x);
+    const h = Math.abs(to.y - from.y);
+    ctx.putImageData(snapshot.current, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(99,102,241,0.08)';
+    ctx.fillRect(x, y, w, h);
+  };
+
+  const copySelection = () => {
+    if (!sel || !selClean.current) return;
+    const tmp = document.createElement('canvas');
+    tmp.width = CANVAS_W; tmp.height = CANVAS_H;
+    tmp.getContext('2d').putImageData(selClean.current, 0, 0);
+    const imgData = tmp.getContext('2d').getImageData(
+      Math.round(sel.x), Math.round(sel.y),
+      Math.max(1, Math.round(sel.w)), Math.max(1, Math.round(sel.h))
+    );
+    setCopiedRegion(imgData);
+    setSelMsg('✓ Region copied!');
+    setTimeout(() => setSelMsg(''), 2000);
+  };
+
+  const pasteSelection = () => {
+    if (!copiedRegion) return;
+    pushHistory();
+    const ctx = canvasRef.current.getContext('2d');
+    const tmp = document.createElement('canvas');
+    tmp.width = copiedRegion.width; tmp.height = copiedRegion.height;
+    tmp.getContext('2d').putImageData(copiedRegion, 0, 0);
+    const px = Math.round((CANVAS_W - copiedRegion.width) / 2 + 20);
+    const py = Math.round((CANVAS_H - copiedRegion.height) / 2 + 20);
+    ctx.drawImage(tmp, px, py);
+    setSaved(false);
+    setSelMsg('✓ Pasted!');
+    setTimeout(() => setSelMsg(''), 2000);
+  };
+
+  const deselectRegion = () => {
+    if (selClean.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.putImageData(selClean.current, 0, 0);
+    }
+    setSel(null);
+    selClean.current = null;
+  };
+
+  // ── Canvas mouse/touch handlers ───────────────────────────────────
+  const onPointerDown = (e) => {
     e.preventDefault();
-    setDrawing(false);
+    if (textPos) { setTextPos(null); setTextVal(''); return; }
+    const pos = getPos(e);
+    const ctx = canvasRef.current.getContext('2d');
+
+    if (tool === 'text') {
+      setTextPos(pos);
+      setTextVal('');
+      return;
+    }
+
+    isDrawingRef.current = true;
+    startPos.current = pos;
+
+    if (tool === 'pen' || tool === 'eraser') {
+      pushHistory();
+      penStart(ctx, pos);
+    } else if (tool === 'line') {
+      pushHistory();
+      snapshot.current = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+    } else if (tool === 'dot') {
+      pushHistory();
+      placeDot(ctx, pos);
+      isDrawingRef.current = false;
+      setSaved(false);
+    } else if (tool === 'select') {
+      deselectRegion();
+      snapshot.current = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+      selClean.current = snapshot.current;
+    }
+  };
+
+  const onPointerMove = (e) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const pos = getPos(e);
+    const ctx = canvasRef.current.getContext('2d');
+
+    if (tool === 'pen' || tool === 'eraser') {
+      penMove(ctx, pos);
+      setSaved(false);
+    } else if (tool === 'line') {
+      drawLinePreview(ctx, startPos.current, pos);
+    } else if (tool === 'select') {
+      const x = Math.min(startPos.current.x, pos.x);
+      const y = Math.min(startPos.current.y, pos.y);
+      const w = Math.abs(pos.x - startPos.current.x);
+      const h = Math.abs(pos.y - startPos.current.y);
+      drawSelRect(ctx, startPos.current, pos);
+      setSel({ x, y, w, h });
+    }
+  };
+
+  const onPointerUp = (e) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    const pos = getPos(e);
+    const ctx = canvasRef.current.getContext('2d');
+
+    if (tool === 'line') {
+      ctx.putImageData(snapshot.current, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(startPos.current.x, startPos.current.y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      setSaved(false);
+      snapshot.current = null;
+    } else if (tool === 'select') {
+      const x = Math.min(startPos.current.x, pos.x);
+      const y = Math.min(startPos.current.y, pos.y);
+      const w = Math.abs(pos.x - startPos.current.x);
+      const h = Math.abs(pos.y - startPos.current.y);
+      if (w > 4 && h > 4) {
+        setSel({ x, y, w, h });
+      } else {
+        deselectRegion();
+      }
+    }
     lastPos.current = null;
   };
 
-  const clearCanvas = () => {
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    setSaved(false);
-  };
-
-  const useDrawing = () => {
-    onCapture(canvasRef.current.toDataURL('image/png'));
-    setSaved(true);
-  };
-
-  // Draw an image (from URL/dataURL) onto the canvas, scaled to fit
-  const drawImageOnCanvas = (src) => {
+  // ── Upload / clipboard ────────────────────────────────────────────
+  const drawImageOnCanvas = (src, pushHist = true) => {
+    if (pushHist) pushHistory();
     const img = new Image();
     img.onload = () => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (canvas.width - w) / 2;
-      const y = (canvas.height - h) / 2;
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      const scale = Math.min(CANVAS_W / img.width, CANVAS_H / img.height);
+      const w = img.width * scale, h = img.height * scale;
+      const x = (CANVAS_W - w) / 2, y = (CANVAS_H - h) / 2;
       ctx.drawImage(img, x, y, w, h);
       setSaved(false);
     };
     img.src = src;
   };
 
-  // Upload image from file input
   const handleUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3238,7 +3442,6 @@ function DrawingCanvas({ existingImg, onCapture }) {
     e.target.value = '';
   };
 
-  // Copy canvas to clipboard
   const copyCanvas = () => {
     canvasRef.current.toBlob(async (blob) => {
       try {
@@ -3252,7 +3455,6 @@ function DrawingCanvas({ existingImg, onCapture }) {
     }, 'image/png');
   };
 
-  // Paste image from clipboard
   const pasteCanvas = async () => {
     try {
       const items = await navigator.clipboard.read();
@@ -3263,14 +3465,13 @@ function DrawingCanvas({ existingImg, onCapture }) {
           const url = URL.createObjectURL(blob);
           const img = new Image();
           img.onload = () => {
+            pushHistory();
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            const x = (canvas.width - w) / 2;
-            const y = (canvas.height - h) / 2;
+            ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+            const scale = Math.min(CANVAS_W / img.width, CANVAS_H / img.height);
+            const w = img.width * scale, h = img.height * scale;
+            const x = (CANVAS_W - w) / 2, y = (CANVAS_H - h) / 2;
             ctx.drawImage(img, x, y, w, h);
             setSaved(false);
             URL.revokeObjectURL(url);
@@ -3281,14 +3482,15 @@ function DrawingCanvas({ existingImg, onCapture }) {
           return;
         }
       }
-      setPasteMsg('No image in clipboard');
-      setTimeout(() => setPasteMsg(''), 2500);
+      setPasteMsg('No image');
+      setTimeout(() => setPasteMsg(''), 2000);
     } catch {
-      setPasteMsg('Paste failed – allow clipboard access');
-      setTimeout(() => setPasteMsg(''), 3000);
+      setPasteMsg('Paste failed');
+      setTimeout(() => setPasteMsg(''), 2500);
     }
   };
 
+  // ── Constants ─────────────────────────────────────────────────────
   const COLORS = [
     { val: '#111111', label: 'Black' },
     { val: '#dc2626', label: 'Red' },
@@ -3296,77 +3498,158 @@ function DrawingCanvas({ existingImg, onCapture }) {
     { val: '#16a34a', label: 'Green' },
     { val: '#ea580c', label: 'Orange' },
     { val: '#7c3aed', label: 'Purple' },
+    { val: '#ec4899', label: 'Pink' },
     { val: '#ffffff', label: 'White', outline: true },
   ];
   const SIZES = [{ label: 'S', val: 2 }, { label: 'M', val: 4 }, { label: 'L', val: 8 }, { label: 'XL', val: 16 }];
+  const TOOLS = [
+    { id: 'pen', icon: '✏️', label: 'Pen' },
+    { id: 'line', icon: '╱', label: 'Line' },
+    { id: 'dot', icon: '●', label: 'Dot' },
+    { id: 'text', icon: 'T', label: 'Text' },
+    { id: 'eraser', icon: '⌫', label: 'Eraser' },
+    { id: 'select', icon: '⬚', label: 'Select' },
+  ];
+
+  const sizeLabel = tool === 'text'
+    ? `Font: ${fontSizeMap[size] || 18}px`
+    : tool === 'dot'
+    ? `Radius: ${size * 2}px`
+    : `Brush: ${size}px`;
+
+  const canvasCursor = tool === 'eraser' ? 'cell'
+    : tool === 'text' ? 'text'
+    : tool === 'select' ? 'crosshair'
+    : 'crosshair';
 
   return (
     <div className="space-y-2">
-      {/* Toolbar row 1: colors, sizes, eraser, clear */}
+      {/* Row 1: Tool selector */}
+      <div className="flex items-center gap-1 flex-wrap pb-1 border-b border-gray-100">
+        {TOOLS.map(t => (
+          <button key={t.id} type="button" title={t.label}
+            onClick={() => { setTool(t.id); setTextPos(null); if (t.id !== 'select') deselectRegion(); }}
+            className={`text-xs border rounded px-2 py-0.5 font-medium transition-colors flex items-center gap-0.5
+              ${tool === t.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+            <span>{t.icon}</span>
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+        <div className="ml-auto text-xs text-gray-400 font-medium">{sizeLabel}</div>
+      </div>
+
+      {/* Row 2: Colors + Sizes */}
       <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-gray-100">
-        {/* Color swatches */}
         <div className="flex gap-1 items-center">
           {COLORS.map(c => (
             <button key={c.val} type="button" title={c.label}
-              onClick={() => { setColor(c.val); setEraser(false); }}
+              onClick={() => setColor(c.val)}
               style={{
                 backgroundColor: c.val,
-                border: color === c.val && !eraser ? '2.5px solid #7c3aed' : c.outline ? '1.5px solid #d1d5db' : '1.5px solid transparent',
-                boxShadow: color === c.val && !eraser ? '0 0 0 1px #7c3aed' : 'none',
+                border: color === c.val ? '2.5px solid #7c3aed' : c.outline ? '1.5px solid #d1d5db' : '1.5px solid transparent',
+                boxShadow: color === c.val ? '0 0 0 1px #7c3aed' : 'none',
               }}
-              className="w-6 h-6 rounded-full transition-transform hover:scale-110 shrink-0" />
+              className="w-5 h-5 rounded-full transition-transform hover:scale-110 shrink-0" />
           ))}
         </div>
-        {/* Size buttons */}
         <div className="flex gap-1">
           {SIZES.map(s => (
             <button key={s.label} type="button"
-              onClick={() => { setSize(s.val); setEraser(false); }}
-              className={`text-xs border rounded px-1.5 py-0.5 transition-colors font-medium ${size === s.val && !eraser ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              onClick={() => setSize(s.val)}
+              className={`text-xs border rounded px-1.5 py-0.5 font-medium transition-colors
+                ${size === s.val ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
               {s.label}
             </button>
           ))}
         </div>
-        {/* Eraser */}
-        <button type="button" onClick={() => setEraser(v => !v)}
-          className={`text-xs border rounded px-2 py-0.5 transition-colors ${eraser ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-          🧹 Eraser
-        </button>
-        {/* Clear */}
-        <button type="button" onClick={clearCanvas}
-          className="text-xs border border-red-200 rounded px-2 py-0.5 text-red-500 hover:bg-red-50 transition-colors ml-auto">
-          🗑 Clear
-        </button>
       </div>
 
-      {/* Toolbar row 2: upload, copy, paste */}
+      {/* Row 3 (conditional): Selection controls */}
+      {(sel || copiedRegion) && (
+        <div className="flex items-center gap-2 pb-1 border-b border-indigo-100 bg-indigo-50 rounded px-2 py-1">
+          <span className="text-xs text-indigo-600 font-medium">Select:</span>
+          <button type="button" onClick={copySelection} disabled={!sel}
+            className="text-xs border border-indigo-300 rounded px-2 py-0.5 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-40">
+            📋 Copy Region
+          </button>
+          <button type="button" onClick={pasteSelection} disabled={!copiedRegion}
+            className="text-xs border border-indigo-300 rounded px-2 py-0.5 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-40">
+            📌 Paste Copy
+          </button>
+          <button type="button" onClick={deselectRegion}
+            className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-500 hover:bg-gray-100 transition-colors">
+            ✕ Deselect
+          </button>
+          {selMsg && <span className="text-xs text-green-600 font-medium">{selMsg}</span>}
+        </div>
+      )}
+
+      {/* Row 4 (conditional): Text input panel */}
+      {textPos && (
+        <div className="flex items-center gap-2 pb-1 border-b border-amber-100 bg-amber-50 rounded px-2 py-1">
+          <span className="text-xs text-amber-700 font-medium">Type text:</span>
+          <input
+            autoFocus
+            type="text"
+            value={textVal}
+            onChange={e => setTextVal(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { placeText(textVal); }
+              if (e.key === 'Escape') { setTextPos(null); setTextVal(''); }
+            }}
+            placeholder="Enter text…"
+            className="flex-1 text-sm border border-amber-300 rounded px-2 py-0.5 outline-none focus:border-amber-500"
+          />
+          <button type="button" onClick={() => placeText(textVal)}
+            className="text-xs bg-amber-500 text-white rounded px-2 py-0.5 hover:bg-amber-600 transition-colors">
+            Place
+          </button>
+          <button type="button" onClick={() => { setTextPos(null); setTextVal(''); }}
+            className="text-xs text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+      )}
+
+      {/* Canvas */}
+      <div style={{ position: 'relative', aspectRatio: `${CANVAS_W}/${CANVAS_H}`, width: '100%' }}>
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+          style={{ cursor: canvasCursor, touchAction: 'none', display: 'block', width: '100%', height: '100%' }}
+          className="border-2 border-gray-200 rounded-lg bg-white"
+          onMouseDown={onPointerDown} onMouseMove={onPointerMove} onMouseUp={onPointerUp} onMouseLeave={onPointerUp}
+          onTouchStart={onPointerDown} onTouchMove={onPointerMove} onTouchEnd={onPointerUp} />
+        {/* Text cursor hint */}
+        {tool === 'text' && !textPos && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <span className="text-xs text-gray-400 bg-white/80 rounded px-2 py-1 border border-gray-200">Click to place text</span>
+          </div>
+        )}
+      </div>
+
+      {/* Row 5: Upload / Copy / Paste / Undo / Clear */}
       <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-gray-100">
-        {/* Upload image */}
         <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
         <button type="button" onClick={() => uploadRef.current.click()}
-          className="text-xs border border-blue-200 rounded px-2 py-0.5 text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1">
-          📁 Upload Image
+          className="text-xs border border-blue-200 rounded px-2 py-0.5 text-blue-600 hover:bg-blue-50 transition-colors">
+          📁 Upload
         </button>
-        {/* Copy */}
         <button type="button" onClick={copyCanvas}
-          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors">
           📋 Copy
         </button>
         {copyMsg && <span className="text-xs text-green-600 font-medium">{copyMsg}</span>}
-        {/* Paste */}
         <button type="button" onClick={pasteCanvas}
-          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1">
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors">
           📌 Paste
         </button>
         {pasteMsg && <span className="text-xs text-blue-600 font-medium">{pasteMsg}</span>}
+        <button type="button" onClick={undo} disabled={history.length === 0}
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 ml-auto">
+          ↩ Undo
+        </button>
+        <button type="button" onClick={clearCanvas}
+          className="text-xs border border-red-200 rounded px-2 py-0.5 text-red-500 hover:bg-red-50 transition-colors">
+          🗑 Clear
+        </button>
       </div>
-
-      {/* Canvas */}
-      <canvas ref={canvasRef} width={400} height={220}
-        style={{ cursor: eraser ? 'cell' : 'crosshair', touchAction: 'none' }}
-        className="border-2 border-gray-200 rounded-lg w-full bg-white"
-        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
 
       {/* Use Drawing button */}
       <button type="button" onClick={useDrawing}
