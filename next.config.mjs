@@ -1,11 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: { serverComponentsExternalPackages: ['@anthropic-ai/sdk', 'docx'] },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals = [...(Array.isArray(config.externals) ? config.externals : [config.externals].filter(Boolean)), 'docx'];
-    }
-    return config;
-  },
+  experimental: { serverComponentsExternalPackages: ['@anthropic-ai/sdk'] },
 };
 export default nextConfig;
