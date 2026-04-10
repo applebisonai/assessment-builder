@@ -1,11 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
+
 export const maxDuration = 60;
+
 export async function POST(request) {
   try {
     let apiKey, gradeLevel, subject, standard, customTitle;
     let includeVersionB, includeAnswerKey;
     let fileContent = null, fileMediaType = null;
     let inputMode = 'file';
+    let generateMode = 'parallel'; // 'extract' | 'parallel'
     let pastedText = '', url = '', scratchTopic = '', scratchInstructions = '';
 
     const contentType = request.headers.get('content-type') || '';
@@ -19,6 +22,7 @@ export async function POST(request) {
       customTitle      = fd.get('customTitle') || '';
       includeVersionB  = fd.get('includeVersionB') === 'true';
       includeAnswerKey = fd.get('includeAnswerKey') === 'true';
+      generateMode     = fd.get('generateMode') || 'parallel';
       inputMode        = 'file';
 
       const file = fd.get('file');
@@ -42,6 +46,7 @@ export async function POST(request) {
       includeVersionB  = body.includeVersionB || false;
       includeAnswerKey = body.includeAnswerKey || false;
       inputMode        = body.inputMode || 'scratch';
+      generateMode     = body.generateMode || 'parallel';
       pastedText       = body.pastedText || '';
       url              = body.url || '';
       scratchTopic     = body.scratchTopic || '';
@@ -153,24 +158,72 @@ CHOOSING THE RIGHT MARKER:
   • Table of data referenced by questions → [DATA_TABLE: ...]
 `;
 
+    // ─── Exact copy / extract prompt ──────────────────────────────────────────
+    const extractPrompt = `You are an EXACT COPY EXTRACTOR for assessments.
+Your only job: read the source and reproduce every real question EXACTLY as written — same words, same numbers, same answer choices.
+
+━━━ EXTRACTION RULES ━━━
+
+RULE 1 — COPY EVERYTHING EXACTLY.
+Reproduce each question number, question text, and all answer choices word-for-word.
+Do NOT change any numbers, names, words, or phrasing.
+Do NOT add, remove, or reorder questions.
+
+RULE 2 — CLEAN UP NOISE ONLY.
+Remove these — they are NOT questions:
+- Google Forms metadata: "Multiple Choice 1 pt * Required", "Numeric 1 pt ✱ Required", "Mark the correct answer.", "Your answer", "* Required"
+- Student info fields: "Name", "Class", "Date", "Email" (these are form fields, not questions)
+- Page numbers, footers, "This form was created inside of…"
+- Any item with no actual question text — skip it entirely
+
+RULE 3 — COMPUTATION QUESTIONS.
+If a question is a bare number with the equation on the next line (e.g. "10." then "24 ÷ 6 = ___" below), combine them:
+  10. 24 ÷ 6 = ___
+Never output a question that is just a number with no text.
+
+RULE 4 — VISUAL MARKERS.
+For EVERY question that has a visual model, diagram, or graphic in the source, add the correct marker on its own line BEFORE the question number.
+${VISUAL_REFERENCE}
+${VISUAL_SELECTION_GUIDE}
+
+RULE 5 — OUTPUT FORMAT.
+Line 1: Assessment title${customTitle ? ` — use exactly: "${customTitle}"` : ' (copy from source)'}
+Then: questions numbered exactly as in source
+Answer choices: A) B) C) D) format
+No asterisks, no markdown, no bold text.
+No student info fields. No form metadata.
+
+RULE 6 — ELA READING PASSAGES.
+If the source is an ELA assessment that includes a reading passage (an excerpt or story students read before answering questions):
+- Output the passage as plain unnumbered paragraph(s) BEFORE question 1.
+- Remove any line numbers or paragraph numbers in the passage (e.g. "1  The bubble floated..." → "The bubble floated...").
+- The passage text is NOT a question — never assign it a question number.
+- Keep one blank line between passage paragraphs.
+- Question-type labels ("Multiple Selection", "Mark all correct answers", "Select all that apply") are metadata — omit them entirely, just keep the question text and choices.`;
+
     // ─── Parallel form system prompt ──────────────────────────────────────────
     const parallelPrompt = `You are a PARALLEL FORM GENERATOR for math assessments.
 Your only job: read the source assessment and output a near-identical version with different numbers.
 
-━━━ THE 6 RULES ━━━
+You generate items using Radical/Incidental theory:
+• RADICALS are the mathematical parameters that control difficulty and cognitive level (number range, operation, whether regrouping is needed). Keep radicals at the SAME difficulty as the source — do not make problems harder or easier.
+• INCIDENTALS are surface features (character names, object types, story context). Change incidentals freely to make the parallel form feel fresh.
 
-RULE 1 — SAME STRUCTURE.
+━━━ THE RULES ━━━
+
+RULE 1 — SAME STRUCTURE, SAME DIFFICULTY.
 Count questions in the source. Output exactly that many, in the same order.
 Keep: question type (MC/fill-in/open/computation), sub-parts (a/b/c), section headers, direction lines.
-Change only: specific numbers, proper names in word problems, and the objects/context of word problems.
+Keep radicals equivalent: same operation, same number range, same regrouping/carry requirements.
+Change incidentals: names, objects, story contexts — but keep them grade-appropriate and realistic.
 
 RULE 2 — COPY QUESTION FORMAT EXACTLY.
 Source "The array shows ___ × ___."  →  Output "The array shows ___ × ___."   (keep every blank)
 Source "420 ÷ 7 ="                  →  Output "560 ÷ 8 ="                      (keep computation format)
-Source MC with A B C D               →  Output MC with A B C D (recalculate choices for new numbers)
+Source MC with A B C D                →  Output MC with A B C D (recalculate choices for new numbers)
 Source sub-parts a) b) c)            →  Output sub-parts a) b) c)
 
-RULE 3 — COPY SECTION HEADERS AND DIRECTIONS EXACTLY.
+RULE 3 — COPY SeCTION HEADERS AND DIPECTONS EXACTLY.
 "Part A: Word Problems" → copy it exactly. It goes on its own line, no number.
 
 RULE 4 — VISUAL MARKERS.
@@ -221,8 +274,23 @@ DO NOT use [WORK_SPACE] unless the source actually has a blank drawing/work box 
 ${VISUAL_REFERENCE}
 ${VISUAL_SELECTION_GUIDE}
 
-RULE 5 — ANSWER CHOICES.
+RULE 5 — VARIABLE SYNCHRONIZATION (VISUAL ↔ TEXT).
+When you change numbers for the parallel form, the visual marker parameters MUST update to match.
+Use this process for each question:
+  Step 1: Pick new numbers for the parallel question (the radicals).
+  Step 2: Write the question text with those new numbers.
+  Step 3: Write the visual marker using EXACTLY the same numbers from Step 1.
+  Step 4: Recalculate answer choices based on those same numbers.
+NEVER let the text say one thing and the visual show different numbers.
+Examples of synchronized output:
+  Source: "3 × 4 = ___" with [ARRAY: rows=3 cols=4]
+  Parallel: "5 × 3 = ___" with [ARRAY: rows=5 cols=3]  ← visual matches text
+  Source: "What is 2/5 of the bar?" with [FRACTION: 2/5]
+  Parallel: "What is 3/8 of the bar?" with [FRACTION: 3/8]  ← visual matches text
+
+RULE 6 — ANSWER CHOICES.
 Recalculate MC choices to match the new numbers. Keep the same structure (one correct + three plausible distractors).
+Verify: the correct answer must be mathematically correct for the new numbers. Distractors should reflect common errors for the new problem (off-by-one, wrong operation, etc.).
 
 RULE 6 — OUTPUT FORMAT.
 Line 1: Assessment title${customTitle ? ` — use exactly: "${customTitle}"` : ' (same as source, or a close parallel)'}
@@ -231,6 +299,29 @@ Then: questions numbered exactly as in source
 Answer choices: A) B) C) D) format
 Standard tags: [3.OA.A.1] on their own line after a question
 No asterisks, no markdown, no bold text.
+
+RULE 7 — GOOGLE FORMS / QUIZ CLEANUP.
+If the source is a Google Form or online quiz PDF, it will contain metadata you must IGNORE and NEVER include in your output:
+- "Multiple Choice 1 pt * Required", "Short answer text", "Numeric 1 pt", "Paragraph text", etc.
+- "Mark the correct answer.", "Your answer", "* Required", "Select all that apply."
+- Student info fields like "Name *", "Class *", "Date *", "Email address" — these are NOT questions; omit them entirely.
+- Page numbers, form footers, "This form was created inside of…"
+- Any question that has NO actual question text (just a label or blank) — skip it entirely.
+Output only the real academic questions with their answer choices.
+
+RULE 8 — COMPUTATION QUESTIONS.
+If the source has computation-only questions (a bare math expression, e.g. "24 ÷ 6 = ___" or "3/4 + 1/4 = ___"), put the equation directly as the question text on the same line as the number:
+  10. 56 ÷ 8 = ___
+Never write "10. Solve" with the equation on a separate line. The equation IS the question.
+If the source says "Solve" or "Compute" with an equation below, replace the whole thing with just:
+  N. [the equation] = ___
+
+RULE 9 — EVERY QUESTION MUST HAVE REAL TEXT.
+Before writing each question, check: does this question have actual academic content?
+  ✓ INCLUDE: real math questions, word problems, fill-in-the-blank, MC, equations to solve
+  ✗ SKIP: student info fields (Name, Class, Date, Email), form labels, UI buttons, page numbers, blank items
+Every numbered question in your output must have actual question text — never output a bare number with nothing after it.
+If the source question is unclear or unreadable, write a similar question on the same topic/skill instead of leaving it blank.
 ${includeVersionB ? '\nAfter all questions write "VERSION B" on its own line, then repeat with a different set of numbers/contexts.' : ''}
 ${includeAnswerKey ? '\nAfter all questions (and Version B if included) write "TEACHER ANSWER KEY" on its own line. List: "1. C — brief explanation" for MC; computed value for fill-in; sample answer for open response.' : ''}
 ${standard ? `\nAlign to standard: ${standard}` : ''}`;
@@ -266,15 +357,25 @@ ${includeAnswerKey ? '\nAfter questions write "TEACHER ANSWER KEY" then list ans
     let systemPrompt, userContent;
 
     if (inputMode === 'file' && fileContent) {
-      systemPrompt = parallelPrompt;
       const isImage = ['image/png','image/jpeg','image/webp'].includes(fileMediaType);
-      userContent = [
-        { type: 'text', text: 'Here is the source assessment. Read every question carefully, identify each visual, then output the parallel form following all rules.' },
-        { type: isImage ? 'image' : 'document', source: { type: 'base64', media_type: fileMediaType, data: fileContent } },
-      ];
+      if (generateMode === 'extract') {
+        systemPrompt = extractPrompt;
+        userContent = [
+          { type: 'text', text: 'Here is the source assessment. Extract every question exactly as written, add visual markers where needed, and clean up any form metadata noise.' },
+          { type: isImage ? 'image' : 'document', source: { type: 'base64', media_type: fileMediaType, data: fileContent } },
+        ];
+      } else {
+        systemPrompt = parallelPrompt;
+        userContent = [
+          { type: 'text', text: 'Here is the source assessment. Read every question carefully, identify each visual, then output the parallel form following all rules.' },
+          { type: isImage ? 'image' : 'document', source: { type: 'base64', media_type: fileMediaType, data: fileContent } },
+        ];
+      }
     } else if (inputMode === 'paste' && pastedText) {
-      systemPrompt = parallelPrompt;
-      userContent = `Here is the source assessment text. Read every question, then output a parallel form:\n\n${pastedText}`;
+      systemPrompt = generateMode === 'parallel' ? parallelPrompt : extractPrompt;
+      userContent = generateMode === 'parallel'
+        ? `Here is the source assessment text. Read every question, then output a parallel form:\n\n${pastedText}`
+        : `Here is the assessment text. Extract every question exactly as written:\n\n${pastedText}`;
     } else if (inputMode === 'url' && url) {
       systemPrompt = scratchPrompt;
       userContent = `Create a ${gradeDisplay} ${subject} assessment based on the lesson at: ${url}`;
