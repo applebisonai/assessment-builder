@@ -1447,6 +1447,10 @@ function parseAssessment(text) {
     // Form UI chrome — including Unicode heavy asterisk (✱ U+2731)
     /^[*✱]\s*required\.?$/i,
     /^mark\s+the\s+correct\s+answer\.?$/i,
+    /^mark\s+all\s+(correct\s+answers?|that\s+apply)[\s.]*$/i,
+    /^select\s+all\s+(correct\s+answers?|that\s+apply)[\s.]*$/i,
+    /^choose\s+all\s+(correct\s+answers?|that\s+apply)[\s.]*$/i,
+    /^multiple\s+selection\.?$/i,
     /^your\s+answer(s)?\.?$/i,
     /^(this\s+form\s+was\s+created|never\s+submit\s+passwords|page\s+\d+\s+of\s+\d+|powered\s+by\s+google)/i,
     /^(add\s+a\s+comment|submit|next|back|clear\s+form)\s*$/i,
@@ -3895,8 +3899,14 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
     return !q.vb && q.type !== 'answer-key'; // Version A
   });
 
-  const startEdit = (idx, text) => { setEditingIdx(idx); setEditText(text); setEditingChoiceIdx(null); };
-  const saveEdit = (idx, q) => { onQuestionEdit(idx, { ...q, text: editText }); setEditingIdx(null); };
+  const startEdit = (idx, q) => { setEditingIdx(idx); setEditText([q.text, ...(q.lines || [])].filter(l => l != null).join('\n')); setEditingChoiceIdx(null); };
+  const saveEdit = (idx, q) => {
+    const allLines = editText.split('\n');
+    const newText = allLines[0] ?? '';
+    const newLines = allLines.slice(1).filter(l => l.trim() !== '');
+    onQuestionEdit(idx, { ...q, text: newText, lines: newLines });
+    setEditingIdx(null);
+  };
   // Choice editing
   const [editingChoiceIdx, setEditingChoiceIdx] = useState(null); // { qIdx, cIdx }
   const [editChoiceText, setEditChoiceText] = useState('');
@@ -4019,7 +4029,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                   </span>
                   <div className="flex gap-2 items-start mt-1 pl-4">
                     <textarea value={editText} onChange={e => setEditText(e.target.value)}
-                      className="flex-1 border border-blue-300 rounded p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-200" rows={2} autoFocus />
+                      className="flex-1 border border-blue-300 rounded p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-200" rows={4} autoFocus />
                     <div className="flex flex-col gap-1">
                       <button type="button" onClick={() => saveEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-1 hover:bg-green-700 font-medium">Save</button>
                       <button type="button" onClick={() => setEditingIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-2 py-1 hover:bg-red-200">Cancel</button>
@@ -4149,7 +4159,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                     )}
                     {onQuestionEdit && (
                       <button type="button"
-                        onClick={() => startEdit(idx, q.text)}
+                        onClick={() => startEdit(idx, q)}
                         className="text-xs border rounded px-2 py-0.5 text-gray-600 border-gray-200 bg-white hover:bg-gray-50 transition-colors">
                         ✏ Edit Text
                       </button>
