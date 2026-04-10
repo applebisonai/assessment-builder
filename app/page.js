@@ -4939,7 +4939,8 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
         rows: [new TableRow({ children: cells })],
       }));
     }
-�(   if (showClassLine || showScoreLine) {
+
+    if (showClassLine || showScoreLine) {
       children.push(spacer(4, 0));
       const scorePtLabel = totalPoints != null ? ` / ${totalPoints} ${totalPoints === 1 ? 'pt' : 'pts'}` : '';
       const classW = showScoreLine ? 5760 : 9360;
