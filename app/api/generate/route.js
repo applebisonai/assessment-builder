@@ -194,11 +194,14 @@ No asterisks, no markdown, no bold text.
 No student info fields. No form metadata.
 
 RULE 6 — ELA READING PASSAGES.
-If the source is an ELA assessment that includes a reading passage (an excerpt or story students read before answering questions):
-- Output the passage as plain unnumbered paragraph(s) BEFORE question 1.
-- Remove any line numbers or paragraph numbers in the passage (e.g. "1  The bubble floated..." → "The bubble floated...").
-- The passage text is NOT a question — never assign it a question number.
-- Keep one blank line between passage paragraphs.
+If the source is an ELA assessment that includes a reading passage (a story or excerpt students read before answering questions):
+- Write [PASSAGE] on its own line BEFORE the passage text.
+- Output each passage paragraph as plain prose — no numbers, no letters, no bullets.
+- Strip any margin or inline line-numbers printed beside the passage (e.g. "1  The bubble floated..." → "The bubble floated...").
+- Leave one blank line between passage paragraphs.
+- Write [/PASSAGE] on its own line AFTER the last passage paragraph.
+- Then begin the numbered questions starting with 1.
+- The passage text is NOT a question — NEVER assign it a number like "1." or any letter label.
 - Question-type labels ("Multiple Selection", "Mark all correct answers", "Select all that apply") are metadata — omit them entirely, just keep the question text and choices.`;
 
     // ─── Parallel form system prompt ──────────────────────────────────────────
