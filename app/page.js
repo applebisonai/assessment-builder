@@ -2960,7 +2960,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
               🖨 Print / Export PDF
             </button>
-            <button onClick={() => onCopyGdoc(allQs)}
+            <button onClick={() => onCopyGdoc(allQs, twoColChoices)}
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
               📋 Copy to Google Docs
             </button>
@@ -5324,7 +5324,7 @@ function execCopy(html) {
   return ok;
 }
 
-async function copyToGoogleDocs(questions) {
+async function copyToGoogleDocs(questions, twoColChoices = false) {
   // ── 1. Render each SVG visual to a PNG data-URL ───────────────────────────
   const visualPngs = {};
   const markersNeeded = [...new Set(
@@ -5394,11 +5394,17 @@ async function copyToGoogleDocs(questions) {
     if (!q || !q.type) return;
 
     if (q.type === 'header') {
-      html += `<p style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 4px 0">${q.text}</p>`;
+      // Long text with mid-sentence periods = ELA passage paragraph; render as prose
+      const isPassage = q.text && (q.text.length > 110 || /\.\s+\S/.test(q.text));
+      if (isPassage) {
+        html += `<p style="font-size:11pt;margin:4px 0;line-height:1.6">${q.text}</p>`;
+      } else {
+        html += `<p style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 4px 0">${q.text}</p>`;
+      }
     } else if (q.type === 'meta') {
       html += `<p style="text-align:center;font-size:11pt;color:#555;margin:0 0 12px 0">${q.text}</p>`;
     } else if (q.type === 'section') {
-      html += `<p style="font-weight:bold;margin:16px 0 4px 0;font-size:12pt">${q.text}</p>`;
+      html += `<p style="font-weight:bold;border-top:2px solid #aaa;padding-top:6px;text-align:center;margin:16px 0 4px 0;font-size:12pt;letter-spacing:0.03em">${q.text}</p>`;
     } else if (q.type === 'vb-divider') {
       html += `<br/><p style="font-size:13pt;font-weight:bold;border-top:2px solid #333;padding-top:10px;margin:16px 0 8px 0">VERSION B</p>`;
     } else if (q.type === 'ak-divider') {
@@ -5409,27 +5415,16 @@ async function copyToGoogleDocs(questions) {
       // Wrap each question in a page-break-safe container with extra top spacing
       html += `<div style="page-break-inside:avoid;margin-top:28px">`;
 
-      // Visual — use custom uploaded image first, then captured PNG, then table HTML
-      if (q._customImg) {
-        html += `<p style="margin:0 0 4px 0"><img src="${q._customImg}" style="display:block;max-width:100%;max-height:200px;border:none"></p>`;
-      } else if (q.marker && !q.marker.startsWith('[IMAGE:')) {
-        const png = visualPngs[q.marker];
-        if (png) {
-          html += `<p style="margin:0 0 4px 0"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
-        } else {
-          html += visualToHtml(q.marker);
-        }
-      }
-
-      // Question number + text + standard tag (table for reliable right-align in Docs)
-      const numStr = q.qNum ? `<strong>${q.qNum}.</strong> ` : '';
+      // Question number + text + optional points + standard tag — FIRST, matching preview layout
+      const numStr = q.qNum ? `<strong>${q.qNum}.</strong>` : '';
+      const ptsStr = q.points != null ? ` <span style="font-size:9pt;color:#666">(${q.points} ${q.points === 1 ? 'pt' : 'pts'})</span>` : '';
       if (q.standard) {
         html += `<table style="width:100%;border-collapse:collapse;border:none;margin:2px 0 4px 0"><tbody><tr>
-          <td style="border:none;padding:0;vertical-align:top">${numStr}${q.text || ''}</td>
+          <td style="border:none;padding:0;vertical-align:top">${numStr}${ptsStr}${q.text ? ' ' + q.text : ''}</td>
           <td style="border:none;text-align:right;vertical-align:top;white-space:nowrap;font-size:9pt;color:#3b82f6;font-style:italic;padding-left:12px">${q.standard}</td>
         </tr></tbody></table>`;
       } else {
-        html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
+        html += `<p style="margin:2px 0 4px 0">${numStr}${ptsStr}${q.text ? ' ' + q.text : ''}</p>`;
       }
 
       // Sub-lines — math item rows get letter-spaced cells; prose stays plain
@@ -5447,22 +5442,61 @@ async function copyToGoogleDocs(questions) {
         }
       });
 
+      // Visual — BELOW question text (matching preview), custom image first, then PNG, then table HTML
+      if (q._customImg) {
+        html += `<p style="margin:4px 0 4px 16px"><img src="${q._customImg}" style="display:block;max-width:100%;max-height:200px;border:none"></p>`;
+      } else if (q.marker && !q.marker.startsWith('[IMAGE:')) {
+        const png = visualPngs[q.marker];
+        if (png) {
+          html += `<p style="margin:4px 0 4px 16px"><img src="${png.dataUrl}" width="${png.w}" height="${png.h}" style="display:block;max-width:100%;border:none"></p>`;
+        } else {
+          html += `<div style="margin-left:16px">${visualToHtml(q.marker)}</div>`;
+        }
+      }
+
       // Choices
       if (q.choices?.length) {
         const isSATA = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
         const bubble = isSATA ? '☐' : '○';
-        q.choices.forEach(ch => {
-          html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
-        });
+        const use2Col = twoColChoices && !isSATA && q.choices.length >= 3;
+        if (use2Col) {
+          html += `<table style="border-collapse:collapse;border:none;margin:4px 0 4px 8px;width:100%"><tbody>`;
+          for (let i = 0; i < q.choices.length; i += 2) {
+            html += `<tr>`;
+            [i, i + 1].forEach(ci => {
+              if (ci < q.choices.length) {
+                const ch = q.choices[ci];
+                html += `<td style="border:none;padding:2px 8px 2px 0;width:50%;vertical-align:top">${bubble} <strong>${ch.letter})</strong> ${ch.text}</td>`;
+              } else {
+                html += `<td style="border:none"></td>`;
+              }
+            });
+            html += `</tr>`;
+          }
+          html += `</tbody></table>`;
+        } else {
+          q.choices.forEach(ch => {
+            html += `<p style="margin:1px 0 1px 28px">${bubble} <strong>${ch.letter})</strong>&nbsp;&nbsp;${ch.text}</p>`;
+          });
+        }
+      }
+
+      // Answer lines for non-MC types — matching preview blank lines
+      if (!q.choices?.length && ['fill', 'open', 'compute', 'word'].includes(q.qType)) {
+        const ansDefaults = { fill: 2, open: 4, compute: 3, word: 5 };
+        const n = q.lineCount ?? ansDefaults[q.qType] ?? 3;
+     0   html += `<table style="border-collapse:collapse;border:none;margin:8px 0 4px 16px;width:85%"><tbody>`;
+        for (let i = 0; i < n; i++) {
+          html += `<tr><td style="border:none;border-bottom:1px solid #888;padding:10px 0 0 0;height:22px">&nbsp;</td></tr>`;
+        }
+        html += `</tbody></table>`;
       }
 
       html += `</div>`;
     }
   });
 
-  html += '</body></html>';
-
-  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
+  html += '</body></html>';  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
   const plain = gdocPlainText(questions);
   try {
     const ok = execCopy(html);
@@ -5490,9 +5524,9 @@ export default function AssessmentBuilder() {
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const handleCopyGdoc = qs => {
+  const handleCopyGdoc = (qs, twoCol = false) => {
     showToast('Preparing visuals…');
-    copyToGoogleDocs(qs).then(() => {
+    copyToGoogleDocs(qs, twoCol).then(() => {
       showToast('Copied! Paste into the Google Doc that just opened (Ctrl+V / Cmd+V)');
     });
   };
@@ -5912,7 +5946,7 @@ export default function AssessmentBuilder() {
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 🖨 Print / Export PDF
               </button>
-              <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'))}
+              <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'), twoColChoices)}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 📋 Copy to Google Docs
               </button>
