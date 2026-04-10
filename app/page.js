@@ -4840,11 +4840,20 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
   });
 
   // 3. Build DOCX entirely client-side (avoids server webpack bundling issues)
+  if (!window.docx) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/docx@9.6.1/dist/index.iife.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
   const {
     Document, Packer, Paragraph, TextRun, ImageRun,
     AlignmentType, BorderStyle, WidthType,
     Table, TableRow, TableCell,
-  } = await import('docx');
+  } = window.docx;
 
   // Unit helpers
   const PT  = v => v * 20;   // points  → twips
