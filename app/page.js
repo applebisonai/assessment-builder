@@ -5485,7 +5485,7 @@ async function copyToGoogleDocs(questions, twoColChoices = false) {
       if (!q.choices?.length && ['fill', 'open', 'compute', 'word'].includes(q.qType)) {
         const ansDefaults = { fill: 2, open: 4, compute: 3, word: 5 };
         const n = q.lineCount ?? ansDefaults[q.qType] ?? 3;
-     0   html += `<table style="border-collapse:collapse;border:none;margin:8px 0 4px 16px;width:85%"><tbody>`;
+        html += `<table style="border-collapse:collapse;border:none;margin:8px 0 4px 16px;width:85%"><tbody>`;
         for (let i = 0; i < n; i++) {
           html += `<tr><td style="border:none;border-bottom:1px solid #888;padding:10px 0 0 0;height:22px">&nbsp;</td></tr>`;
         }
