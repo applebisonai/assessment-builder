@@ -5038,24 +5038,10 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
 
     if (q.type !== 'question') continue;
 
-    // Image visual
-    const imgDataUrl = q._svgPng || q._customImg || null;
-    if (imgDataUrl) {
-      const imgW = q._svgW ? Math.min(q._svgW, 380) : 280;
-      const imgH = q._svgH ? Math.min(q._svgH, 180) : 130;
-      const imageRun = imgRunFromDataUrl(imgDataUrl, imgW, imgH);
-      if (imageRun) {
-        children.push(new Paragraph({
-          spacing: { before: PT(16), after: PT(4) },
-          children: [imageRun],
-        }));
-      }
-    }
-
-    // Question number + text
+    // Question number + text — FIRST, matching the preview layout
     const ptLabel = q.points != null ? ` (${q.points} ${q.points === 1 ? 'pt' : 'pts'})` : '';
     children.push(new Paragraph({
-      spacing: { before: imgDataUrl ? PT(4) : PT(16), after: PT(4) },
+      spacing: { before: PT(16), after: PT(4) },
       children: [
         ...(q.qNum ? [new TextRun({ text: `${q.qNum}.`, bold: true, font: 'Arial', size: HPT(FS) })] : []),
         ...(ptLabel ? [new TextRun({ text: ptLabel, font: 'Arial', size: HPT(FS_CHOICE - 2), color: '555555' })] : []),
@@ -5071,6 +5057,20 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
         indent: { left: IN(0.25) },
         children: [new TextRun({ text: l, font: 'Arial', size: HPT(FS) })],
       }));
+    }
+
+    // Image visual — BELOW question text, matching the preview layout
+    const imgDataUrl = q._svgPng || q._customImg || null;
+    if (imgDataUrl) {
+      const imgW = q._svgW ? Math.min(q._svgW, 380) : 280;
+      const imgH = q._svgH ? Math.min(q._svgH, 180) : 130;
+      const imageRun = imgRunFromDataUrl(imgDataUrl, imgW, imgH);
+      if (imageRun) {
+        children.push(new Paragraph({
+          spacing: { before: PT(4), after: PT(4) },
+          children: [imageRun],
+        }));
+      }
     }
 
     // Answer choices
@@ -5946,7 +5946,7 @@ export default function AssessmentBuilder() {
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 🖨 Print / Export PDF
               </button>
-              <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'), twoColChoices)}
+              <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'))}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
                 📋 Copy to Google Docs
               </button>
