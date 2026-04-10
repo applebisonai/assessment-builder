@@ -1494,6 +1494,17 @@ function parseAssessment(text) {
     // Skip Google Forms metadata noise
     if (isNoise(trimmed)) continue;
 
+    // ELA reading passage markers — [PASSAGE] ... [/PASSAGE]
+    if (trimmed === '[PASSAGE]') {
+      flush();
+      current = { id: `passage-${i}`, type: 'passage', text: '', choices: [], lines: [], vb: inVersionB };
+      continue;
+    }
+    if (trimmed === '[/PASSAGE]') {
+      flush();
+      continue;
+    }
+
     // Version B boundary — must not match numbered questions like "1. Version B..."
     if (/^-*\s*version\s*b\s*-*$/i.test(trimmed)) {
       flush();
@@ -3955,7 +3966,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
         {(() => {
           // Single-pass sequential numbering. Any item that isn't a structural
           // non-question type gets the next question number.
-          const NON_Q = new Set(['header', 'section', 'answer-key', 'vb-divider', 'ak-divider']);
+          const NON_Q = new Set(['header', 'section', 'passage', 'answer-key', 'vb-divider', 'ak-divider']);
           let qSeq = 0;
           return visibleQs.map((q, vIdx) => {
           const idx = origIdxMap[vIdx];
@@ -3972,6 +3983,17 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
             ) : (
               <div key={q.id} className="text-center font-bold text-base mt-4 mb-1 text-gray-800">
                 {q.text}
+              </div>
+            );
+          }
+
+          if (q.type === 'passage') {
+            const passageLines = [q.text, ...(q.lines || [])].filter(l => l && l.trim());
+            return (
+              <div key={q.id} className="text-sm text-gray-800 leading-relaxed my-3 print-question">
+                {passageLines.map((line, li) => (
+                  <p key={li} className="mb-2">{line}</p>
+                ))}
               </div>
             );
           }
@@ -5000,6 +5022,18 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
   for (const q of annotated) {
     if (!q || !q.type) continue;
 
+    if (q.type === 'passage') {
+      const passageLines = [q.text, ...(q.lines || [])].filter(l => l && l.trim());
+      for (const line of passageLines) {
+        children.push(new Paragraph({
+          spacing: { before: PT(2), after: PT(6) },
+          children: [new TextRun({ text: line, size: HPT(FS), font: 'Arial' })],
+        }));
+      }
+      children.push(spacer(8, 0));
+      continue;
+    }
+
     if (q.type === 'header' && q.id !== 'title') {
       children.push(spacer(8, 4));
       children.push(new Paragraph({
@@ -5176,7 +5210,7 @@ function generateFormsScript(questions, title) {
   let qNum = 0;
   for (const q of questions) {
     if (!q || !q.type) continue;
-    if (['vb-divider', 'ak-divider', 'answer-key'].includes(q.type)) continue;
+    if (['vb-divider', 'ak-divider', 'answer-key', 'passage'].includes(q.type)) continue;
     // Skip the title header row (id === 'title')
     if (q.type === 'header' && q.id === 'title') continue;
 
@@ -5303,9 +5337,13 @@ function FormsScriptModal({ script, onClose }) {
 
 function gdocPlainText(questions) {
   return questions
-    .filter(q => q.type === 'question' || q.type === 'header')
+    .filter(q => q.type === 'question' || q.type === 'header' || q.type === 'passage')
     .map(q => {
       if (q.type === 'header') return `\n${q.text}\n`;
+      if (q.type === 'passage') {
+        const lines = [q.text, ...(q.lines || [])].filter(l => l && l.trim());
+        return lines.join('\n\n');
+      }
       const num = q.qNum ? `${q.qNum}. ` : '';
       const choices = q.choices?.length
         ? '\n' + q.choices.map(c => `    ${c.letter}) ${c.text}`).join('\n')
@@ -5403,7 +5441,13 @@ async function copyToGoogleDocs(questions, twoColChoices = false) {
   questions.forEach(q => {
     if (!q || !q.type) return;
 
-    if (q.type === 'header') {
+    if (q.type === 'passage') {
+      const passageLines = [q.text, ...(q.lines || [])].filter(l => l && l.trim());
+      passageLines.forEach(line => {
+        html += `<p style="font-size:11pt;margin:4px 0 8px 0;line-height:1.6">${line}</p>`;
+      });
+      html += `<br/>`;
+    } else if (q.type === 'header') {
       // Long text with mid-sentence periods = ELA passage paragraph; render as prose
       const isPassage = q.text && (q.text.length > 110 || /\.\s+\S/.test(q.text));
       if (isPassage) {
