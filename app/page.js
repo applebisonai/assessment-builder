@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, Component } from 'react';
 
-// ─── Error Boundary ─────────────────────────────────────────────────────────
+// âââ Error Boundary âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
@@ -9,7 +9,7 @@ class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-          Visual render error — click Edit to adjust.
+          Visual render error â click Edit to adjust.
         </div>
       );
     }
@@ -17,10 +17,10 @@ class ErrorBoundary extends Component {
   }
 }
 
-// ─── Fraction Utilities ────────────────────────────────────────────────────────
+// âââ Fraction Utilities ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; }
 
-/** Convert a decimal value to a fraction/mixed-number string, e.g. 0.75 → "3/4", 1.5 → "1 1/2" */
+/** Convert a decimal value to a fraction/mixed-number string, e.g. 0.75 â "3/4", 1.5 â "1 1/2" */
 function toFrac(v, maxDenom = 16) {
   const val = parseFloat(v);
   if (isNaN(val)) return String(v);
@@ -50,7 +50,7 @@ function parseFracStr(s) {
   return parseFloat(t);
 }
 
-// ─── Vector Visual Components ─────────────────────────────────────────────────
+// âââ Vector Visual Components âââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function ArrayViz({ rows, cols }) {
   const R = Math.min(parseInt(rows) || 3, 12);
@@ -77,11 +77,11 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
   hopSize = null, hopStart = null, hops = null, hopOp = '+',
   labelFmt = 'decimal', labelAt = null }) {
   const mn = parseFloat(min) || 0, mx = parseFloat(max) || 10;
-  // step = number of equal divisions across the number line (e.g. 4 → ticks at min, 25%, 50%, 75%, max)
+  // step = number of equal divisions across the number line (e.g. 4 â ticks at min, 25%, 50%, 75%, max)
   const numDivs = Math.max(1, Math.min(Math.round(parseFloat(step) || 4), 60));
   const st = (mx - mn) / numDivs; // actual interval between ticks
 
-  // Build tick positions — exactly numDivs+1 evenly-spaced ticks
+  // Build tick positions â exactly numDivs+1 evenly-spaced ticks
   const ticks = [];
   for (let i = 0; i <= numDivs; i++) {
     ticks.push(parseFloat((mn + i * st).toFixed(6)));
@@ -102,13 +102,13 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
 
   const op = String(hopOp || '+').trim();
   // Build hop pairs + parallel label array
-  // Supports: + add  − subtract  × multiply  ÷ divide  custom "from:to" pairs
+  // Supports: + add  â subtract  Ã multiply  Ã· divide  custom "from:to" pairs
   let hopPairs = [];
   let hopLabels = [];
 
   if (hasArcs) {
     if (hops && String(hops).trim()) {
-      // Custom "from:to" pairs — supports fractions (1/4), mixed numbers (1 1/4), and decimals
+      // Custom "from:to" pairs â supports fractions (1/4), mixed numbers (1 1/4), and decimals
       hopPairs = String(hops).split(',').map(s => {
         const parts = s.split(':');
         const a = parseFracStr(parts[0]);
@@ -118,42 +118,42 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
       hopPairs.forEach(([a, b]) => {
         const diff = parseFloat((b - a).toFixed(6));
         const diffStr = labelFmt === 'fraction' ? toFrac(Math.abs(diff)) : String(parseFloat(Math.abs(diff).toFixed(4)));
-        hopLabels.push(diff >= 0 ? `+${diffStr}` : `−${diffStr}`);
+        hopLabels.push(diff >= 0 ? `+${diffStr}` : `â${diffStr}`);
       });
     } else if (hopSize) {
       const hs = parseFloat(hopSize);
-      if (op === '×' || op === '*') {
-        // Multiplicative: start × hs × hs × …
+      if (op === 'Ã' || op === '*') {
+        // Multiplicative: start Ã hs Ã hs Ã â¦
         const start = hopStart !== null && hopStart !== '' ? parseFloat(hopStart) : (mn || 1);
         let v = start;
         for (let n = 0; n < 20; n++) {
           const next = parseFloat((v * hs).toFixed(6));
           if (next > mx + 0.0001 || Math.abs(next - v) < 0.0001) break;
           hopPairs.push([v, next]);
-          hopLabels.push(`×${hs}`);
+          hopLabels.push(`Ã${hs}`);
           v = next;
         }
-      } else if (op === '÷' || op === '/') {
-        // Division: start ÷ hs ÷ hs … (default start = max)
+      } else if (op === 'Ã·' || op === '/') {
+        // Division: start Ã· hs Ã· hs â¦ (default start = max)
         const start = hopStart !== null && hopStart !== '' ? parseFloat(hopStart) : mx;
         let v = start;
         for (let n = 0; n < 20; n++) {
           const next = parseFloat((v / hs).toFixed(6));
           if (next < mn - 0.0001 || Math.abs(next - v) < 0.0001) break;
           hopPairs.push([v, next]);
-          hopLabels.push(`÷${hs}`);
+          hopLabels.push(`Ã·${hs}`);
           v = next;
         }
-      } else if (op === '-' || op === '−') {
-        // Subtraction: arcs go right → left (default start = max)
+      } else if (op === '-' || op === 'â') {
+        // Subtraction: arcs go right â left (default start = max)
         const start = hopStart !== null && hopStart !== '' ? parseFloat(hopStart) : mx;
         const hsAbs = Math.abs(hs);
         for (let v = start; v - hsAbs >= mn - 0.0001; v = parseFloat((v - hsAbs).toFixed(4))) {
           hopPairs.push([v, parseFloat((v - hsAbs).toFixed(4))]);
-          hopLabels.push(`−${hsAbs}`);
+          hopLabels.push(`â${hsAbs}`);
         }
       } else {
-        // Addition (default): arcs go left → right
+        // Addition (default): arcs go left â right
         const start = hopStart !== null && hopStart !== '' ? parseFloat(hopStart) : mn;
         if (hs > 0) {
           for (let v = start; v + hs <= mx + 0.0001; v = parseFloat((v + hs).toFixed(4))) {
@@ -206,7 +206,7 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
         );
       })}
 
-      {/* Hop arcs — bidirectional: + and × go left→right, − and ÷ go right→left */}
+      {/* Hop arcs â bidirectional: + and Ã go leftâright, â and Ã· go rightâleft */}
       {hopPairs.map(([v1, v2], i) => {
         const xa = toX(v1), xb = toX(v2);
         const span = Math.abs(xb - xa);
@@ -314,7 +314,7 @@ function FractionBar({ n, d }) {
   const N = parseInt(n) || 1, D = Math.max(parseInt(d) || 4, 1);
   const barW = 140, H = 36, segW = barW / D, gap = 10, pad = 2;
 
-  // Simple proper fraction (N ≤ D): single bar
+  // Simple proper fraction (N â¤ D): single bar
   if (N <= D) {
     return (
       <svg width={barW + 4} height={H + 2} style={{ display: 'block' }}>
@@ -370,7 +370,7 @@ function FractionCircle({ n, d }) {
     return <path key={i} d={path} fill={i < filledN ? '#93c5fd' : 'white'} stroke="#334155" strokeWidth={1.5} />;
   });
 
-  // Simple proper fraction (N ≤ D): single circle
+  // Simple proper fraction (N â¤ D): single circle
   if (N <= D) {
     const cx = circleD / 2, cy = circleD / 2;
     return (
@@ -439,7 +439,7 @@ function AreaModel({ cols, rows: rowsStr, vals }) {
   const colors = ['#fed7aa', '#fce7f3', '#bbf7d0', '#bfdbfe', '#fef08a', '#d9f99d'];
   return (
     <svg width={totalW} height={totalH} style={{ display: 'block' }}>
-      {/* Column labels — font scales with cell width to prevent crowding */}
+      {/* Column labels â font scales with cell width to prevent crowding */}
       {colVals.map((cv, ci) => {
         const fs = Math.min(12, Math.max(8, Math.floor(colWidths[ci] * 0.26)));
         return (
@@ -447,7 +447,7 @@ function AreaModel({ cols, rows: rowsStr, vals }) {
             textAnchor="middle" fontSize={fs} fontWeight="700" fill="#334155">{cv}</text>
         );
       })}
-      {/* Row labels — font scales with cell height */}
+      {/* Row labels â font scales with cell height */}
       {rowVals.map((rv, ri) => {
         const fs = Math.min(12, Math.max(8, Math.floor(rowHeights[ri] * 0.34)));
         return (
@@ -558,21 +558,21 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
   const cs = 36,  cox = 10, coy = 8;  // front-face size, depth-x, depth-y
   // Front face sits at y=(pad+coy); top face peaks at y=pad; right face at x=(bx+cs)
   const cubeW = cs + cox;  // 46
-  const cubeH = cs + coy;  // 44  – top of top-face (y=pad) to bottom of front-face (y=pad+coy+cs)
+  const cubeH = cs + coy;  // 44  â top of top-face (y=pad) to bottom of front-face (y=pad+coy+cs)
 
   let x = pad;
   const items = [];
 
-  // ── Thousands: 3-dimensional cube with 10×10 grid on front face ─────────
+  // ââ Thousands: 3-dimensional cube with 10Ã10 grid on front face âââââââââ
   for (let i = 0; i < TH; i++) {
     const fx = x, fy = pad + coy;   // top-left of front face
-    // Top face (lighter purple) – parallelogram above front
+    // Top face (lighter purple) â parallelogram above front
     items.push(
       <polygon key={`th${i}top`}
         points={`${fx},${fy} ${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cox},${fy-coy}`}
         fill="#c4b5fd" stroke="#5b21b6" strokeWidth={0.7} />
     );
-    // Right side face (darker purple) – parallelogram right of front
+    // Right side face (darker purple) â parallelogram right of front
     items.push(
       <polygon key={`th${i}rt`}
         points={`${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cs+cox},${fy+cs-coy} ${fx+cs},${fy+cs}`}
@@ -583,7 +583,7 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
       <rect key={`th${i}fr`} x={fx} y={fy} width={cs} height={cs}
         fill="#7c3aed" stroke="#5b21b6" strokeWidth={0.7} />
     );
-    // 10×10 grid lines on front face
+    // 10Ã10 grid lines on front face
     const gStep = cs / 10;
     for (let g = 1; g < 10; g++) {
       items.push(<line key={`th${i}gv${g}`}
@@ -596,7 +596,7 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
     x += cubeW + gap;
   }
 
-  // ── Hundreds: flat 10×10 grid square ────────────────────────────────────
+  // ââ Hundreds: flat 10Ã10 grid square ââââââââââââââââââââââââââââââââââââ
   const hBy = pad + coy;  // align baseline with thousands
   for (let i = 0; i < H; i++) {
     const bx = x;
@@ -607,7 +607,7 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
     x += 32 + gap;
   }
 
-  // ── Tens: vertical rod ───────────────────────────────────────────────────
+  // ââ Tens: vertical rod âââââââââââââââââââââââââââââââââââââââââââââââââââ
   for (let i = 0; i < T; i++) {
     for (let r = 0; r < 10; r++)
       items.push(<rect key={`t${i}${r}`}
@@ -615,7 +615,7 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
     x += 12 + gap;
   }
 
-  // ── Ones: single small square ────────────────────────────────────────────
+  // ââ Ones: single small square ââââââââââââââââââââââââââââââââââââââââââââ
   for (let i = 0; i < O; i++) {
     items.push(<rect key={`o${i}`}
       x={x} y={hBy + 12} width={8} height={8} fill="#334155" />);
@@ -631,12 +631,12 @@ function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
   );
 }
 
-// ─── Partial Quotients long-division model ────────────────────────────────────
+// âââ Partial Quotients long-division model ââââââââââââââââââââââââââââââââââââ
 function PartialQuotients({ dividend, divisor, steps }) {
   const dvd = parseFloat(dividend) || 0;
   const dvs = parseFloat(divisor) || 0;
 
-  // Parse steps — filter truly empty/zero pairs
+  // Parse steps â filter truly empty/zero pairs
   const stepList = steps
     ? String(steps).split(',').map(s => {
         const [a, b] = s.split(':');
@@ -653,7 +653,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
   const quotient = stepList.reduce((s, r) => s + r.pq, 0);
   const finalRem = running;
 
-  // ── Layout constants ──
+  // ââ Layout constants ââ
   const FS = 13;      // font-size px
   const CW = 7.8;     // char width (monospace @ FS=13)
   const RH = 28;      // row height
@@ -661,7 +661,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
   const RG = 5;       // vertical gap around horizontal rules
   const IND = 8;      // indent inside bracket for minus sign
 
-  // ── Column width measurements ──
+  // ââ Column width measurements ââ
   const allLeft = [dvd, ...rows.flatMap(r => [r.sub, r.rem])];
   const maxLD = Math.max(...allLeft.map(n => String(Math.round(Math.abs(n))).length), 1);
   const allPQ  = [...rows.map(r => r.pq), quotient];
@@ -669,14 +669,14 @@ function PartialQuotients({ dividend, divisor, steps }) {
   const dvsDigits = dvs > 0 ? String(Math.round(dvs)).length : 0;
   const dvsW = dvsDigits > 0 ? dvsDigits * CW + 14 : 0;
 
-  // ── X positions ──
+  // ââ X positions ââ
   const bracketX = PAD + dvsW;                          // left edge of bracket (vertical wall)
   const numEndX  = bracketX + IND + (maxLD + 1) * CW;  // right-align working numbers here
   const sepX     = numEndX + 18;                        // dashed column separator
   const pqX      = sepX + 10;                           // left edge of PQ numbers
   const totalW   = pqX + maxPQD * CW + PAD;
 
-  // ── Y positions (built sequentially) ──
+  // ââ Y positions (built sequentially) ââ
   let y = PAD + 2;
   const roofY = y;              // top of the bracket "roof"
 
@@ -711,10 +711,10 @@ function PartialQuotients({ dividend, divisor, steps }) {
   y += PAD;
   const bracketBotY = y - PAD + 2;
 
-  // ── Render ──
+  // ââ Render ââ
   return (
     <svg width={totalW} height={y} style={{ display: 'block', overflow: 'visible' }}>
-      {/* ── BRACKET ── */}
+      {/* ââ BRACKET ââ */}
       {/* Vertical left wall */}
       <line x1={bracketX} y1={roofY} x2={bracketX} y2={bracketBotY}
         stroke="#1e293b" strokeWidth={2.5} strokeLinecap="square" />
@@ -722,7 +722,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
       <line x1={bracketX} y1={roofY} x2={numEndX + 6} y2={roofY}
         stroke="#1e293b" strokeWidth={2.5} strokeLinecap="square" />
 
-      {/* ── DIVISOR (left of bracket) ── */}
+      {/* ââ DIVISOR (left of bracket) ââ */}
       {dvs > 0 && (
         <text x={bracketX - 6} y={dvdTextY}
           textAnchor="end" fontSize={FS} fontFamily="monospace" fontWeight="700" fill="#1e293b">
@@ -730,13 +730,13 @@ function PartialQuotients({ dividend, divisor, steps }) {
         </text>
       )}
 
-      {/* ── DIVIDEND ── */}
+      {/* ââ DIVIDEND ââ */}
       <text x={numEndX} y={dvdTextY}
         textAnchor="end" fontSize={FS} fontFamily="monospace" fill="#1e293b">
         {Math.round(dvd)}
       </text>
 
-      {/* ── STEP ROWS ── */}
+      {/* ââ STEP ROWS ââ */}
       {stepItems.map((item, i) => {
         if (item.type === 'rule') {
           return <line key={i} x1={bracketX + IND - 2} y1={item.y} x2={numEndX + 4} y2={item.y}
@@ -747,7 +747,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
             <g key={i}>
               {/* minus sign */}
               <text x={bracketX + IND} y={item.y}
-                fontSize={FS} fontFamily="monospace" fill="#475569">−</text>
+                fontSize={FS} fontFamily="monospace" fill="#475569">â</text>
               {/* subtracted amount */}
               <text x={numEndX} y={item.y}
                 textAnchor="end" fontSize={FS} fontFamily="monospace" fill="#1e293b">
@@ -772,7 +772,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
         return null;
       })}
 
-      {/* ── PQ COLUMN ── */}
+      {/* ââ PQ COLUMN ââ */}
       {/* Dashed vertical separator */}
       <line x1={sepX} y1={roofY} x2={sepX} y2={pqLineY + 2}
         stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,3" />
@@ -785,7 +785,7 @@ function PartialQuotients({ dividend, divisor, steps }) {
         {Math.round(quotient)}
       </text>
 
-      {/* ── REMAINDER NOTE ── */}
+      {/* ââ REMAINDER NOTE ââ */}
       {remNoteY !== null && (
         <text x={bracketX + IND} y={remNoteY}
           fontSize={FS - 1} fontFamily="monospace" fill="#64748b">
@@ -849,9 +849,9 @@ function BarModel({ segments, label }) {
   );
 }
 
-// ─── Fraction Strips ──────────────────────────────────────────────────────────
+// âââ Fraction Strips ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Shows stacked fraction strips for addition (two colored groups) or
-// subtraction (one group with ✕ marks on crossed-out sections).
+// subtraction (one group with â marks on crossed-out sections).
 function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
                       op = '+', cross = 0, crossWh = 0 }) {
   const dA   = Math.max(2, Math.min(parseInt(d)      || 4,  24));
@@ -887,8 +887,8 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
   };
 
   // Render one group: wholes + fraction strip
-  // xStart: fraction section index from which filled sections become crossed (−1 = none)
-  // xWhStart: whole strip index from which strips become crossed (−1 = none)
+  // xStart: fraction section index from which filled sections become crossed (â1 = none)
+  // xWhStart: whole strip index from which strips become crossed (â1 = none)
   const renderGroup = (ox, oy, wholes, num, den, col, xStart, xWhStart = -1) => {
     const els = [];
     // Whole strips
@@ -911,7 +911,7 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
         </g>
       );
     }
-    // Fraction row (always shown — empty sections are white)
+    // Fraction row (always shown â empty sections are white)
     const fy  = oy + wholes * (SH + GY);
     const secW = SW / den;
     const fSize = secFS(den);
@@ -954,7 +954,7 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
       {hasRHS && (
         <text x={PAD + SW + OPW / 2} y={svgH / 2 + 7}
           textAnchor="middle" fontSize={24} fontWeight="800" fill="#475569">
-          {isAdd ? '+' : '−'}
+          {isAdd ? '+' : 'â'}
         </text>
       )}
       {/* Group B (addition, or subtraction showing subtrahend) */}
@@ -1106,7 +1106,7 @@ function NumberChart({ start = 1, end = 100, cols = 10, shaded = '' }) {
   );
 }
 
-// ─── Volume 3D (Rectangular Prism) ────────────────────────────────────────────
+// âââ Volume 3D (Rectangular Prism) ââââââââââââââââââââââââââââââââââââââââââââ
 function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
   const L = Math.min(Math.max(parseInt(l) || 3, 1), 8);
   const W = Math.min(Math.max(parseInt(w) || 2, 1), 8);
@@ -1114,7 +1114,7 @@ function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
   const showFormula = formula !== 'no';
   const showCubeLines = cubelines !== 'no';
   const s = 22;
-  const c = Math.sqrt(3) / 2; // cos30° ≈ 0.866 for true isometric
+  const c = Math.sqrt(3) / 2; // cos30Â° â 0.866 for true isometric
 
   // Offsets so the leftmost/topmost point stays inside the SVG
   const pad = 38;
@@ -1171,11 +1171,11 @@ function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
       <polygon points={topPts}   fill="#eff6ff" stroke="none" />
       {/* Unit cube grid lines */}
       {gridLines}
-      {/* Face outlines — uniform dark blue for clean look */}
+      {/* Face outlines â uniform dark blue for clean look */}
       <polygon points={frontPts} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
       <polygon points={rightPts} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
       <polygon points={topPts}   fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
-      {/* Hidden back edges (dashed) — completes the 3D prism look */}
+      {/* Hidden back edges (dashed) â completes the 3D prism look */}
       <line x1={X(0,0).toFixed(1)} y1={Y(0,0,0).toFixed(1)} x2={X(0,W).toFixed(1)} y2={Y(0,W,0).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
       <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(L,W).toFixed(1)} y2={Y(L,W,0).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
       <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(0,W).toFixed(1)} y2={Y(0,W,H).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
@@ -1185,14 +1185,14 @@ function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
       <text x={hx.toFixed(1)} y={hy.toFixed(1)} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>
       {showFormula && (
         <text x={svgW / 2} y={svgH - 6} textAnchor="middle" fontSize={11} fill="#1e3a8a">
-          {`V = ${L} × ${W} × ${H} = ${vol} cubic units`}
+          {`V = ${L} Ã ${W} Ã ${H} = ${vol} cubic units`}
         </text>
       )}
     </svg>
   );
 }
 
-// ─── 2D Shape with side labels ────────────────────────────────────────────────
+// âââ 2D Shape with side labels ââââââââââââââââââââââââââââââââââââââââââââââââ
 function Shape2D({ shape, labels, color }) {
   const shapeId = shape || 'rectangle';
   const fillColor = color || '#dbeafe';
@@ -1279,7 +1279,7 @@ function Shape2D({ shape, labels, color }) {
   );
 }
 
-// ─── Parse visual marker string → React component ─────────────────────────────
+// âââ Parse visual marker string â React component âââââââââââââââââââââââââââââ
 function parseVisualModel(marker) {
   const m = marker.trim();
   const kv = {};
@@ -1316,13 +1316,13 @@ function parseVisualModel(marker) {
     const [n, d] = frac.split('/');
     return <FractionCircle n={n} d={d} />;
   }
-  // Mixed number bar: whole=W n=N d=D  → convert to improper → FractionBar auto-renders multi bars
+  // Mixed number bar: whole=W n=N d=D  â convert to improper â FractionBar auto-renders multi bars
   if (m.startsWith('[MIXED_NUM:')) {
     const D = Math.max(parseInt(kv.d) || 4, 1);
     const totalN = (parseInt(kv.whole) || 0) * D + (parseInt(kv.n) || 0);
     return <FractionBar n={totalN} d={D} />;
   }
-  // Mixed number circle: same logic → FractionCircle auto-renders multi circles
+  // Mixed number circle: same logic â FractionCircle auto-renders multi circles
   if (m.startsWith('[MIXED_CIRCLE:')) {
     const D = Math.max(parseInt(kv.d) || 4, 1);
     const totalN = (parseInt(kv.whole) || 0) * D + (parseInt(kv.n) || 0);
@@ -1410,7 +1410,7 @@ function parseVisualModel(marker) {
   return null;
 }
 
-// ─── Parse assessment text → question objects ──────────────────────────────────
+// âââ Parse assessment text â question objects ââââââââââââââââââââââââââââââââââ
 // Split a text string that contains inline choices appended to the question,
 // e.g. "Which is closest? A) 2 B) 20 C) 200 D) 2,000"
 // Returns { qText, choices } or null if no inline choices detected.
@@ -1438,19 +1438,19 @@ function parseAssessment(text) {
   let inAnswerKey = false;
   const MARKER_RE = /^\[(ARRAY|NUM_LINE|GROUPS|TENS_FRAME|NUM_BOND|FRACTION|FRAC_CIRCLE|MIXED_NUM|MIXED_CIRCLE|MIXED_NUM_BOX|FRACTION_BOX|AREA_MODEL|BASE10|PV_CHART|BAR_MODEL|FRAC_STRIPS|TAPE|FUNC_TABLE|DATA_TABLE|YES_NO_TABLE|GRID_RESPONSE|NUM_CHART|PARTIAL_Q|WORK_SPACE|IMAGE)\s*[:|\]]/i;
 
-  // Google Forms / quiz-platform metadata — silently skip these lines everywhere
+  // Google Forms / quiz-platform metadata â silently skip these lines everywhere
   const GFORM_NOISE = [
-    // Question type + point value labels (e.g. "Multiple Choice 1 pt * Required", "Numeric 1 pt ✱ Required")
-    /^(multiple\s+choice|short\s+answer|paragraph(\s+text)?|linear\s+scale|checkbox(\s+grid)?|dropdown|date|time|file\s+upload|numeric|true\s*\/\s*false|matching)\s*[\d.]*\s*(pt|pts|point|points)?\s*[*✱]?\s*(required)?\.?$/i,
-    // Bare point values: "1 pt", "2 pts * Required", "1 pt ✱ Required"
-    /^\d+(\.\d+)?\s*(pt|pts|point|points)\s*[*✱]?\s*(required)?\.?$/i,
-    // Form UI chrome — including Unicode heavy asterisk (✱ U+2731)
-    /^[*✱]\s*required\.?$/i,
+    // Question type + point value labels (e.g. "Multiple Choice 1 pt * Required", "Numeric 1 pt â± Required")
+    /^(multiple\s+choice|short\s+answer|paragraph(\s+text)?|linear\s+scale|checkbox(\s+grid)?|dropdown|date|time|file\s+upload|numeric|true\s*\/\s*false|matching)\s*[\d.]*\s*(pt|pts|point|points)?\s*[*â±]?\s*(required)?\.?$/i,
+    // Bare point values: "1 pt", "2 pts * Required", "1 pt â± Required"
+    /^\d+(\.\d+)?\s*(pt|pts|point|points)\s*[*â±]?\s*(required)?\.?$/i,
+    // Form UI chrome â including Unicode heavy asterisk (â± U+2731)
+    /^[*â±]\s*required\.?$/i,
     /^mark\s+the\s+correct\s+answer\.?$/i,
     /^your\s+answer(s)?\.?$/i,
     /^(this\s+form\s+was\s+created|never\s+submit\s+passwords|page\s+\d+\s+of\s+\d+|powered\s+by\s+google)/i,
     /^(add\s+a\s+comment|submit|next|back|clear\s+form)\s*$/i,
-    // Student info field labels — NOT real questions
+    // Student info field labels â NOT real questions
     /^(name|your\s+name|student'?s?\s+name|first\s+name|last\s+name|full\s+name)\s*[*]?\.?$/i,
     /^(class|class\s*(\/|and)?\s*period|period|course)\s*[*]?\.?$/i,
     /^(date|today'?s?\s+date|test\s+date)\s*[*]?\.?$/i,
@@ -1469,14 +1469,14 @@ function parseAssessment(text) {
     if (current) {
       // If text is empty OR is a bare instruction word (e.g. "Solve"),
       // promote the first continuation line to text.
-      // Handles Google Form computation style: "10. Solve" with "24 ÷ 6 = ___" on next line.
+      // Handles Google Form computation style: "10. Solve" with "24 Ã· 6 = ___" on next line.
       if (
         (!current.text?.trim() || DEGENERATE_TEXT.test(current.text.trim())) &&
         current.lines?.length
       ) {
         current.text = current.lines.shift();
       }
-      // Drop fully empty shells (no text, no choices, no marker, no lines — Name/Email fields etc.)
+      // Drop fully empty shells (no text, no choices, no marker, no lines â Name/Email fields etc.)
       const hasContent = current.text?.trim() || current.choices?.length || current.marker || current.lines?.length;
       if (hasContent) questions.push(current);
       current = null;
@@ -1484,13 +1484,13 @@ function parseAssessment(text) {
   };
 
   for (let i = 0; i < lines.length; i++) {
-    // Normalize Unicode asterisk variants (✱ ⁎ ＊ ✶ etc.) → plain * so noise regex matches
-    const trimmed = lines[i].trim().replace(/[✱⁎＊✶✴✵✷✸✹❋＊]/g, '*');
+    // Normalize Unicode asterisk variants (â± â ï¼ â¶ etc.) â plain * so noise regex matches
+    const trimmed = lines[i].trim().replace(/[â±âï¼â¶â´âµâ·â¸â¹âï¼]/g, '*');
     if (!trimmed) continue;
     // Skip Google Forms metadata noise
     if (isNoise(trimmed)) continue;
 
-    // Version B boundary — must not match numbered questions like "1. Version B..."
+    // Version B boundary â must not match numbered questions like "1. Version B..."
     if (/^-*\s*version\s*b\s*-*$/i.test(trimmed)) {
       flush();
       inVersionB = true;
@@ -1506,7 +1506,7 @@ function parseAssessment(text) {
       continue;
     }
 
-    // Answer key lines — store as simple rows
+    // Answer key lines â store as simple rows
     if (inAnswerKey) {
       questions.push({ id: `ak-line-${i}`, type: 'answer-key', text: trimmed });
       continue;
@@ -1521,7 +1521,7 @@ function parseAssessment(text) {
 
     // Question number with text: "1. text" or "1) text"
     const qMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
-    // Bare question number alone on its line: "10." or "10)" — Google Form computation style
+    // Bare question number alone on its line: "10." or "10)" â Google Form computation style
     const bareMatch = !qMatch && trimmed.match(/^(\d+)[.)]\s*$/);
 
     if (qMatch || bareMatch) {
@@ -1529,7 +1529,7 @@ function parseAssessment(text) {
       const qText = qMatch ? qMatch[2] : '';
 
       if (qMatch && current && !current.qNum) {
-        // Marker was the line before — attach number to it
+        // Marker was the line before â attach number to it
         current.qNum = qNum;
         const inlined = tryExtractInlineChoices(qText);
         if (inlined) { current.text = inlined.qText; current.choices = inlined.choices; }
@@ -1557,7 +1557,7 @@ function parseAssessment(text) {
       // Check if multiple choices are squished on this one line
       const parts = trimmed.split(/\s+(?=[A-Fa-f][.)]\s)/);
       if (parts.length >= 2) {
-        // Multiple inline choices — split and add each
+        // Multiple inline choices â split and add each
         for (const part of parts) {
           const m = part.trim().match(/^([A-Fa-f])[.)]\s+(.+)$/);
           if (m) current.choices.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
@@ -1568,10 +1568,10 @@ function parseAssessment(text) {
       continue;
     }
 
-    // ELA-style bubble choices: "( ) text" or "○ text" or "◯ text"
+    // ELA-style bubble choices: "( ) text" or "â text" or "â¯ text"
     // These appear in ELA assessments instead of A) B) C) D) labels.
     // Auto-assign letters A, B, C, D based on the order they appear.
-    const elaChoiceMatch = current && !choiceMatch && trimmed.match(/^(?:\(\s*\)|[○◯⃝])\s+(.+)$/);
+    const elaChoiceMatch = current && !choiceMatch && trimmed.match(/^(?:\(\s*\)|[ââ¯â])\s+(.+)$/);
     if (elaChoiceMatch) {
       const text = elaChoiceMatch[1].trim();
       const nextLetter = String.fromCharCode(65 + current.choices.length); // A, B, C, D ...
@@ -1600,7 +1600,7 @@ function parseAssessment(text) {
   return questions;
 }
 
-// ─── Manual Builder Helpers ───────────────────────────────────────────────────
+// âââ Manual Builder Helpers âââââââââââââââââââââââââââââââââââââââââââââââââââ
 const Q_TYPES = [
   { id: 'mc', label: 'Multiple Choice' },
   { id: 'multiselect', label: 'Select All That Apply' },
@@ -1616,7 +1616,7 @@ const defaultChoices = () => LETTERS.slice(0, 4).map(l => ({ letter: l, text: ''
 const VISUAL_TYPES_LIST = [
   { id: 'none',        label: 'None' },
   { id: 'custom',      label: 'UPLOAD / PASTE IMAGE', color: '#b45309' },
-  { id: 'DRAW',        label: '✏ DRAW (freehand)', color: '#7c3aed' },
+  { id: 'DRAW',        label: 'â DRAW (freehand)', color: '#7c3aed' },
   { id: 'SHAPE_2D',   label: '2D Shape (with labels)' },
   { id: 'AREA_MODEL',  label: 'Area Model (multi-digit)' },
   { id: 'ARRAY',       label: 'Array (dots)' },
@@ -1691,7 +1691,7 @@ function VisualParamForm({ type, params, onChange }) {
                 <input value={params.labelAt || ''} onChange={e => set('labelAt', e.target.value)}
                   className="border rounded p-1 w-full font-mono text-xs"
                   placeholder="e.g. 0, 1/4, 1/2, 3/4, 1  or  0, 0.5, 1" />
-                <span className="text-xs text-slate-400">Comma-separated — fractions like 1/4 and mixed numbers like 1 1/2 are supported</span>
+                <span className="text-xs text-slate-400">Comma-separated â fractions like 1/4 and mixed numbers like 1 1/2 are supported</span>
               </div>
             )}
           </div>
@@ -1699,7 +1699,7 @@ function VisualParamForm({ type, params, onChange }) {
           <div className="space-y-0.5">
             <p className="text-xs font-medium text-gray-600">Label format:</p>
             <div className="flex gap-3">
-              {[['decimal', 'Decimal (0.5, 1.25…)'], ['fraction', 'Fraction (1/2, 1 1/4…)']].map(([val, lbl]) => (
+              {[['decimal', 'Decimal (0.5, 1.25â¦)'], ['fraction', 'Fraction (1/2, 1 1/4â¦)']].map(([val, lbl]) => (
                 <label key={val} className="text-xs flex items-center gap-1 cursor-pointer">
                   <input type="radio" checked={(params.labelFmt || 'decimal') === val}
                     onChange={() => set('labelFmt', val)} />
@@ -1715,11 +1715,11 @@ function VisualParamForm({ type, params, onChange }) {
             </label>
             {params.jumps === 'yes' && (
               <>
-                {/* Operation model buttons — two groups */}
+                {/* Operation model buttons â two groups */}
                 <div className="flex flex-col gap-1 w-full">
                   <p className="text-xs text-gray-500">Model type</p>
                   <div className="flex gap-1">
-                    {[{op:'+',label:'+ Add'},{op:'-',label:'− Subtract'},{op:'×',label:'× Multiply'},{op:'÷',label:'÷ Divide'}].map(({op,label}) => {
+                    {[{op:'+',label:'+ Add'},{op:'-',label:'â Subtract'},{op:'Ã',label:'Ã Multiply'},{op:'Ã·',label:'Ã· Divide'}].map(({op,label}) => {
                       const active = (params.hop_op || '+') === op;
                       return (
                         <button key={op} type="button"
@@ -1734,7 +1734,7 @@ function VisualParamForm({ type, params, onChange }) {
                 {inp('Amount / Factor', 'hop_size', { type: 'number', min: 0.01, step: 'any', placeholder: '= 1 step' })}
                 {inp('Start at', 'hop_start', { type: 'number', step: 'any', placeholder: 'auto' })}
                 <label className="text-xs flex flex-col gap-0.5 w-full">
-                  <span className="font-medium">Custom hops (from:to, …)</span>
+                  <span className="font-medium">Custom hops (from:to, â¦)</span>
                   <input value={params.hops || ''} onChange={e => set('hops', e.target.value)}
                     className="border rounded p-1 w-full font-mono text-xs"
                     placeholder="e.g. 0:1/4, 1/4:1/2, 1/2:3/4" />
@@ -1745,7 +1745,7 @@ function VisualParamForm({ type, params, onChange }) {
           </div>
           {params.jumps === 'yes' && (
             <p className="text-xs text-slate-400">
-              + − go left/right · × ÷ use start value · custom hops override all
+              + â go left/right Â· Ã Ã· use start value Â· custom hops override all
             </p>
           )}
         </div>
@@ -1843,7 +1843,7 @@ function VisualParamForm({ type, params, onChange }) {
                 className="border rounded p-1 w-full text-sm" placeholder="e.g. 3" />
             </div>
           </div>
-          <p className="text-xs text-slate-400">Example: Whole=2, N=1, D=3 → shows 2 and 1/3</p>
+          <p className="text-xs text-slate-400">Example: Whole=2, N=1, D=3 â shows 2 and 1/3</p>
         </div>
       );
     case 'AREA_MODEL':
@@ -1852,7 +1852,7 @@ function VisualParamForm({ type, params, onChange }) {
           <label className="text-xs block">Column values (comma-sep) <input value={params.cols || ''} onChange={e => set('cols', e.target.value)} placeholder="e.g. 20,3 or 200,40,7" className="border rounded p-1 w-36 ml-1" /></label>
           <label className="text-xs block">Row values (comma-sep) <input value={params.rows || ''} onChange={e => set('rows', e.target.value)} placeholder="e.g. 10,4 or 30,2" className="border rounded p-1 w-36 ml-1" /></label>
           <label className="text-xs block">Cell values (optional, comma-sep) <input value={params.vals || ''} onChange={e => set('vals', e.target.value)} placeholder="e.g. 200,6,400,12" className="border rounded p-1 w-36 ml-1" /></label>
-          <p className="text-xs text-slate-400">Multi-digit: cols=20,3 rows=10,4 → 2×2 grid for 23×14</p>
+          <p className="text-xs text-slate-400">Multi-digit: cols=20,3 rows=10,4 â 2Ã2 grid for 23Ã14</p>
         </div>
       );
     case 'BASE10':
@@ -1863,28 +1863,28 @@ function VisualParamForm({ type, params, onChange }) {
               <span className="text-xs text-gray-500 font-medium">Thousands</span>
               <input type="number" min={0} max={20} value={params.thousands ?? ''}
                 onChange={e => set('thousands', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
+                className="border rounded p-1 w-full text-sm" placeholder="0â20" />
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-gray-500 font-medium">Hundreds</span>
               <input type="number" min={0} max={20} value={params.hundreds ?? ''}
                 onChange={e => set('hundreds', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
+                className="border rounded p-1 w-full text-sm" placeholder="0â20" />
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-gray-500 font-medium">Tens</span>
               <input type="number" min={0} max={20} value={params.tens ?? ''}
                 onChange={e => set('tens', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
+                className="border rounded p-1 w-full text-sm" placeholder="0â20" />
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-gray-500 font-medium">Ones</span>
               <input type="number" min={0} max={20} value={params.ones ?? ''}
                 onChange={e => set('ones', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
+                className="border rounded p-1 w-full text-sm" placeholder="0â20" />
             </div>
           </div>
-          <p className="text-xs text-slate-400">Purple cubes=1000s · dark squares=100s · rods=10s · cubes=1s (max 20 — use above 9 for regrouping)</p>
+          <p className="text-xs text-slate-400">Purple cubes=1000s Â· dark squares=100s Â· rods=10s Â· cubes=1s (max 20 â use above 9 for regrouping)</p>
         </div>
       );
     case 'BAR_MODEL':
@@ -1902,7 +1902,7 @@ function VisualParamForm({ type, params, onChange }) {
           {/* Operation */}
           <div className="flex gap-4 items-center">
             <span className="text-xs font-medium text-gray-700">Operation:</span>
-            {[{v:'+', l:'＋ Addition'}, {v:'-', l:'− Subtraction'}].map(({v,l}) => (
+            {[{v:'+', l:'ï¼ Addition'}, {v:'-', l:'â Subtraction'}].map(({v,l}) => (
               <label key={v} className="text-xs flex items-center gap-1 cursor-pointer">
                 <input type="radio" checked={fsOp === v} onChange={() => set('op', v)} />
                 {l}
@@ -1921,7 +1921,7 @@ function VisualParamForm({ type, params, onChange }) {
           {/* Group B */}
           <div className="space-y-1">
             <p className="text-xs font-semibold text-amber-700">
-              {isAddOp ? 'Group B (gold strips — second addend):' : 'Group B (gold strips — optional subtrahend):'}
+              {isAddOp ? 'Group B (gold strips â second addend):' : 'Group B (gold strips â optional subtrahend):'}
             </p>
             <div className="flex gap-2 flex-wrap">
               {inp('Whole #', 'bw', { type:'number', min:0, max:10, placeholder:'0' })}
@@ -1935,10 +1935,10 @@ function VisualParamForm({ type, params, onChange }) {
             <div className="space-y-2 bg-red-50 rounded p-2">
               <p className="text-xs font-semibold text-red-700">Cross out (subtraction):</p>
               <div className="flex gap-2 flex-wrap">
-                {inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })}
-                {inp('Fraction sections to ✕', 'cross', { type:'number', min:0, placeholder:'0' })}
+                {inp('Whole #s to â', 'crossWh', { type:'number', min:0, placeholder:'0' })}
+                {inp('Fraction sections to â', 'cross', { type:'number', min:0, placeholder:'0' })}
               </div>
-              <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red ✕ marks.</p>
+              <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red â marks.</p>
             </div>
           )}
         </div>
@@ -1948,14 +1948,14 @@ function VisualParamForm({ type, params, onChange }) {
       return (
         <div className="space-y-1">
           <label className="text-xs block">Column headers (comma-sep) <input value={params.header || 'Category,Count'} onChange={e => set('header', e.target.value)} className="border rounded p-1 w-full mt-0.5" /></label>
-          <label className="text-xs block">Rows — one per line, values comma-sep
+          <label className="text-xs block">Rows â one per line, values comma-sep
             <textarea value={params.rowsText || ''} onChange={e => set('rowsText', e.target.value)}
               className="border rounded p-1 w-full h-20 font-mono text-xs mt-0.5" placeholder={"Apples,5\nBananas,8"} />
           </label>
         </div>
       );
     case 'PARTIAL_Q': {
-      // Parse steps string "sub:pq,sub:pq" → editable rows
+      // Parse steps string "sub:pq,sub:pq" â editable rows
       const raw = params.steps || '';
       const stepRows = raw.split(',').filter(Boolean).map(s => {
         const [a, b] = s.split(':');
@@ -1963,7 +1963,7 @@ function VisualParamForm({ type, params, onChange }) {
       });
       if (stepRows.length === 0) stepRows.push({ sub: '', pq: '' });
 
-      // Serialize rows to steps string — empties stay as ":" so UI keeps them visible
+      // Serialize rows to steps string â empties stay as ":" so UI keeps them visible
       const serializeRows = rows => rows.map(r => `${r.sub}:${r.pq}`).join(',');
       // For the marker we strip truly empty rows (handled in PartialQuotients filter)
 
@@ -1998,7 +1998,7 @@ function VisualParamForm({ type, params, onChange }) {
           <div className="space-y-1">
             {stepRows.map((row, i) => (
               <div key={i} className="flex items-center gap-1">
-                <span className="text-xs text-gray-400 w-4">−</span>
+                <span className="text-xs text-gray-400 w-4">â</span>
                 <input value={row.sub} onChange={e => updateRow(i, 'sub', e.target.value)}
                   className="border rounded p-1 w-20 text-xs" placeholder="amount" type="number" min={0} />
                 <span className="text-xs text-gray-400">pq:</span>
@@ -2007,13 +2007,13 @@ function VisualParamForm({ type, params, onChange }) {
                 {remainders[i] !== undefined && (
                   <span className="text-xs text-slate-400 ml-1">= {Math.round(remainders[i] * 1000) / 1000}</span>
                 )}
-                <button type="button" onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 text-xs ml-0.5">✕</button>
+                <button type="button" onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 text-xs ml-0.5">â</button>
               </div>
             ))}
             <button type="button" onClick={addRow}
               className="text-xs text-blue-600 hover:text-blue-800 mt-1">+ Add step</button>
           </div>
-          <p className="text-xs text-slate-400">Each step: amount subtracted · pq = partial quotient</p>
+          <p className="text-xs text-slate-400">Each step: amount subtracted Â· pq = partial quotient</p>
         </div>
       );
     }
@@ -2212,7 +2212,7 @@ function paramsToMarker(type, params) {
   return null;
 }
 
-// ─── Math Symbol Toolbar ───────────────────────────────────────────────────────
+// âââ Math Symbol Toolbar âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Inserts math symbols at cursor position in any <input> or <textarea>
 function MathToolbar({ targetRef, onInsert }) {
   const [showFrac, setShowFrac] = useState(false);
@@ -2254,19 +2254,19 @@ function MathToolbar({ targetRef, onInsert }) {
 
   const symbols = [
     { label: '+', tip: 'Plus' },
-    { label: '−', tip: 'Minus' },
-    { label: '×', tip: 'Multiply' },
-    { label: '÷', tip: 'Divide' },
-    { label: '≠', tip: 'Not equal' },
-    { label: '≤', tip: 'Less than or equal' },
-    { label: '≥', tip: 'Greater than or equal' },
-    { label: '²', tip: 'Squared' },
-    { label: '³', tip: 'Cubed' },
-    { label: '½', tip: '1/2' },
-    { label: '⅓', tip: '1/3' },
-    { label: '¼', tip: '1/4' },
-    { label: '¾', tip: '3/4' },
-    { label: '⅔', tip: '2/3' },
+    { label: 'â', tip: 'Minus' },
+    { label: 'Ã', tip: 'Multiply' },
+    { label: 'Ã·', tip: 'Divide' },
+    { label: 'â ', tip: 'Not equal' },
+    { label: 'â¤', tip: 'Less than or equal' },
+    { label: 'â¥', tip: 'Greater than or equal' },
+    { label: 'Â²', tip: 'Squared' },
+    { label: 'Â³', tip: 'Cubed' },
+    { label: 'Â½', tip: '1/2' },
+    { label: 'â', tip: '1/3' },
+    { label: 'Â¼', tip: '1/4' },
+    { label: 'Â¾', tip: '3/4' },
+    { label: 'â', tip: '2/3' },
   ];
 
   return (
@@ -2304,7 +2304,7 @@ function MathToolbar({ targetRef, onInsert }) {
   );
 }
 
-// ─── Question Form (for Manual Builder) ──────────────────────────────────────
+// âââ Question Form (for Manual Builder) ââââââââââââââââââââââââââââââââââââââ
 function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const isEdit = !!question?.id;
   const [qType, setQType] = useState(question?.qType || 'mc');
@@ -2329,7 +2329,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
     reader.readAsDataURL(blob);
   };
 
-  // Primary: clipboard API button — reads clipboard directly on user click, no focus needed
+  // Primary: clipboard API button â reads clipboard directly on user click, no focus needed
   const [clipMsg, setClipMsg] = useState('');
   const pasteFromClipboard = async () => {
     setClipMsg('');
@@ -2351,7 +2351,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         }
         if (found) break;
       }
-      if (!found) setClipMsg('No image in clipboard — copy an image first, then try again.');
+      if (!found) setClipMsg('No image in clipboard â copy an image first, then try again.');
     } catch (err) {
       if (err.name === 'NotAllowedError') {
         setClipMsg('Clipboard access denied. Allow it in your browser or use "Browse for file" below.');
@@ -2422,7 +2422,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
     <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm text-gray-700">{isEdit ? 'Edit Question' : `Add Question ${questionCount}`}</h4>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg leading-none">â</button>
       </div>
 
       {/* Type */}
@@ -2443,7 +2443,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         <p className="text-xs text-gray-500 mb-1">Question Text</p>
         <MathToolbar targetRef={qTextRef} />
         <textarea ref={qTextRef} value={qText} onChange={e => setQText(e.target.value)}
-          placeholder={qType === 'fill' ? 'Use ___ for blanks, e.g. "3 × ___ = 12"' : qType === 'compute' ? 'e.g. "432 ÷ 6 ="' : 'Type your question...'}
+          placeholder={qType === 'fill' ? 'Use ___ for blanks, e.g. "3 Ã ___ = 12"' : qType === 'compute' ? 'e.g. "432 Ã· 6 ="' : 'Type your question...'}
           className="w-full border rounded p-2 text-sm h-20 resize-none" />
       </div>
 
@@ -2452,7 +2452,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         <div>
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-500">
-              {qType === 'multiselect' ? 'Answer Choices (checkboxes — multiple correct)' : 'Answer Choices'}
+              {qType === 'multiselect' ? 'Answer Choices (checkboxes â multiple correct)' : 'Answer Choices'}
             </p>
             <button onClick={addChoice} disabled={choices.length >= 8}
               className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-300 font-medium">
@@ -2471,13 +2471,13 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
                 }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
                 {choices.length > 2 && (
                   <button onClick={() => removeChoice(ci)}
-                    className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">✕</button>
+                    className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">â</button>
                 )}
               </div>
             ))}
           </div>
           {qType === 'multiselect' && (
-            <p className="text-xs text-gray-400 mt-1">Tip: students check all correct answers — consider making 2–3 choices correct.</p>
+            <p className="text-xs text-gray-400 mt-1">Tip: students check all correct answers â consider making 2â3 choices correct.</p>
           )}
         </div>
       )}
@@ -2524,7 +2524,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
                 {/* Primary: clipboard API button */}
                 <button type="button" onClick={pasteFromClipboard}
                   className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors">
-                  📋 Paste Image from Clipboard
+                  ð Paste Image from Clipboard
                 </button>
                 {clipMsg && <p className="text-xs text-amber-600">{clipMsg}</p>}
 
@@ -2538,7 +2538,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
                 {/* File browse fallback */}
                 <button type="button" onClick={() => fileRef.current?.click()}
                   className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
-                  📁 Browse for image file…
+                  ð Browse for image fileâ¦
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
@@ -2565,12 +2565,12 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         </div>
         <div className="flex-1">
           <label className="text-xs font-medium text-gray-600 block mb-1">
-            Correct Answer <span className="text-gray-400 font-normal">(for answer key — optional)</span>
+            Correct Answer <span className="text-gray-400 font-normal">(for answer key â optional)</span>
           </label>
         {hasChoices && choices.filter(c => c.text).length > 0 ? (
           <select value={answer} onChange={e => setAnswer(e.target.value)}
             className="w-full border rounded p-1.5 text-sm">
-            <option value="">— select correct answer —</option>
+            <option value="">â select correct answer â</option>
             {choices.filter(c => c.text).map(c => (
               <option key={c.letter} value={c.letter}>{c.letter}) {c.text.slice(0, 50)}</option>
             ))}
@@ -2583,7 +2583,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
         </div>
       </div>
 
-      {/* Answer lines — only for non-MC types */}
+      {/* Answer lines â only for non-MC types */}
       {!hasChoices && (
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-600 shrink-0">Answer lines</label>
@@ -2622,7 +2622,7 @@ function AssessmentPreviewSingle({ q, customImg }) {
     ? <img src={customImg} alt="custom" className="max-h-28 border rounded mb-1" />
     : q.marker
       ? (q.marker.startsWith('[IMAGE:')
-        ? <div className="border-2 border-dashed border-orange-300 rounded p-2 text-xs text-orange-600 bg-orange-50 mb-1">⚠ Image placeholder</div>
+        ? <div className="border-2 border-dashed border-orange-300 rounded p-2 text-xs text-orange-600 bg-orange-50 mb-1">â  Image placeholder</div>
         : <div className="mb-1"><ErrorBoundary>{parseVisualModel(q.marker)}</ErrorBoundary></div>)
       : null;
   return (
@@ -2653,7 +2653,7 @@ function AssessmentPreviewSingle({ q, customImg }) {
   );
 }
 
-// ─── Manual Builder ───────────────────────────────────────────────────────────
+// âââ Manual Builder âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
   const [questions, setQuestions] = useState([]);
   const [title, setTitle] = useState('');
@@ -2702,10 +2702,10 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
         showNameLine, showDateLine, showClassLine, showScoreLine,
         fontSize, twoColChoices,
       }));
-    } catch {} // quota exceeded (large images) — silently ignore
+    } catch {} // quota exceeded (large images) â silently ignore
   }, [questions, title, customVisuals, includeAnswerKey, showNameLine, showDateLine, showClassLine, showScoreLine, fontSize, twoColChoices]);
 
-  // Sync _customImg from question objects → customVisuals so images always render in preview
+  // Sync _customImg from question objects â customVisuals so images always render in preview
   useEffect(() => {
     const allQsNow = [...(title ? [{ id: 'title', type: 'header', text: title }] : []), ...questions];
     let changed = false;
@@ -2729,7 +2729,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
     }
     setQuestions(newQuestions);
 
-    // Immediately sync _customImg → customVisuals so the image shows right away.
+    // Immediately sync _customImg â customVisuals so the image shows right away.
     // This avoids a render cycle where hasCvOverride=true with a stale null cv.customImg.
     if (q._customImg) {
       setCustomVisuals(prev => ({
@@ -2789,7 +2789,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
       let text = `${q.qNum}.`;
       if ((q.qType === 'mc' || q.qType === 'multiselect') && q.choices?.length) {
         const choice = q.choices.find(c => c.letter === q.answer);
-        text += ` ${q.answer}${choice ? ` — ${choice.text}` : ''}`;
+        text += ` ${q.answer}${choice ? ` â ${choice.text}` : ''}`;
       } else {
         text += ` ${q.answer}`;
       }
@@ -2803,7 +2803,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
 
   return (
     <div className="flex gap-6">
-      {/* Left — question list */}
+      {/* Left â question list */}
       <div className="w-80 shrink-0 space-y-3">
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assessment Title</p>
@@ -2812,7 +2812,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
             className="w-full border rounded p-2 text-sm" />
         </div>
 
-        {/* Student header — always visible, right below title */}
+        {/* Student header â always visible, right below title */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1.5 shadow-sm">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Student Header</p>
           <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
@@ -2862,7 +2862,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
               )}
               <button onClick={addSection}
                 className="text-xs text-gray-600 border border-gray-300 rounded-md px-2 py-1 hover:bg-gray-50 font-medium transition-colors" title="Add section divider">
-                ─ Section
+                â Section
               </button>
               <button onClick={() => { setEditingQ(null); setShowForm(!showForm); setEditingSectionId(null); }}
                 className="text-xs bg-blue-600 text-white rounded-md px-2.5 py-1 hover:bg-blue-700 shadow-sm font-medium transition-colors">+ Add</button>
@@ -2870,7 +2870,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
           </div>
 
           {questions.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-4">No questions yet — click Add to begin</p>
+            <p className="text-xs text-gray-400 text-center py-4">No questions yet â click Add to begin</p>
           )}
 
           <div className="space-y-1 max-h-80 overflow-y-auto">
@@ -2893,16 +2893,16 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
                           className="flex-1 border rounded px-1.5 py-1 text-xs font-semibold"
                           placeholder="e.g. Part I: Multiple Choice"
                         />
-                        <button onClick={() => saveSectionEdit(q.id)} className="text-green-600 text-xs px-1">✓</button>
-                        <button onClick={() => setEditingSectionId(null)} className="text-gray-400 text-xs px-0.5">✕</button>
+                        <button onClick={() => saveSectionEdit(q.id)} className="text-green-600 text-xs px-1">â</button>
+                        <button onClick={() => setEditingSectionId(null)} className="text-gray-400 text-xs px-0.5">â</button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 border-t border-gray-200 pt-1.5 mt-0.5">
-                        <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">⠿</span>
+                        <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">â ¿</span>
                         <span className="flex-1 text-xs font-semibold text-gray-600 truncate">{q.text}</span>
                         <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 shrink-0">
-                          <button onClick={() => { setEditingSectionId(q.id); setEditingSectionText(q.text); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">✎</button>
-                          <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">✕</button>
+                          <button onClick={() => { setEditingSectionId(q.id); setEditingSectionText(q.text); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">â</button>
+                          <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">â</button>
                         </div>
                       </div>
                     )}
@@ -2917,13 +2917,13 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => reorderByDrag(idx)}
                   className="flex items-center gap-1 bg-gray-50 rounded p-1.5 group cursor-default select-none">
-                  <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">⠿</span>
+                  <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0 text-base leading-none">â ¿</span>
                   <span className="text-xs text-gray-400 w-5 shrink-0">{q.qNum}.</span>
                   <span className="flex-1 text-xs text-gray-700 truncate">{q.text}</span>
                   <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 shrink-0">
-                    <button onClick={() => duplicateQ(q.id)} title="Duplicate" className="text-gray-400 hover:text-indigo-600 px-0.5 text-xs">⧉</button>
-                    <button onClick={() => { setEditingQ(q); setShowForm(true); setEditingSectionId(null); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">✎</button>
-                    <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">✕</button>
+                    <button onClick={() => duplicateQ(q.id)} title="Duplicate" className="text-gray-400 hover:text-indigo-600 px-0.5 text-xs">â§</button>
+                    <button onClick={() => { setEditingQ(q); setShowForm(true); setEditingSectionId(null); }} className="text-blue-500 hover:text-blue-700 px-0.5 text-xs">â</button>
+                    <button onClick={() => deleteQ(q.id)} className="text-red-400 hover:text-red-600 px-0.5 text-xs">â</button>
                   </div>
                 </div>
               );
@@ -2952,46 +2952,46 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
               {includeAnswerKey && (
                 <p className="text-xs text-gray-400">
                   {answerKeyRows.length}/{qCount} answers filled in
-                  {answerKeyRows.length < qCount && ' — edit questions to add missing answers'}
+                  {answerKeyRows.length < qCount && ' â edit questions to add missing answers'}
                 </p>
               )}
             </div>
             <button onClick={onPrint}
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-              🖨 Print / Export PDF
+              ð¨ Print / Export PDF
             </button>
             <button onClick={() => onCopyGdoc(allQs)}
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-              📋 Copy to Google Docs
+              ð Copy to Google Docs
             </button>
             <button onClick={() => onExportDocx({ questions: allQs, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices })}
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-              📄 Export as Word (.docx)
+              ð Export as Word (.docx)
             </button>
             <button onClick={() => setFormsScript(generateFormsScript(allQs, title))}
               className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-              📝 Export to Google Forms
+              ð Export to Google Forms
             </button>
           </div>
         )}
       </div>
       {formsScript && <FormsScriptModal script={formsScript} onClose={() => setFormsScript(null)} />}
 
-      {/* Right — preview */}
+      {/* Right â preview */}
       <div className="flex-1 min-w-0">
         {allQs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-80 rounded-xl border-2 border-dashed border-gray-200 bg-white text-center px-8">
-            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">✏️</div>
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">âï¸</div>
             <p className="text-sm font-semibold text-gray-600 mb-1">No questions yet</p>
             <p className="text-xs text-gray-400 leading-relaxed">Click "+ Add" in the panel on the left to start building your assessment</p>
           </div>
         ) : (
           <div id="print-area" className={`bg-white rounded-xl border border-gray-100 p-8 shadow-md ${{ normal: 'text-sm', large: 'text-base', xl: 'text-lg' }[fontSize]}`}>
-            {/* Assessment title — top of page */}
+            {/* Assessment title â top of page */}
             {title && (
               <div className="text-center font-bold text-lg mb-4 font-serif text-gray-800">{title}</div>
             )}
-            {/* Student header lines — below title, above questions */}
+            {/* Student header lines â below title, above questions */}
             {(showNameLine || showDateLine || showClassLine || showScoreLine) && (
               <div className="mb-6 font-serif text-sm text-gray-900">
                 {(showNameLine || showDateLine) && (
@@ -3062,7 +3062,7 @@ function ManualBuilder({ onPrint, onCopyGdoc, onExportDocx }) {
   );
 }
 
-// ─── Parse a marker string back into { type, params } for editing ─────────────
+// âââ Parse a marker string back into { type, params } for editing âââââââââââââ
 function markerToTypeParams(marker) {
   if (!marker) return { type: 'none', params: {} };
   if (marker.startsWith('[IMAGE: draw')) return { type: 'DRAW', params: {} };
@@ -3139,7 +3139,7 @@ function markerToTypeParams(marker) {
   return { type, params };
 }
 
-// ─── Drawing Canvas ────────────────────────────────────────────────────────────
+// âââ Drawing Canvas ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function DrawingCanvas({ existingImg, onCapture }) {
   const CANVAS_W = 480, CANVAS_H = 300;
   const fontSizeMap = { 2: 12, 4: 18, 8: 28, 16: 42 };
@@ -3225,7 +3225,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     setSaved(true);
   };
 
-  // ── Pen / Eraser ──────────────────────────────────────────────────
+  // ââ Pen / Eraser ââââââââââââââââââââââââââââââââââââââââââââââââââ
   const penStart = (ctx, pos) => {
     ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
     ctx.fillStyle = color;
@@ -3248,7 +3248,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     lastPos.current = pos;
   };
 
-  // ── Line ──────────────────────────────────────────────────────────
+  // ââ Line ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const drawLinePreview = (ctx, from, to) => {
     ctx.putImageData(snapshot.current, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
@@ -3261,7 +3261,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     ctx.stroke();
   };
 
-  // ── Dot ───────────────────────────────────────────────────────────
+  // ââ Dot âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const placeDot = (ctx, pos) => {
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = color;
@@ -3270,7 +3270,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     ctx.fill();
   };
 
-  // ── Text ──────────────────────────────────────────────────────────
+  // ââ Text ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const placeText = (txt) => {
     if (!txt.trim() || !textPos) return;
     pushHistory();
@@ -3285,7 +3285,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     setTextVal('');
   };
 
-  // ── Select ────────────────────────────────────────────────────────
+  // ââ Select ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const drawSelRect = (ctx, from, to) => {
     const x = Math.min(from.x, to.x);
     const y = Math.min(from.y, to.y);
@@ -3312,7 +3312,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
       Math.max(1, Math.round(sel.w)), Math.max(1, Math.round(sel.h))
     );
     setCopiedRegion(imgData);
-    setSelMsg('✓ Region copied!');
+    setSelMsg('â Region copied!');
     setTimeout(() => setSelMsg(''), 2000);
   };
 
@@ -3327,7 +3327,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     const py = Math.round((CANVAS_H - copiedRegion.height) / 2 + 20);
     ctx.drawImage(tmp, px, py);
     setSaved(false);
-    setSelMsg('✓ Pasted!');
+    setSelMsg('â Pasted!');
     setTimeout(() => setSelMsg(''), 2000);
   };
 
@@ -3340,7 +3340,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     selClean.current = null;
   };
 
-  // ── Canvas mouse/touch handlers ───────────────────────────────────
+  // ââ Canvas mouse/touch handlers âââââââââââââââââââââââââââââââââââ
   const onPointerDown = (e) => {
     e.preventDefault();
     if (textPos) { setTextPos(null); setTextVal(''); return; }
@@ -3428,7 +3428,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     lastPos.current = null;
   };
 
-  // ── Upload / clipboard ────────────────────────────────────────────
+  // ââ Upload / clipboard ââââââââââââââââââââââââââââââââââââââââââââ
   const drawImageOnCanvas = (src, pushHist = true) => {
     if (pushHist) pushHistory();
     const img = new Image();
@@ -3458,7 +3458,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     canvasRef.current.toBlob(async (blob) => {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        setCopyMsg('✓ Copied!');
+        setCopyMsg('â Copied!');
         setTimeout(() => setCopyMsg(''), 2000);
       } catch {
         setCopyMsg('Copy failed');
@@ -3487,7 +3487,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
             ctx.drawImage(img, x, y, w, h);
             setSaved(false);
             URL.revokeObjectURL(url);
-            setPasteMsg('✓ Pasted!');
+            setPasteMsg('â Pasted!');
             setTimeout(() => setPasteMsg(''), 2000);
           };
           img.src = url;
@@ -3502,7 +3502,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
     }
   };
 
-  // ── Constants ─────────────────────────────────────────────────────
+  // ââ Constants âââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const COLORS = [
     { val: '#111111', label: 'Black' },
     { val: '#dc2626', label: 'Red' },
@@ -3515,12 +3515,12 @@ function DrawingCanvas({ existingImg, onCapture }) {
   ];
   const SIZES = [{ label: 'S', val: 2 }, { label: 'M', val: 4 }, { label: 'L', val: 8 }, { label: 'XL', val: 16 }];
   const TOOLS = [
-    { id: 'pen', icon: '✏️', label: 'Pen' },
-    { id: 'line', icon: '╱', label: 'Line' },
-    { id: 'dot', icon: '●', label: 'Dot' },
+    { id: 'pen', icon: 'âï¸', label: 'Pen' },
+    { id: 'line', icon: 'â±', label: 'Line' },
+    { id: 'dot', icon: 'â', label: 'Dot' },
     { id: 'text', icon: 'T', label: 'Text' },
-    { id: 'eraser', icon: '⌫', label: 'Eraser' },
-    { id: 'select', icon: '⬚', label: 'Select' },
+    { id: 'eraser', icon: 'â«', label: 'Eraser' },
+    { id: 'select', icon: 'â¬', label: 'Select' },
   ];
 
   const sizeLabel = tool === 'text'
@@ -3582,15 +3582,15 @@ function DrawingCanvas({ existingImg, onCapture }) {
           <span className="text-xs text-indigo-600 font-medium">Select:</span>
           <button type="button" onClick={copySelection} disabled={!sel}
             className="text-xs border border-indigo-300 rounded px-2 py-0.5 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-40">
-            📋 Copy Region
+            ð Copy Region
           </button>
           <button type="button" onClick={pasteSelection} disabled={!copiedRegion}
             className="text-xs border border-indigo-300 rounded px-2 py-0.5 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-40">
-            📌 Paste Copy
+            ð Paste Copy
           </button>
           <button type="button" onClick={deselectRegion}
             className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-500 hover:bg-gray-100 transition-colors">
-            ✕ Deselect
+            â Deselect
           </button>
           {selMsg && <span className="text-xs text-green-600 font-medium">{selMsg}</span>}
         </div>
@@ -3609,7 +3609,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
               if (e.key === 'Enter') { placeText(textVal); }
               if (e.key === 'Escape') { setTextPos(null); setTextVal(''); }
             }}
-            placeholder="Enter text…"
+            placeholder="Enter textâ¦"
             className="flex-1 text-sm border border-amber-300 rounded px-2 py-0.5 outline-none focus:border-amber-500"
           />
           <button type="button" onClick={() => placeText(textVal)}
@@ -3617,7 +3617,7 @@ function DrawingCanvas({ existingImg, onCapture }) {
             Place
           </button>
           <button type="button" onClick={() => { setTextPos(null); setTextVal(''); }}
-            className="text-xs text-gray-500 hover:text-gray-700">✕</button>
+            className="text-xs text-gray-500 hover:text-gray-700">â</button>
         </div>
       )}
 
@@ -3641,32 +3641,32 @@ function DrawingCanvas({ existingImg, onCapture }) {
         <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
         <button type="button" onClick={() => uploadRef.current.click()}
           className="text-xs border border-blue-200 rounded px-2 py-0.5 text-blue-600 hover:bg-blue-50 transition-colors">
-          📁 Upload
+          ð Upload
         </button>
         <button type="button" onClick={copyCanvas}
           className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors">
-          📋 Copy
+          ð Copy
         </button>
         {copyMsg && <span className="text-xs text-green-600 font-medium">{copyMsg}</span>}
         <button type="button" onClick={pasteCanvas}
           className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors">
-          📌 Paste
+          ð Paste
         </button>
         {pasteMsg && <span className="text-xs text-blue-600 font-medium">{pasteMsg}</span>}
         <button type="button" onClick={undo} disabled={history.length === 0}
           className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 ml-auto">
-          ↩ Undo
+          â© Undo
         </button>
         <button type="button" onClick={clearCanvas}
           className="text-xs border border-red-200 rounded px-2 py-0.5 text-red-500 hover:bg-red-50 transition-colors">
-          🗑 Clear
+          ð Clear
         </button>
       </div>
 
       {/* Use Drawing button */}
       <button type="button" onClick={useDrawing}
         className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${saved ? 'bg-green-600 text-white' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>
-        {saved ? '✓ Drawing Saved! (click Save below to apply)' : '✓ Use This Drawing'}
+        {saved ? 'â Drawing Saved! (click Save below to apply)' : 'â Use This Drawing'}
       </button>
     </div>
   );
@@ -3701,7 +3701,7 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
         }
         if (found) break;
       }
-      if (!found) setClipMsg('No image in clipboard — copy an image first, then try again.');
+      if (!found) setClipMsg('No image in clipboard â copy an image first, then try again.');
     } catch (err) {
       setClipMsg(err.name === 'NotAllowedError'
         ? 'Clipboard access denied. Allow it in your browser or use "Browse for file" below.'
@@ -3794,7 +3794,7 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
               <>
                 <button type="button" onClick={pasteFromClipboard}
                   className="w-full py-3 rounded-lg border-2 border-blue-300 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors">
-                  📋 Paste Image from Clipboard
+                  ð Paste Image from Clipboard
                 </button>
                 {clipMsg && <p className="text-xs text-amber-600">{clipMsg}</p>}
                 <div ref={imgDropRef}
@@ -3804,7 +3804,7 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
                 </div>
                 <button type="button" onClick={() => fileRef.current?.click()}
                   className="w-full text-xs border border-gray-300 rounded py-1.5 text-gray-500 hover:bg-gray-50">
-                  📁 Browse for image file…
+                  ð Browse for image fileâ¦
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files[0]; if (f) loadBlob(f); }} />
@@ -3821,12 +3821,12 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
         )}
 
         <div className="flex gap-2 justify-between items-center">
-          {/* Remove visual — only shown when there's something to remove */}
+          {/* Remove visual â only shown when there's something to remove */}
           {(marker || initialCustomImg) ? (
             <button type="button"
               onClick={() => onSave({ marker: null, customImg: null })}
               className="px-3 py-2 text-sm rounded border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-colors">
-              🗑 Remove Visual
+              ð Remove Visual
             </button>
           ) : <span />}
           <div className="flex gap-2">
@@ -3841,12 +3841,12 @@ function ModelEditor({ marker, initialCustomImg, initialImgScale, onSave, onClos
   );
 }
 
-// ─── Math line splitter ────────────────────────────────────────────────────────
+// âââ Math line splitter ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Detects lines that are rows of math items (fractions, mixed numbers, blanks)
 // and splits them into an array for spaced rendering. Returns null for prose.
-const UNICODE_FRAC = '½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞⅐⅑⅒';
+const UNICODE_FRAC = 'Â½ââÂ¼Â¾âââââââââââââ';
 const MATH_ITEM_RE = new RegExp(
-  `\\d+\\s+[${UNICODE_FRAC}]` +   // mixed number with unicode fraction: "2 ⅖"
+  `\\d+\\s+[${UNICODE_FRAC}]` +   // mixed number with unicode fraction: "2 â"
   `|\\d+\\s*\\/\\s*\\d+` +         // fraction: "11/4" or "11 / 4"
   `|_{3,}` +                        // answer blank: "______"
   `|[${UNICODE_FRAC}]` +           // lone unicode fraction character
@@ -3864,7 +3864,7 @@ function splitMathItems(text) {
   return matches.map(m => m[0]);
 }
 
-// Renders a single line — if it's a row of math items, spaces them out; otherwise plain text.
+// Renders a single line â if it's a row of math items, spaces them out; otherwise plain text.
 function MathLine({ text, className = '' }) {
   const items = splitMathItems(text);
   if (items) {
@@ -3879,7 +3879,7 @@ function MathLine({ text, className = '' }) {
   return <div className={className}>{text}</div>;
 }
 
-// ─── Assessment Preview ────────────────────────────────────────────────────────
+// âââ Assessment Preview ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, onRegen, onDelete, regenningIdx, twoColChoices = false }) {
   const [editingIdx, setEditingIdx] = useState(null);
   const [editText, setEditText] = useState('');
@@ -3996,21 +3996,21 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
             : markerToUse
               ? (markerToUse.startsWith('[IMAGE:')
                 ? <div className="border-2 border-dashed border-orange-300 rounded p-3 text-xs text-orange-600 bg-orange-50">
-                    ⚠ Click "Edit Visual" below to paste your own image
+                    â  Click "Edit Visual" below to paste your own image
                   </div>
                 : <ErrorBoundary>{parseVisualModel(markerToUse)}</ErrorBoundary>)
               : null;
 
           return (
             <div key={q.id} className="relative print-question">
-              {/* Standard tag — top-right corner */}
+              {/* Standard tag â top-right corner */}
               {q.standard && (
                 <div className="absolute top-0 right-0 text-xs text-blue-500 font-medium bg-white/90 px-1.5 py-0.5 rounded-bl border border-blue-200 no-print-border leading-tight">
                   {q.standard}
                 </div>
               )}
 
-              {/* ① Number + question text on the same line */}
+              {/* â  Number + question text on the same line */}
               {editingIdx === idx ? (
                 <div className="mb-1.5">
                   <span className="font-bold text-gray-800 mr-1.5">
@@ -4036,7 +4036,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                 </div>
               )}
 
-              {/* ② Content — indented below the number+text row */}
+              {/* â¡ Content â indented below the number+text row */}
               <div className="pl-4">
                 {/* Math continuation lines */}
                 {q.lines?.length > 0 && (
@@ -4047,7 +4047,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                   </div>
                 )}
 
-                {/* Visual model — shown below question number/text */}
+                {/* Visual model â shown below question number/text */}
                 {visualComponent && (
                   <div className="my-2">{visualComponent}</div>
                 )}
@@ -4070,7 +4070,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                 className="flex-1 border border-blue-300 rounded px-1 py-0.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-200" autoFocus
                                 onKeyDown={e => { if (e.key === 'Enter') saveChoiceEdit(idx, q); if (e.key === 'Escape') setEditingChoiceIdx(null); }} />
                               <button type="button" onClick={() => saveChoiceEdit(idx, q)} className="text-xs bg-green-600 text-white rounded px-1.5 py-0.5">Save</button>
-                              <button type="button" onClick={() => setEditingChoiceIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-1.5 py-0.5">✕</button>
+                              <button type="button" onClick={() => setEditingChoiceIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-1.5 py-0.5">â</button>
                             </span>
                           ) : (
                             <span className="group/ch">
@@ -4078,7 +4078,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                               {onQuestionEdit && (
                                 <button type="button"
                                   onClick={() => startChoiceEdit(idx, ci, ch.text)}
-                                  className="ml-1 opacity-0 group-hover/ch:opacity-60 text-xs text-blue-500 no-print hover:opacity-100">✏</button>
+                                  className="ml-1 opacity-0 group-hover/ch:opacity-60 text-xs text-blue-500 no-print hover:opacity-100">â</button>
                               )}
                             </span>
                           )}
@@ -4101,7 +4101,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                   );
                 })()}
 
-                {/* Type picker — shown when ⇄ Change Type is clicked */}
+                {/* Type picker â shown when â Change Type is clicked */}
                 {editingTypeIdx === idx && onQuestionEdit && (
                   <div className="mt-2 no-print">
                     <p className="text-xs text-gray-500 mb-1 font-medium">Select question type:</p>
@@ -4114,7 +4114,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         </button>
                       ))}
                       <button type="button" onClick={() => setEditingTypeIdx(null)}
-                        className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-400 hover:bg-gray-50 ml-1">✕</button>
+                        className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-400 hover:bg-gray-50 ml-1">â</button>
                     </div>
                   </div>
                 )}
@@ -4128,44 +4128,44 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                       onKeyDown={e => { if (e.key === 'Enter') saveAnswer(idx, q); if (e.key === 'Escape') setEditingAnswerIdx(null); }}
                       className="flex-1 border border-green-300 rounded px-2 py-0.5 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-green-200" />
                     <button type="button" onClick={() => saveAnswer(idx, q)} className="text-xs bg-green-600 text-white rounded px-2 py-0.5 hover:bg-green-700">Save</button>
-                    <button type="button" onClick={() => setEditingAnswerIdx(null)} className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-500 hover:bg-gray-50">✕</button>
+                    <button type="button" onClick={() => setEditingAnswerIdx(null)} className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-500 hover:bg-gray-50">â</button>
                   </div>
                 ) : q.answer && onQuestionEdit ? (
                   <div className="mt-1 text-xs text-green-700 no-print flex items-center gap-1">
-                    <span className="font-semibold">✓ Answer:</span> <span>{q.answer}</span>
-                    <button type="button" onClick={() => startAnswerEdit(idx, q.answer)} className="ml-1 text-blue-400 hover:text-blue-600">✏</button>
+                    <span className="font-semibold">â Answer:</span> <span>{q.answer}</span>
+                    <button type="button" onClick={() => startAnswerEdit(idx, q.answer)} className="ml-1 text-blue-400 hover:text-blue-600">â</button>
                   </div>
                 ) : null}
 
-                {/* Action toolbar — no-print, always visible (not hover-dependent) */}
+                {/* Action toolbar â no-print, always visible (not hover-dependent) */}
                 {(onEdit || onQuestionEdit || onRegen || onDelete) && editingIdx !== idx && editingTypeIdx !== idx && (
                   <div className="flex gap-1.5 mt-3 flex-wrap no-print">
                     {onEdit && (
                       <button type="button"
                         onClick={() => onEdit(q.id, markerToUse, customImgSrc, imgScale)}
                         className="text-xs border rounded px-2 py-0.5 text-blue-600 border-blue-200 bg-white hover:bg-blue-50 transition-colors">
-                        {visualComponent ? '✏ Edit Visual' : '+ Add Visual / Model'}
+                        {visualComponent ? 'â Edit Visual' : '+ Add Visual / Model'}
                       </button>
                     )}
                     {onQuestionEdit && (
                       <button type="button"
                         onClick={() => startEdit(idx, q.text)}
                         className="text-xs border rounded px-2 py-0.5 text-gray-600 border-gray-200 bg-white hover:bg-gray-50 transition-colors">
-                        ✏ Edit Text
+                        â Edit Text
                       </button>
                     )}
                     {onQuestionEdit && (
                       <button type="button"
                         onClick={() => { setEditingTypeIdx(idx); setEditingIdx(null); setEditingAnswerIdx(null); setEditingChoiceIdx(null); }}
                         className="text-xs border rounded px-2 py-0.5 text-purple-600 border-purple-200 bg-white hover:bg-purple-50 transition-colors">
-                        ⇄ Change Type
+                        â Change Type
                       </button>
                     )}
                     {onQuestionEdit && (
                       <button type="button"
                         onClick={() => startAnswerEdit(idx, q.answer)}
                         className="text-xs border rounded px-2 py-0.5 text-green-600 border-green-200 bg-white hover:bg-green-50 transition-colors">
-                        ✓ Edit Answer
+                        â Edit Answer
                       </button>
                     )}
                     {onRegen && (
@@ -4177,14 +4177,14 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                             ? 'text-indigo-500 border-indigo-300 bg-indigo-50 cursor-wait'
                             : 'text-gray-400 border-gray-200 bg-white hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50'
                         }`}>
-                        {regenningIdx === idx ? '↺ Regenerating…' : '↺ Regenerate'}
+                        {regenningIdx === idx ? 'âº Regeneratingâ¦' : 'âº Regenerate'}
                       </button>
                     )}
                     {onDelete && (
                       <button type="button"
                         onClick={() => onDelete(idx)}
                         className="text-xs border rounded px-2 py-0.5 text-red-400 border-red-200 bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors ml-auto">
-                        🗑 Delete
+                        ð Delete
                       </button>
                     )}
                   </div>
@@ -4199,7 +4199,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
   );
 }
 
-// ─── Settings Modal ───────────────────────────────────────────────────────────
+// âââ Settings Modal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function SettingsModal({ apiKey, onSave, onClose }) {
   const [val, setVal] = useState(apiKey);
   return (
@@ -4223,7 +4223,7 @@ function SettingsModal({ apiKey, onSave, onClose }) {
   );
 }
 
-// ─── Print styles injected once ───────────────────────────────────────────────
+// âââ Print styles injected once âââââââââââââââââââââââââââââââââââââââââââââââ
 const PRINT_STYLE = `
 @page {
   size: letter portrait;
@@ -4254,7 +4254,7 @@ const PRINT_STYLE = `
 }
 `;
 
-// ─── Visual marker → HTML table (for Google Docs paste) ───────────────────────
+// âââ Visual marker â HTML table (for Google Docs paste) âââââââââââââââââââââââ
 function visualToHtml(marker) {
   if (!marker) return '';
   const m = marker.replace(/^\[/, '').replace(/\]$/, '').trim();
@@ -4262,7 +4262,7 @@ function visualToHtml(marker) {
   const tbl = 'border-collapse:collapse;margin:8px 0;';
   const cell = 'border:1px solid #333;text-align:center;padding:4px;';
 
-  // ── ARRAY ──
+  // ââ ARRAY ââ
   if (m.startsWith('ARRAY:')) {
     const R = Math.min(parseInt(gp('rows')) || 3, 12);
     const C = Math.min(parseInt(gp('cols')) || 3, 12);
@@ -4270,13 +4270,13 @@ function visualToHtml(marker) {
     for (let r = 0; r < R; r++) {
       t += '<tr>';
       for (let c = 0; c < C; c++)
-        t += '<td style="border:none;width:18px;height:18px;text-align:center;font-size:13pt;line-height:1;padding:1px">●</td>';
+        t += '<td style="border:none;width:18px;height:18px;text-align:center;font-size:13pt;line-height:1;padding:1px">â</td>';
       t += '</tr>';
     }
     return t + '</tbody></table>';
   }
 
-  // ── NUMBER LINE ──
+  // ââ NUMBER LINE ââ
   if (m.startsWith('NUM_LINE:')) {
     const mn = parseFloat(gp('min') ?? '0');
     const mx = parseFloat(gp('max') ?? '10');
@@ -4301,30 +4301,30 @@ function visualToHtml(marker) {
         hopPairs = hopsParam.split(',').map(s => s.split(':').map(Number)).filter(([a,b]) => !isNaN(a) && !isNaN(b));
         hopPairs.forEach(([a, b]) => {
           const diff = parseFloat((b - a).toFixed(4));
-          hopLabelList.push(diff >= 0 ? `+${diff}` : `−${Math.abs(diff)}`);
+          hopLabelList.push(diff >= 0 ? `+${diff}` : `â${Math.abs(diff)}`);
         });
       } else if (hopSizeParam) {
         const hs = parseFloat(hopSizeParam);
-        if (hopOpParam === '×' || hopOpParam === '*') {
+        if (hopOpParam === 'Ã' || hopOpParam === '*') {
           const start = hopStartParam !== null ? parseFloat(hopStartParam) : (mn || 1);
           let v = start;
           for (let n = 0; n < 20; n++) {
             const next = parseFloat((v * hs).toFixed(6));
             if (next > mx + 0.0001 || Math.abs(next - v) < 0.0001) break;
-            hopPairs.push([v, next]); hopLabelList.push(`×${hs}`); v = next;
+            hopPairs.push([v, next]); hopLabelList.push(`Ã${hs}`); v = next;
           }
-        } else if (hopOpParam === '÷' || hopOpParam === '/') {
+        } else if (hopOpParam === 'Ã·' || hopOpParam === '/') {
           const start = hopStartParam !== null ? parseFloat(hopStartParam) : mx;
           let v = start;
           for (let n = 0; n < 20; n++) {
             const next = parseFloat((v / hs).toFixed(6));
             if (next < mn - 0.0001 || Math.abs(next - v) < 0.0001) break;
-            hopPairs.push([v, next]); hopLabelList.push(`÷${hs}`); v = next;
+            hopPairs.push([v, next]); hopLabelList.push(`Ã·${hs}`); v = next;
           }
-        } else if (hopOpParam === '-' || hopOpParam === '−') {
+        } else if (hopOpParam === '-' || hopOpParam === 'â') {
           const start = hopStartParam !== null ? parseFloat(hopStartParam) : mx;
           for (let v = start; v - hs >= mn - 0.0001; v = parseFloat((v - hs).toFixed(4))) {
-            hopPairs.push([v, parseFloat((v - hs).toFixed(4))]); hopLabelList.push(`−${hs}`);
+            hopPairs.push([v, parseFloat((v - hs).toFixed(4))]); hopLabelList.push(`â${hs}`);
           }
         } else {
           const start = hopStartParam !== null ? parseFloat(hopStartParam) : mn;
@@ -4354,7 +4354,7 @@ function visualToHtml(marker) {
         if (gapCols > 0) t += `<td colspan="${gapCols}" style="border:none"></td>`;
         const span = Math.max(1, Math.round(fHi - fLo));
         const label = hopLabelList[hi] || '';
-        t += `<td colspan="${span}" style="border:none;border-bottom:2px solid #2563eb;text-align:center;font-size:9pt;color:#2563eb;font-weight:bold;padding:0 2px;width:${tw * span}px">⌢ ${label}</td>`;
+        t += `<td colspan="${span}" style="border:none;border-bottom:2px solid #2563eb;text-align:center;font-size:9pt;color:#2563eb;font-weight:bold;padding:0 2px;width:${tw * span}px">â¢ ${label}</td>`;
         lastFrac = Math.round(fHi);
       });
       const remaining = ticks.length - 1 - lastFrac;
@@ -4373,11 +4373,11 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── GROUPS ──
+  // ââ GROUPS ââ
   if (m.startsWith('GROUPS:')) {
     const G = Math.min(parseInt(gp('groups')) || 3, 8);
     const I = Math.min(parseInt(gp('items')) || 3, 8);
-    const dots = Array(I).fill('●').join('  ');
+    const dots = Array(I).fill('â').join('  ');
     let t = `<table style="${tbl}border:none"><tbody><tr>`;
     for (let g = 0; g < G; g++) {
       // Use dashed border instead of border-radius (Google Docs ignores border-radius)
@@ -4387,7 +4387,7 @@ function visualToHtml(marker) {
     return t + '</tr></tbody></table>';
   }
 
-  // ── TENS FRAME ──
+  // ââ TENS FRAME ââ
   if (m.startsWith('TENS_FRAME:')) {
     const filled = parseInt(gp('filled') ?? '5');
     const total = parseInt(gp('total') ?? '10');
@@ -4399,19 +4399,19 @@ function visualToHtml(marker) {
       t += '<tr>';
       for (let c = 0; c < cols; c++) {
         count++;
-        t += `<td style="${cell}width:26px;height:26px;font-size:14pt;background:${count <= filled ? '#334155' : '#fff'};color:#fff">${count <= filled ? '●' : ''}</td>`;
+        t += `<td style="${cell}width:26px;height:26px;font-size:14pt;background:${count <= filled ? '#334155' : '#fff'};color:#fff">${count <= filled ? 'â' : ''}</td>`;
       }
       t += '</tr>';
     }
     return t + '</tbody></table>';
   }
 
-  // ── NUMBER BOND ──
+  // ââ NUMBER BOND ââ
   if (m.startsWith('NUM_BOND:')) {
     const whole = gp('whole') ?? '?';
     const p1 = gp('part1') ?? '?';
     const p2 = gp('part2') ?? '?';
-    // Use rounded border (not 50% — GDocs ignores border-radius) + bold value
+    // Use rounded border (not 50% â GDocs ignores border-radius) + bold value
     const circle = (v) => `<td style="border:2px solid #333;width:42px;height:42px;text-align:center;vertical-align:middle;font-size:13pt;font-weight:bold;padding:4px">${v}</td>`;
     return `<table style="${tbl}border:none;text-align:center"><tbody>
       <tr><td style="border:none;width:50px">&nbsp;</td>${circle(whole)}<td style="border:none;width:50px">&nbsp;</td></tr>
@@ -4420,7 +4420,7 @@ function visualToHtml(marker) {
     </tbody></table>`;
   }
 
-  // ── FRACTION BAR (proper + improper) ──
+  // ââ FRACTION BAR (proper + improper) ââ
   if (m.startsWith('FRACTION:') || m.startsWith('MIXED_NUM:')) {
     let n, d;
     if (m.startsWith('MIXED_NUM:')) {
@@ -4450,7 +4450,7 @@ function visualToHtml(marker) {
     return t + '</tr></tbody></table>';
   }
 
-  // ── FRACTION CIRCLE (proper + improper) ──
+  // ââ FRACTION CIRCLE (proper + improper) ââ
   // Google Docs ignores border-radius, so use a pie-sector table approach
   if (m.startsWith('FRAC_CIRCLE:') || m.startsWith('MIXED_CIRCLE:')) {
     let n, d;
@@ -4483,7 +4483,7 @@ function visualToHtml(marker) {
     return t + '</p>';
   }
 
-  // ── AREA MODEL ──
+  // ââ AREA MODEL ââ
   if (m.startsWith('AREA_MODEL:')) {
     const colsRaw = (m.match(/cols=([\d,]+)/) || [])[1] || '10,10';
     const rowsRaw = (m.match(/rows=([\d,]+)/) || [])[1] || '1';  // allow comma-sep rows
@@ -4520,7 +4520,7 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── BASE-10 BLOCKS ──
+  // ââ BASE-10 BLOCKS ââ
   if (m.startsWith('BASE10:')) {
     const TH = Math.min(parseInt(gp('thousands') ?? '0'), 9);
     const H = Math.min(parseInt(gp('hundreds') ?? '0'), 9);
@@ -4529,9 +4529,9 @@ function visualToHtml(marker) {
     // Render as labeled groups of symbols (works reliably in Google Docs)
     let t = `<table style="${tbl}border:none"><tbody><tr>`;
     if (TH) {
-      // Thousands: 4×4 grid symbol ▦ repeated TH times
+      // Thousands: 4Ã4 grid symbol â¦ repeated TH times
       t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
-        <div style="font-size:8pt;color:#666;margin-bottom:2px">Thousands (×${TH})</div>
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Thousands (Ã${TH})</div>
         <table style="border-collapse:collapse;display:inline-table"><tbody>`;
       for (let i = 0; i < TH; i++) {
         t += `<tr><td style="border:1px solid #7c3aed;padding:1px;margin:1px;vertical-align:top">`;
@@ -4547,7 +4547,7 @@ function visualToHtml(marker) {
     }
     if (H) {
       t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
-        <div style="font-size:8pt;color:#666;margin-bottom:2px">Hundreds (×${H})</div>
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Hundreds (Ã${H})</div>
         <table style="border-collapse:collapse;display:inline-table"><tbody>`;
       for (let i = 0; i < H; i++) {
         t += `<tr><td style="border:1px solid #334155;padding:1px;vertical-align:top">`;
@@ -4563,7 +4563,7 @@ function visualToHtml(marker) {
     }
     if (T) {
       t += `<td style="border:none;padding:0 10px 0 0;vertical-align:top">
-        <div style="font-size:8pt;color:#666;margin-bottom:2px">Tens (×${T})</div>`;
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Tens (Ã${T})</div>`;
       for (let i = 0; i < T; i++) {
         t += `<span style="display:inline-block;border:1px solid #334155;width:8px;padding:1px;margin:1px;vertical-align:top">`;
         for (let r = 0; r < 5; r++) t += `<span style="display:block;width:6px;height:4px;background:#334155;margin-bottom:1px"></span>`;
@@ -4573,7 +4573,7 @@ function visualToHtml(marker) {
     }
     if (O) {
       t += `<td style="border:none;vertical-align:top">
-        <div style="font-size:8pt;color:#666;margin-bottom:2px">Ones (×${O})</div>`;
+        <div style="font-size:8pt;color:#666;margin-bottom:2px">Ones (Ã${O})</div>`;
       for (let i = 0; i < O; i++)
         t += `<span style="display:inline-block;width:12px;height:12px;border:1px solid #334155;background:#334155;margin:1px"></span>`;
       t += '</td>';
@@ -4581,7 +4581,7 @@ function visualToHtml(marker) {
     return t + '</tr></tbody></table>';
   }
 
-  // ── PLACE VALUE CHART ──
+  // ââ PLACE VALUE CHART ââ
   if (m.startsWith('PV_CHART:')) {
     const num = m.replace('PV_CHART:', '').trim();
     const digits = num.replace(/,/g, '').split('');
@@ -4594,7 +4594,7 @@ function visualToHtml(marker) {
     return t + '</tr></tbody></table>';
   }
 
-  // ── BAR MODEL ──
+  // ââ BAR MODEL ââ
   if (m.startsWith('BAR_MODEL:')) {
     const raw = m.replace('BAR_MODEL:', '').split('|')[0].trim();
     const labelM = m.match(/label=([^\]]+)/);
@@ -4609,7 +4609,7 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── TAPE DIAGRAM ──
+  // ââ TAPE DIAGRAM ââ
   if (m.startsWith('TAPE:')) {
     const segsRaw = m.replace('TAPE:', '').split('|')[0].trim();
     const totalM = m.match(/total=([^\]\s|]+)/);
@@ -4627,7 +4627,7 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── FUNCTION TABLE ──
+  // ââ FUNCTION TABLE ââ
   if (m.startsWith('FUNC_TABLE:')) {
     const pairsM = m.match(/pairs=([\w:,?]+)/);
     const ruleM = m.match(/rule=([^\]\|]+)/);
@@ -4642,7 +4642,7 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── DATA TABLE ──
+  // ââ DATA TABLE ââ
   if (m.startsWith('DATA_TABLE:')) {
     const rest = m.replace('DATA_TABLE:', '').trim();
     const parts = rest.split('|').map(p => p.trim());
@@ -4658,29 +4658,29 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── YES/NO TABLE ──
+  // ââ YES/NO TABLE ââ
   if (m.startsWith('YES_NO_TABLE:')) {
     const stmts = m.replace('YES_NO_TABLE:', '').split('|').map(s => s.trim()).filter(Boolean);
     let t = `<table style="${tbl}"><tbody>`;
     t += `<tr><td style="${cell}font-weight:bold;background:#f1f5f9;min-width:180px;padding:4px 8px">Statement</td><td style="${cell}font-weight:bold;background:#f1f5f9;width:52px">Yes</td><td style="${cell}font-weight:bold;background:#f1f5f9;width:52px">No</td></tr>`;
     stmts.forEach(s => {
-      t += `<tr><td style="${cell}padding:4px 8px">${s}</td><td style="${cell}text-align:center;font-size:14pt">○</td><td style="${cell}text-align:center;font-size:14pt">○</td></tr>`;
+      t += `<tr><td style="${cell}padding:4px 8px">${s}</td><td style="${cell}text-align:center;font-size:14pt">â</td><td style="${cell}text-align:center;font-size:14pt">â</td></tr>`;
     });
     return t + '</tbody></table>';
   }
 
-  // ── GRID RESPONSE ──
+  // ââ GRID RESPONSE ââ
   if (m.startsWith('GRID_RESPONSE:')) {
     const cols = Math.min(parseInt(gp('cols') ?? '4'), 8);
     let t = `<table style="${tbl}"><tbody>`;
     t += '<tr>' + Array(cols).fill(0).map(() => `<td style="${cell}width:30px;height:32px;background:#f8fafc"></td>`).join('') + '</tr>';
     '0123456789'.split('').forEach(d => {
-      t += '<tr>' + Array(cols).fill(0).map(() => `<td style="${cell}width:30px;height:22px;font-size:9pt;text-align:center">○ ${d}</td>`).join('') + '</tr>';
+      t += '<tr>' + Array(cols).fill(0).map(() => `<td style="${cell}width:30px;height:22px;font-size:9pt;text-align:center">â ${d}</td>`).join('') + '</tr>';
     });
     return t + '</tbody></table>';
   }
 
-  // ── NUMBER CHART ──
+  // ââ NUMBER CHART ââ
   if (m.startsWith('NUM_CHART:')) {
     const start = parseInt(gp('start') ?? '1');
     const end = parseInt(gp('end') ?? '100');
@@ -4699,7 +4699,7 @@ function visualToHtml(marker) {
     return t + '</tbody></table>';
   }
 
-  // ── PARTIAL QUOTIENTS ──
+  // ââ PARTIAL QUOTIENTS ââ
   if (m.startsWith('PARTIAL_Q:')) {
     const dvd = parseFloat(gp('dividend') || '0');
     const dvs = gp('divisor');
@@ -4718,22 +4718,22 @@ function visualToHtml(marker) {
     const rem = running;
     const mono = 'font-family:monospace;font-size:10pt;';
     let t = `<table style="${tbl}border:none;${mono}"><tbody>`;
-    if (dvs) t += `<tr><td style="border:none;color:#64748b;font-size:8pt">÷ ${dvs}</td><td style="border:none;text-align:right">${dvd}</td><td style="border:none;padding-left:16px"></td></tr>`;
+    if (dvs) t += `<tr><td style="border:none;color:#64748b;font-size:8pt">Ã· ${dvs}</td><td style="border:none;text-align:right">${dvd}</td><td style="border:none;padding-left:16px"></td></tr>`;
     else     t += `<tr><td style="border:none"></td><td style="border:none;text-align:right">${dvd}</td><td style="border:none;padding-left:16px"></td></tr>`;
     rows.forEach(({sub,pq,after}) => {
-      t += `<tr><td style="border:none;text-align:right">−${sub}</td><td style="border:none"></td><td style="border:none;padding-left:16px;color:#2563eb">${pq}</td></tr>`;
+      t += `<tr><td style="border:none;text-align:right">â${sub}</td><td style="border:none"></td><td style="border:none;padding-left:16px;color:#2563eb">${pq}</td></tr>`;
       t += `<tr><td colspan="2" style="border:none;border-top:1.5px solid #334155;text-align:right">${Math.round(after*10000)/10000}</td><td style="border:none"></td></tr>`;
     });
     t += `<tr><td style="border:none"></td><td style="border:none"></td><td style="border:none;border-top:1.5px solid #334155;padding-left:16px;font-weight:bold">${quotient}${rem!==0?` r${Math.round(rem*10000)/10000}`:''}</td></tr>`;
     return t + '</tbody></table>';
   }
 
-  // ── WORK SPACE ──
+  // ââ WORK SPACE ââ
   if (m.startsWith('WORK_SPACE')) {
     return `<table style="${tbl}width:100%"><tbody><tr><td style="border:1px dashed #94a3b8;height:80pt;width:100%">&nbsp;</td></tr></tbody></table>`;
   }
 
-  // ── MIXED_NUM_BOX ── (student response boxes: whole | N/D)
+  // ââ MIXED_NUM_BOX ââ (student response boxes: whole | N/D)
   if (m.startsWith('MIXED_NUM_BOX')) {
     const whole = (m.match(/whole=([^\s\]]+)/) || [])[1] || '';
     const n = (m.match(/\bn=([^\s\]]+)/) || [])[1] || '';
@@ -4750,7 +4750,7 @@ function visualToHtml(marker) {
     </tr></tbody></table>`;
   }
 
-  // ── FRACTION_BOX ── (student response boxes: N/D)
+  // ââ FRACTION_BOX ââ (student response boxes: N/D)
   if (m.startsWith('FRACTION_BOX')) {
     const n = (m.match(/\bn=([^\s\]]+)/) || [])[1] || '';
     const d = (m.match(/\bd=([^\s\]]+)/) || [])[1] || '';
@@ -4764,7 +4764,7 @@ function visualToHtml(marker) {
     </td></tr></tbody></table>`;
   }
 
-  // ── IMAGE placeholder ──
+  // ââ IMAGE placeholder ââ
   if (m.startsWith('IMAGE:')) {
     const desc = m.replace('IMAGE:', '').trim();
     return `<p style="border:1px dashed #ea580c;padding:6px 10px;color:#ea580c;font-size:10pt;margin:6px 0">[Insert image: ${desc}]</p>`;
@@ -4774,10 +4774,10 @@ function visualToHtml(marker) {
   return `<p style="border:1px dashed #94a3b8;padding:4px 8px;color:#64748b;font-size:9pt;margin:4px 0">[${m}]</p>`;
 }
 
-// ─── Export as Word (.docx) helper ────────────────────────────────────────────
+// âââ Export as Word (.docx) helper ââââââââââââââââââââââââââââââââââââââââââââ
 
 async function exportAsDocx(questions, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize = 'normal', twoColChoices = false) {
-  // 1. Render SVG markers → PNG data URLs (same canvas technique as Google Docs export)
+  // 1. Render SVG markers â PNG data URLs (same canvas technique as Google Docs export)
   const visualPngs = {};
   const markersNeeded = [...new Set(
     questions.filter(q => q.marker && !q.marker.startsWith('[IMAGE:')).map(q => q.marker)
@@ -4839,14 +4839,295 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
     return { ...q, _svgPng: png.dataUrl, _svgW: png.w / 2, _svgH: png.h / 2 };
   });
 
-  // 3. POST to server and download response
-  const res = await fetch('/api/export-docx', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ questions: annotated, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices }),
+  // 3. Build DOCX entirely client-side (avoids server webpack bundling issues)
+  const {
+    Document, Packer, Paragraph, TextRun, ImageRun,
+    AlignmentType, BorderStyle, WidthType,
+    Table, TableRow, TableCell,
+  } = await import('docx');
+
+  // Unit helpers
+  const PT  = v => v * 20;   // points  → twips
+  const HPT = v => v * 2;    // points  → half-points (font size)
+  const IN  = v => v * 1440; // inches  → twips
+
+  const FS = { normal: 12, large: 14, xl: 17 }[fontSize] || 12;
+  const FS_CHOICE = Math.max(FS - 1, 10);
+  const FS_TITLE  = FS + 4;
+
+  // Browser-compatible base64 image helper
+  function imgRunFromDataUrl(dataUrl, widthPt = 300, heightPt = 150) {
+    try {
+      const match = dataUrl.match(/^data:image\/([^;]+);base64,(.+)$/);
+      if (!match) return null;
+      const imgType = match[1] === 'jpeg' ? 'jpg' : match[1];
+      const binaryStr = atob(match[2]);
+      const buf = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) buf[i] = binaryStr.charCodeAt(i);
+      return new ImageRun({
+        type: imgType,
+        data: buf,
+        transformation: { width: Math.round(widthPt), height: Math.round(heightPt) },
+        altText: { title: 'Visual', description: 'Question visual', name: 'visual' },
+      });
+    } catch { return null; }
+  }
+
+  function answerBlank() {
+    return new Paragraph({
+      spacing: { before: PT(8), after: PT(4) },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA', space: 2 } },
+      children: [new TextRun({ text: ' ', font: 'Arial', size: HPT(FS_CHOICE) })],
+    });
+  }
+
+  function spacer(ptBefore = 0, ptAfter = 14) {
+    return new Paragraph({
+      spacing: { before: PT(ptBefore), after: PT(ptAfter) },
+      children: [new TextRun('')],
+    });
+  }
+
+  const noBorder = {
+    top:    { style: BorderStyle.NONE, size: 0, color: 'auto' },
+    bottom: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+    left:   { style: BorderStyle.NONE, size: 0, color: 'auto' },
+    right:  { style: BorderStyle.NONE, size: 0, color: 'auto' },
+  };
+
+  const children = [];
+
+  // Title
+  if (title) {
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: PT(6) },
+      children: [new TextRun({ text: title, bold: true, size: HPT(FS_TITLE), font: 'Arial' })],
+    }));
+  }
+
+  // Student header lines
+  if (showNameLine || showDateLine || showClassLine || showScoreLine) {
+    if (showNameLine || showDateLine) {
+      const nameW = showDateLine ? 6240 : 9360;
+      const dateW = showNameLine ? 3120 : 9360;
+      const cells = [];
+      if (showNameLine) {
+        cells.push(new TableCell({
+          borders: noBorder, width: { size: nameW, type: WidthType.DXA },
+          children: [new Paragraph({
+            spacing: { before: PT(4), after: PT(4) },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '333333', space: 1 } },
+            children: [new TextRun({ text: 'Name: ', font: 'Arial', size: HPT(FS_CHOICE) })],
+          })],
+        }));
+      }
+      if (showDateLine) {
+        cells.push(new TableCell({
+          borders: noBorder, width: { size: dateW, type: WidthType.DXA },
+          margins: { left: showNameLine ? 360 : 0 },
+          children: [new Paragraph({
+            spacing: { before: PT(4), after: PT(4) },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '333333', space: 1 } },
+            children: [new TextRun({ text: 'Date: ', font: 'Arial', size: HPT(FS_CHOICE) })],
+          })],
+        }));
+      }
+      children.push(new Table({
+        width: { size: 9360, type: WidthType.DXA },
+        columnWidths: cells.length === 2 ? [nameW, dateW] : [9360],
+        rows: [new TableRow({ children: cells })],
+      }));
+    }
+�(   if (showClassLine || showScoreLine) {
+      children.push(spacer(4, 0));
+      const scorePtLabel = totalPoints != null ? ` / ${totalPoints} ${totalPoints === 1 ? 'pt' : 'pts'}` : '';
+      const classW = showScoreLine ? 5760 : 9360;
+      const scoreW = showClassLine ? 3600 : 9360;
+      const row2cells = [];
+      if (showClassLine) {
+        row2cells.push(new TableCell({
+          borders: noBorder, width: { size: classW, type: WidthType.DXA },
+          children: [new Paragraph({
+            spacing: { before: PT(4), after: PT(4) },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '333333', space: 1 } },
+            children: [new TextRun({ text: 'Class / Period: ', font: 'Arial', size: HPT(FS_CHOICE) })],
+          })],
+        }));
+      }
+      if (showScoreLine) {
+        row2cells.push(new TableCell({
+          borders: noBorder, width: { size: scoreW, type: WidthType.DXA },
+          margins: { left: showClassLine ? 360 : 0 },
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: PT(4), after: PT(4) },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '333333', space: 1 } },
+            children: [new TextRun({ text: `Score: ___________${scorePtLabel}`, font: 'Arial', size: HPT(FS_CHOICE) })],
+          })],
+        }));
+      }
+      children.push(new Table({
+        width: { size: 9360, type: WidthType.DXA },
+        columnWidths: row2cells.length === 2 ? [classW, scoreW] : [9360],
+        rows: [new TableRow({ children: row2cells })],
+      }));
+    }
+    children.push(spacer(6, 0));
+  }
+
+  // Questions
+  for (const q of annotated) {
+    if (!q || !q.type) continue;
+
+    if (q.type === 'header' && q.id !== 'title') {
+      children.push(spacer(8, 4));
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: PT(6) },
+        children: [new TextRun({ text: q.text || '', bold: true, size: HPT(FS + 1), font: 'Arial' })],
+      }));
+      continue;
+    }
+
+    if (q.type === 'vb-divider') {
+      children.push(new Paragraph({
+        spacing: { before: PT(20), after: PT(8) },
+        border: { top: { style: BorderStyle.SINGLE, size: 8, color: '333333', space: 4 } },
+        children: [new TextRun({ text: 'VERSION B', bold: true, size: HPT(FS + 1), font: 'Arial' })],
+      }));
+      continue;
+    }
+
+    if (q.type === 'ak-divider') {
+      children.push(new Paragraph({
+        spacing: { before: PT(20), after: PT(8) },
+        border: { top: { style: BorderStyle.SINGLE, size: 8, color: '333333', space: 4 } },
+        children: [new TextRun({ text: 'TEACHER ANSWER KEY', bold: true, size: HPT(FS + 1), font: 'Arial' })],
+      }));
+      continue;
+    }
+
+    if (q.type === 'section') {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: PT(18), after: PT(6) },
+        border: { top: { style: BorderStyle.SINGLE, size: 6, color: '555555', space: 4 } },
+        children: [new TextRun({ text: q.text || '', bold: true, size: HPT(FS), font: 'Arial' })],
+      }));
+      continue;
+    }
+
+    if (q.type === 'answer-key') {
+      children.push(new Paragraph({
+        spacing: { before: PT(2), after: PT(2) },
+        children: [new TextRun({ text: q.text || '', font: 'Courier New', size: HPT(FS_CHOICE - 1) })],
+      }));
+      continue;
+    }
+
+    if (q.type !== 'question') continue;
+
+    // Image visual
+    const imgDataUrl = q._svgPng || q._customImg || null;
+    if (imgDataUrl) {
+      const imgW = q._svgW ? Math.min(q._svgW, 380) : 280;
+      const imgH = q._svgH ? Math.min(q._svgH, 180) : 130;
+      const imageRun = imgRunFromDataUrl(imgDataUrl, imgW, imgH);
+      if (imageRun) {
+        children.push(new Paragraph({
+          spacing: { before: PT(16), after: PT(4) },
+          children: [imageRun],
+        }));
+      }
+    }
+
+    // Question number + text
+    const ptLabel = q.points != null ? ` (${q.points} ${q.points === 1 ? 'pt' : 'pts'})` : '';
+    children.push(new Paragraph({
+      spacing: { before: imgDataUrl ? PT(4) : PT(16), after: PT(4) },
+      children: [
+        ...(q.qNum ? [new TextRun({ text: `${q.qNum}.`, bold: true, font: 'Arial', size: HPT(FS) })] : []),
+        ...(ptLabel ? [new TextRun({ text: ptLabel, font: 'Arial', size: HPT(FS_CHOICE - 2), color: '555555' })] : []),
+        new TextRun({ text: `  ${q.text || ''}`, font: 'Arial', size: HPT(FS) }),
+        ...(q.standard ? [new TextRun({ text: `  [${q.standard}]`, font: 'Arial', size: HPT(FS_CHOICE - 2), color: '3B82F6', italics: true })] : []),
+      ],
+    }));
+
+    // Sub-lines
+    for (const l of q.lines || []) {
+      children.push(new Paragraph({
+        spacing: { before: PT(3), after: PT(3) },
+        indent: { left: IN(0.25) },
+        children: [new TextRun({ text: l, font: 'Arial', size: HPT(FS) })],
+      }));
+    }
+
+    // Answer choices
+    if (q.choices?.length) {
+      const isSATA = q.qType === 'multiselect';
+      const use2Col = twoColChoices && !isSATA && q.choices.length >= 3;
+
+      if (use2Col) {
+        const pairs = [];
+        for (let i = 0; i < q.choices.length; i += 2) pairs.push([q.choices[i], q.choices[i + 1]].filter(Boolean));
+        const colW = 4500;
+        for (const pair of pairs) {
+          const cells = pair.map(ch => new TableCell({
+            borders: noBorder, width: { size: colW, type: WidthType.DXA },
+            children: [new Paragraph({
+              spacing: { before: PT(3), after: PT(3) },
+              children: [new TextRun({ text: `○  ${ch.letter})  ${ch.text || ''}`, font: 'Arial', size: HPT(FS_CHOICE) })],
+            })],
+          }));
+          if (cells.length === 1) cells.push(new TableCell({ borders: noBorder, width: { size: colW, type: WidthType.DXA }, children: [new Paragraph({ children: [] })] }));
+          children.push(new Table({
+            width: { size: 9000, type: WidthType.DXA },
+            indent: { size: IN(0.3), type: WidthType.DXA },
+            columnWidths: [colW, colW],
+            rows: [new TableRow({ children: cells })],
+          }));
+        }
+      } else {
+        for (const ch of q.choices) {
+          children.push(new Paragraph({
+            spacing: { before: PT(4), after: PT(4) },
+            indent: { left: IN(0.3) },
+            children: [new TextRun({
+              text: `${isSATA ? '☐' : '○'}  ${ch.letter})  ${ch.text || ''}`,
+              font: 'Arial', size: HPT(FS_CHOICE),
+            })],
+          }));
+        }
+      }
+    } else if (['fill', 'open', 'compute', 'computation', 'word'].includes(q.qType)) {
+      const defaults = { fill: 2, open: 4, compute: 3, computation: 3, word: 5 };
+      const lineCount = q.lineCount ?? defaults[q.qType] ?? 3;
+      for (let i = 0; i < lineCount; i++) children.push(answerBlank());
+    }
+
+    children.push(spacer(8, 0));
+  }
+
+  // Build and download
+  const doc = new Document({
+    styles: {
+      default: {
+        document: { run: { font: 'Arial', size: HPT(FS), fontSize: HPT(FS) } },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          size:   { width: 12240, height: 15840 },
+          margin: { top: IN(1), right: IN(1), bottom: IN(1), left: IN(1) },
+        },
+      },
+      children,
+    }],
   });
-  if (!res.ok) throw new Error(await res.text());
-  const blob = await res.blob();
+
+  const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -4855,7 +5136,7 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// ─── Google Forms Script generator ───────────────────────────────────────────
+// âââ Google Forms Script generator âââââââââââââââââââââââââââââââââââââââââââ
 
 function generateFormsScript(questions, title) {
   const safeTitle = (title || 'Assessment').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -4863,8 +5144,8 @@ function generateFormsScript(questions, title) {
   lines.push('/**');
   lines.push(' * Auto-generated by Assessment Builder');
   lines.push(' * 1. Open https://script.google.com/create');
-  lines.push(' * 2. Paste this code and click Run ▶');
-  lines.push(' * 3. Check the Logs (View → Logs) for your form URL');
+  lines.push(' * 2. Paste this code and click Run â¶');
+  lines.push(' * 3. Check the Logs (View â Logs) for your form URL');
   lines.push(' */');
   lines.push('function createAssessment() {');
   lines.push(`  var form = FormApp.create('${safeTitle}');`);
@@ -4881,7 +5162,7 @@ function generateFormsScript(questions, title) {
 
     if (q.type === 'section') {
       const safeText = (q.text || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      lines.push(`  // ── Section ──────────────────────────────────`);
+      lines.push(`  // ââ Section ââââââââââââââââââââââââââââââââââ`);
       lines.push(`  var sec = form.addPageBreakItem();`);
       lines.push(`  sec.setTitle('${safeText}');`);
       lines.push('');
@@ -4932,14 +5213,14 @@ function generateFormsScript(questions, title) {
     lines.push('');
   }
 
-  lines.push("  Logger.log('✅ Form created!');");
+  lines.push("  Logger.log('â Form created!');");
   lines.push("  Logger.log('Edit URL: ' + form.getEditUrl());");
   lines.push("  Logger.log('Student URL: ' + form.getPublishedUrl());");
   lines.push('}');
   return lines.join('\n');
 }
 
-// ─── Google Forms Script Modal ────────────────────────────────────────────────
+// âââ Google Forms Script Modal ââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function FormsScriptModal({ script, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -4959,17 +5240,17 @@ function FormsScriptModal({ script, onClose }) {
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100">
           <div>
             <h3 className="font-bold text-gray-900">Export to Google Forms</h3>
-            <p className="text-xs text-gray-500 mt-0.5">3-step process — no sign-in required here</p>
+            <p className="text-xs text-gray-500 mt-0.5">3-step process â no sign-in required here</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">â</button>
         </div>
 
         {/* Steps */}
         <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
           <ol className="text-xs text-blue-800 space-y-1 list-none">
             <li><span className="font-bold">1.</span> Copy the script below</li>
-            <li><span className="font-bold">2.</span> Open <a href="https://script.google.com/create" target="_blank" rel="noreferrer" className="underline font-semibold">script.google.com/create</a> → paste → click <strong>Run ▶</strong></li>
-            <li><span className="font-bold">3.</span> Check <strong>View → Logs</strong> for your form link</li>
+            <li><span className="font-bold">2.</span> Open <a href="https://script.google.com/create" target="_blank" rel="noreferrer" className="underline font-semibold">script.google.com/create</a> â paste â click <strong>Run â¶</strong></li>
+            <li><span className="font-bold">3.</span> Check <strong>View â Logs</strong> for your form link</li>
           </ol>
         </div>
 
@@ -4986,11 +5267,11 @@ function FormsScriptModal({ script, onClose }) {
           <button
             onClick={copy}
             className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-            {copied ? '✓ Copied!' : '📋 Copy Script'}
+            {copied ? 'â Copied!' : 'ð Copy Script'}
           </button>
           <a href="https://script.google.com/create" target="_blank" rel="noreferrer"
             className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-gray-200 text-gray-700 hover:bg-gray-50 text-center transition-colors">
-            Open script.google.com ↗
+            Open script.google.com â
           </a>
         </div>
       </div>
@@ -4998,7 +5279,7 @@ function FormsScriptModal({ script, onClose }) {
   );
 }
 
-// ─── Google Docs copy helper ──────────────────────────────────────────────────
+// âââ Google Docs copy helper ââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function gdocPlainText(questions) {
   return questions
@@ -5034,7 +5315,7 @@ function execCopy(html) {
 }
 
 async function copyToGoogleDocs(questions) {
-  // ── 1. Render each SVG visual to a PNG data-URL ───────────────────────────
+  // ââ 1. Render each SVG visual to a PNG data-URL âââââââââââââââââââââââââââ
   const visualPngs = {};
   const markersNeeded = [...new Set(
     questions.filter(q => q.marker && !q.marker.startsWith('[IMAGE:')).map(q => q.marker)
@@ -5093,10 +5374,10 @@ async function copyToGoogleDocs(questions) {
       }));
 
       document.body.removeChild(renderContainer);
-    } catch (e) { /* dynamic import failed – fall back to table HTML */ }
+    } catch (e) { /* dynamic import failed â fall back to table HTML */ }
   }
 
-  // ── 2. Build HTML ─────────────────────────────────────────────────────────
+  // ââ 2. Build HTML âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   let html = `<html><body style="font-family:Arial,sans-serif;font-size:12pt;line-height:1.8;margin:0;padding:0">`;
 
   questions.forEach(q => {
@@ -5118,7 +5399,7 @@ async function copyToGoogleDocs(questions) {
       // Wrap each question in a page-break-safe container with extra top spacing
       html += `<div style="page-break-inside:avoid;margin-top:28px">`;
 
-      // Visual — use custom uploaded image first, then captured PNG, then table HTML
+      // Visual â use custom uploaded image first, then captured PNG, then table HTML
       if (q._customImg) {
         html += `<p style="margin:0 0 4px 0"><img src="${q._customImg}" style="display:block;max-width:100%;max-height:200px;border:none"></p>`;
       } else if (q.marker && !q.marker.startsWith('[IMAGE:')) {
@@ -5141,7 +5422,7 @@ async function copyToGoogleDocs(questions) {
         html += `<p style="margin:2px 0 4px 0">${numStr}${q.text || ''}</p>`;
       }
 
-      // Sub-lines — math item rows get letter-spaced cells; prose stays plain
+      // Sub-lines â math item rows get letter-spaced cells; prose stays plain
       q.lines?.forEach(l => {
         const items = splitMathItems(l);
         if (items) {
@@ -5159,7 +5440,7 @@ async function copyToGoogleDocs(questions) {
       // Choices
       if (q.choices?.length) {
         const isSATA = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
-        const bubble = isSATA ? '☐' : '○';
+        const bubble = isSATA ? 'â' : 'â';
         q.choices.forEach(ch => {
           html += `<p style="margin:1px 0 1px 28px">${bubble} ${ch.letter})&nbsp;&nbsp;${ch.text}</p>`;
         });
@@ -5171,7 +5452,7 @@ async function copyToGoogleDocs(questions) {
 
   html += '</body></html>';
 
-  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
+  // ââ 3. Write to clipboard (execCommand â most reliable for Google Docs) âââ
   const plain = gdocPlainText(questions);
   try {
     const ok = execCopy(html);
@@ -5190,7 +5471,7 @@ async function copyToGoogleDocs(questions) {
   window.open('https://docs.google.com/document/create', '_blank');
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// âââ Main Component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function AssessmentBuilder() {
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -5200,17 +5481,17 @@ export default function AssessmentBuilder() {
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const handleCopyGdoc = qs => {
-    showToast('Preparing visuals…');
+    showToast('Preparing visualsâ¦');
     copyToGoogleDocs(qs).then(() => {
       showToast('Copied! Paste into the Google Doc that just opened (Ctrl+V / Cmd+V)');
     });
   };
 
   const handleExportDocx = ({ questions: qs, title = '', showNameLine = true, showDateLine = true, showClassLine = false, showScoreLine = true, totalPoints = null, fontSize = 'normal', twoColChoices = false }) => {
-    showToast('Building Word document…');
+    showToast('Building Word documentâ¦');
     exportAsDocx(qs, title, showNameLine, showDateLine, showClassLine, showScoreLine, totalPoints, fontSize, twoColChoices)
       .then(() => showToast('Downloaded! Open in Word or upload to Google Drive.'))
-      .catch(() => showToast('Export failed — please try again'));
+      .catch(() => showToast('Export failed â please try again'));
   };
 
   // Input mode
@@ -5232,13 +5513,13 @@ export default function AssessmentBuilder() {
 
   // Generation state
   const [loading, setLoading] = useState(false);
-  const [loadingMode, setLoadingMode] = useState(''); // 'extract' | 'parallel' — shown in button label
+  const [loadingMode, setLoadingMode] = useState(''); // 'extract' | 'parallel' â shown in button label
   const [error, setError] = useState('');
   const [rawText, setRawText] = useState('');
   const [pendingRawText, setPendingRawText] = useState(''); // extracted text awaiting user review/edit before parsing
   const [questions, setQuestions] = useState([]);
   const [customVisuals, setCustomVisuals] = useState({});
-  const [resultMode, setResultMode] = useState(''); // 'review' | 'extract' | 'parallel' — what produced current result
+  const [resultMode, setResultMode] = useState(''); // 'review' | 'extract' | 'parallel' â what produced current result
   const [editingVisual, setEditingVisual] = useState(null); // {qId, marker, customImg, imgScale}
   const [regenningIdx, setRegenningIdx] = useState(null);
   const [aiFormsScript, setAiFormsScript] = useState(null);
@@ -5270,7 +5551,7 @@ export default function AssessmentBuilder() {
     if (!questions.length) return;
     try {
       localStorage.setItem('ab-ai', JSON.stringify({ questions, customVisuals, rawText }));
-    } catch {} // quota exceeded — silently ignore
+    } catch {} // quota exceeded â silently ignore
   }, [questions, customVisuals, rawText]);
 
   const saveApiKey = key => {
@@ -5364,7 +5645,7 @@ export default function AssessmentBuilder() {
       const data = await response.json();
       if (data.error) { setError(data.error); return; }
       setRawText(data.result);
-      // Strip any AI-generated visual markers — user adds visuals manually via "+ Add Visual/Model"
+      // Strip any AI-generated visual markers â user adds visuals manually via "+ Add Visual/Model"
       setQuestions(parseAssessment(data.result).map(q => ({ ...q, marker: null, _customImg: null })));
       setResultMode('parallel');
     } catch (e) {
@@ -5395,7 +5676,7 @@ export default function AssessmentBuilder() {
   };
 
   const handleRegenQuestion = async idx => {
-    if (!apiKey) { showToast('Add your API key first (⚙ API Key)'); return; }
+    if (!apiKey) { showToast('Add your API key first (â API Key)'); return; }
     setRegenningIdx(idx);
     try {
       const q = questions[idx];
@@ -5411,14 +5692,14 @@ export default function AssessmentBuilder() {
       if (parsed.length > 0) {
         // Preserve original question's type, number, and version flag;
         // qType MUST come from the original so MC stays MC, fill-in stays fill-in.
-        // Strip AI-generated marker — user adds visuals manually.
+        // Strip AI-generated marker â user adds visuals manually.
         const newQ = { ...parsed[0], id: q.id, qNum: q.qNum, vb: q.vb, qType: q.qType, marker: null, _customImg: null };
         setQuestions(prev => prev.map((pq, i) => i === idx ? newQ : pq));
         // Clear stale customVisuals entry for this question so the new question renders cleanly
         setCustomVisuals(prev => { const next = { ...prev }; delete next[q.id]; return next; });
       }
     } catch {
-      showToast('Regeneration failed — check your API key');
+      showToast('Regeneration failed â check your API key');
     } finally {
       setRegenningIdx(null);
     }
@@ -5449,7 +5730,7 @@ export default function AssessmentBuilder() {
           </div>
           {/* App mode toggle */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {[['ai', '✦ AI Generate'], ['manual', '✏ Manual Build']].map(([mode, label]) => (
+            {[['ai', 'â¦ AI Generate'], ['manual', 'â Manual Build']].map(([mode, label]) => (
               <button key={mode} onClick={() => setAppMode(mode)}
                 className={`px-4 py-1.5 text-xs rounded-md transition-all font-medium ${appMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                 {label}
@@ -5459,22 +5740,22 @@ export default function AssessmentBuilder() {
         </div>
         <button onClick={() => setShowSettings(true)}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors" title="Settings">
-          <span className="text-base leading-none">⚙</span><span className="font-medium">API Key</span>
+          <span className="text-base leading-none">â</span><span className="font-medium">API Key</span>
         </button>
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-6">
 
-      {/* ── Manual Build mode ── */}
+      {/* ââ Manual Build mode ââ */}
       {appMode === 'manual' && (
         <ManualBuilder onPrint={() => window.print()} onCopyGdoc={handleCopyGdoc} onExportDocx={handleExportDocx} />
       )}
 
-      {/* ── AI Generate mode ── */}
+      {/* ââ AI Generate mode ââ */}
       {appMode === 'ai' && (
       <div className="flex gap-6">
 
-        {/* Left panel — inputs */}
+        {/* Left panel â inputs */}
         <div className="w-80 shrink-0 space-y-4 no-print">
 
           {/* Mode tabs */}
@@ -5497,7 +5778,7 @@ export default function AssessmentBuilder() {
                   className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${file ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}>
                   {file
                     ? <><p className="text-sm font-medium text-blue-700">{file.name}</p><p className="text-xs text-blue-500">{(file.size / 1024).toFixed(0)} KB</p></>
-                    : <><p className="text-sm text-gray-500">Click to upload PDF or image</p><p className="text-xs text-gray-400">.pdf · .png · .jpg · .webp</p></>
+                    : <><p className="text-sm text-gray-500">Click to upload PDF or image</p><p className="text-xs text-gray-400">.pdf Â· .png Â· .jpg Â· .webp</p></>
                   }
                 </div>
                 <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" className="hidden" onChange={handleFileChange} />
@@ -5581,20 +5862,20 @@ export default function AssessmentBuilder() {
             </div>
           </div>
 
-          {/* Generate buttons — two-step flow for file uploads */}
+          {/* Generate buttons â two-step flow for file uploads */}
           {inputMode === 'file' ? (
             <div className="space-y-2">
               <button
                 onClick={() => handleGenerate('extract')}
                 disabled={loading || !file}
                 className="w-full py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 text-white font-semibold text-sm hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
-                {loading && loadingMode === 'extract' ? 'Extracting…' : '📄 Step 1: Extract from PDF'}
+                {loading && loadingMode === 'extract' ? 'Extractingâ¦' : 'ð Step 1: Extract from PDF'}
               </button>
               <button
                 onClick={() => handleGenerate('parallel')}
                 disabled={loading || !file}
                 className="w-full py-3 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 text-white font-semibold text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
-                {loading && loadingMode === 'parallel' ? 'Generating…' : '✦ Step 2: Generate Parallel'}
+                {loading && loadingMode === 'parallel' ? 'Generatingâ¦' : 'â¦ Step 2: Generate Parallel'}
               </button>
               <p className="text-xs text-gray-400 text-center leading-relaxed">
                 Extract first to review the copy, then generate a parallel version
@@ -5605,7 +5886,7 @@ export default function AssessmentBuilder() {
               onClick={() => handleGenerate('parallel')}
               disabled={loading}
               className="w-full py-3 rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 text-white font-semibold text-sm hover:from-blue-600 hover:to-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
-              {loading ? 'Generating…' : '✦ Generate Assessment'}
+              {loading ? 'Generatingâ¦' : 'â¦ Generate Assessment'}
             </button>
           )}
 
@@ -5619,19 +5900,19 @@ export default function AssessmentBuilder() {
             <div className="space-y-2">
               <button onClick={handlePrint}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-                🖨 Print / Export PDF
+                ð¨ Print / Export PDF
               </button>
               <button onClick={() => handleCopyGdoc(questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'))}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-                📋 Copy to Google Docs
+                ð Copy to Google Docs
               </button>
               <button onClick={() => handleExportDocx({ questions: questions.filter(q => q.type !== 'vb-divider' && q.type !== 'ak-divider' && !q.vb && q.type !== 'answer-key'), title: customTitle })}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-                📄 Export as Word (.docx)
+                ð Export as Word (.docx)
               </button>
               <button onClick={() => setAiFormsScript(generateFormsScript(questions, customTitle))}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-                📝 Export to Google Forms
+                ð Export to Google Forms
               </button>
               <button
                 onClick={() => {
@@ -5642,17 +5923,17 @@ export default function AssessmentBuilder() {
                   a.click();
                 }}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors">
-                ⬇ Download Text
+                â¬ Download Text
               </button>
               <button
                 onClick={() => { setQuestions([]); setRawText(''); setPendingRawText(''); setCustomVisuals({}); setFile(null); setResultMode(''); }}
                 className="w-full py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-400 hover:bg-gray-50 transition-colors">
-                ✕ Clear
+                â Clear
               </button>
             </div>
           )}
 
-          {/* Raw text — editable, with re-parse button */}
+          {/* Raw text â editable, with re-parse button */}
           {rawText && (
             <details className="text-xs">
               <summary className="cursor-pointer text-gray-400 hover:text-gray-600">Edit raw text / Re-parse</summary>
@@ -5666,26 +5947,26 @@ export default function AssessmentBuilder() {
                 <button
                   onClick={() => setQuestions(parseAssessment(rawText).map(q => ({ ...q, marker: null, _customImg: null })))}
                   className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
-                  ↻ Re-parse Questions from Edited Text
+                  â» Re-parse Questions from Edited Text
                 </button>
               </div>
             </details>
           )}
         </div>
 
-        {/* Right panel — preview */}
+        {/* Right panel â preview */}
         <div className="flex-1 min-w-0">
           {loading && (
             <div className="flex flex-col items-center justify-center h-80 rounded-xl border border-gray-200 bg-white shadow-sm">
               <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-              <p className="text-sm font-medium text-gray-700">Generating parallel form…</p>
-              <p className="text-xs mt-1.5 text-gray-400">This may take 20–40 seconds</p>
+              <p className="text-sm font-medium text-gray-700">Generating parallel formâ¦</p>
+              <p className="text-xs mt-1.5 text-gray-400">This may take 20â40 seconds</p>
             </div>
           )}
 
           {!loading && !hasResult && (
             <div className="flex flex-col items-center justify-center h-80 rounded-xl border-2 border-dashed border-gray-200 bg-white text-center px-8">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">📄</div>
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-3xl">ð</div>
               <p className="text-sm font-semibold text-gray-600 mb-1">Ready to generate</p>
               <p className="text-xs text-gray-400 max-w-xs leading-relaxed">Upload a PDF or enter your content on the left, then click Generate. Visuals will be recreated as editable vector graphics.</p>
             </div>
@@ -5693,12 +5974,12 @@ export default function AssessmentBuilder() {
 
           {!loading && hasResult && (
             <div>
-              {/* ── Review & Edit step — shown immediately after extraction ── */}
+              {/* ââ Review & Edit step â shown immediately after extraction ââ */}
               {resultMode === 'review' && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3 no-print">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-amber-900">📋 Review Extracted Text</p>
+                      <p className="text-sm font-semibold text-amber-900">ð Review Extracted Text</p>
                       <p className="text-xs text-amber-700 mt-0.5">
                         Check the text below for accuracy. Fix any missing content (e.g. incomplete questions) before parsing into questions.
                       </p>
@@ -5706,7 +5987,7 @@ export default function AssessmentBuilder() {
                     <button
                       onClick={handleParseFromRaw}
                       className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm whitespace-nowrap">
-                      Parse Questions →
+                      Parse Questions â
                     </button>
                   </div>
                   <textarea
@@ -5723,30 +6004,30 @@ export default function AssessmentBuilder() {
                     <button
                       onClick={handleParseFromRaw}
                       className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm">
-                      Parse Questions →
+                      Parse Questions â
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Step banner — shown after parsing, prompts Step 2 */}
+              {/* Step banner â shown after parsing, prompts Step 2 */}
               {resultMode === 'extract' && (
                 <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-center justify-between gap-4 no-print">
                   <div>
-                    <p className="text-sm font-semibold text-indigo-800">✅ Questions parsed</p>
+                    <p className="text-sm font-semibold text-indigo-800">â Questions parsed</p>
                     <p className="text-xs text-indigo-600 mt-0.5">Edit any question below. When ready, create a parallel version with new numbers.</p>
                   </div>
                   <button
                     onClick={handleCreateParallel}
                     disabled={loading}
                     className="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm">
-                    ✦ Create Parallel Version
+                    â¦ Create Parallel Version
                   </button>
                 </div>
               )}
               {resultMode === 'parallel' && (
                 <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 flex items-center justify-between gap-4 no-print">
-                  <p className="text-xs text-blue-700 font-medium">✦ Parallel version generated — edit any question, visual, or choice below</p>
+                  <p className="text-xs text-blue-700 font-medium">â¦ Parallel version generated â edit any question, visual, or choice below</p>
                   <button
                     onClick={handleCreateParallel}
                     disabled={loading}
@@ -5760,7 +6041,7 @@ export default function AssessmentBuilder() {
                 <button
                   onClick={() => { if (window.confirm('Clear this assessment and start over?')) { setQuestions([]); setCustomVisuals({}); setRawText(''); setPendingRawText(''); setResultMode(''); localStorage.removeItem('ab-ai'); } }}
                   className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-200 rounded-lg px-3 py-1.5 transition-colors no-print">
-                  ✕ New Assessment
+                  â New Assessment
                 </button>
               </div>
               )}
@@ -5772,7 +6053,7 @@ export default function AssessmentBuilder() {
                     {questions[0].text}
                   </div>
                 )}
-                {/* Name / Date header — always shown below title */}
+                {/* Name / Date header â always shown below title */}
                 <div className="flex gap-8 mb-5 font-serif text-sm text-gray-900">
                   <div className="flex-1 flex items-baseline gap-2">
                     <span className="shrink-0">Name</span>
