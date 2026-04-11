@@ -204,6 +204,69 @@ If the source is an ELA assessment that includes a reading passage (a story or e
 - The passage text is NOT a question — NEVER assign it a number like "1." or any letter label.
 - Question-type labels ("Multiple Selection", "Mark all correct answers", "Select all that apply") are metadata — omit them entirely, just keep the question text and choices.`;
 
+    // ─── ELA Parallel Assessment prompt ───────────────────────────────────────
+    const elaParallelPrompt = `You are an ELA PARALLEL ASSESSMENT CREATOR for ${gradeDisplay} students.
+You will receive an ELA reading assessment (PDF or image). Your job: analyze it, then create a BRAND-NEW parallel assessment — a completely different passage with the same question types in the same order.
+
+━━━ PHASE 1 — ANALYZE (do this silently, do not output this analysis) ━━━
+Determine:
+  • Fiction or non-fiction?
+  • Approximate reading level and complexity (sentence length, vocabulary difficulty)
+  • Approximate passage word count and number of paragraphs
+  • Exact question types, in order (e.g., Q1 = main idea, Q2 = vocabulary in context, Q3 = inference, Q4 = text evidence, Q5 = author\'s purpose)
+  • Number of questions total
+  • Answer choice format (4-choice MC, multiple select, short answer, etc.)
+
+━━━ PHASE 2 — CREATE NEW PASSAGE ━━━
+
+RULE 1 — WRITE A COMPLETELY ORIGINAL PASSAGE.
+• If source is fiction: write a new original short story or narrative.
+  - Use entirely different characters, setting, conflict, and resolution.
+  - Match the approximate length (word count / paragraph count) of the source passage.
+  - Match the reading complexity: similar sentence length, vocabulary level, and story structure.
+• If source is non-fiction: write a new informational passage on a DIFFERENT topic.
+  - Choose a fresh, age-appropriate topic (animals, science, history, community, nature, etc.).
+  - Match approximate length, paragraph structure, and informational density.
+  - Do NOT copy or paraphrase the source topic — choose something entirely different.
+• The passage must be entirely your own writing.
+• Write in plain prose paragraphs — no numbered paragraphs, no line numbers, no bullet points.
+• Use age-appropriate vocabulary for ${gradeDisplay}.
+
+━━━ PHASE 3 — CREATE PARALLEL QUESTIONS ━━━
+
+RULE 2 — MIRROR THE QUESTION TYPES IN ORDER.
+• Output exactly the same number of questions as the source.
+• Preserve the question type sequence exactly:
+  - If source Q1 is main idea → your Q1 is main idea (about your new passage)
+  - If source Q3 is vocabulary in context → your Q3 is vocabulary in context (a word from your passage)
+  - If source Q5 is inference → your Q5 is inference (answerable from your passage)
+• Common fiction question types: central message/theme, character traits, character feelings/motivations, setting, problem and solution, cause and effect, sequence of events, point of view, inference, vocabulary in context, figurative language, text evidence.
+• Common non-fiction question types: main idea, key details, inference, vocabulary in context, author\'s purpose, text structure, cause and effect, compare and contrast, central idea, text evidence, summary.
+• Match the exact number of answer choices (usually A-D).
+• Ensure exactly one correct answer per multiple-choice question.
+• For vocabulary questions: choose a word that actually appears in your new passage; make distractors real words that do not fit the context.
+• For text evidence questions: the answer must be directly supportable from your passage.
+• For inference questions: the answer must be logically inferable from your passage.
+
+RULE 3 — DO NOT INCLUDE THE ANSWER KEY.
+
+━━━ OUTPUT FORMAT ━━━
+
+Line 1: New assessment title (relevant to your new passage)
+Line 2: Directions (e.g., "Read the passage below. Then answer the questions.")
+[PASSAGE]
+(your new passage — plain paragraphs, no line numbers)
+[/PASSAGE]
+1. (first question text)
+A) ...
+B) ...
+C) ...
+D) ...
+
+2. (second question text)
+A) ...
+(continue for all questions)`;
+
     // ─── Parallel form system prompt ──────────────────────────────────────────
     const parallelPrompt = `You are a PARALLEL FORM GENERATOR for math assessments.
 Your only job: read the source assessment and output a near-identical version with different numbers.
@@ -361,7 +424,13 @@ ${includeAnswerKey ? '\nAfter questions write "TEACHER ANSWER KEY" then list ans
 
     if (inputMode === 'file' && fileContent) {
       const isImage = ['image/png','image/jpeg','image/webp'].includes(fileMediaType);
-      if (generateMode === 'extract') {
+      if (generateMode === 'ela-parallel') {
+        systemPrompt = elaParallelPrompt;
+        userContent = [
+          { type: 'text', text: 'Here is the source ELA assessment. Analyze it carefully — identify whether it is fiction or non-fiction, the passage length and complexity, and every question type in order. Then create a brand-new parallel assessment following all rules.' },
+          { type: isImage ? 'image' : 'document', source: { type: 'base64', media_type: fileMediaType, data: fileContent } },
+        ];
+      } else if (generateMode === 'extract') {
         systemPrompt = extractPrompt;
         userContent = [
           { type: 'text', text: 'Here is the source assessment. Extract every question exactly as written, add visual markers where needed, and clean up any form metadata noise.' },
