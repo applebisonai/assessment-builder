@@ -69,7 +69,7 @@ export async function POST(request) {
     // ─── Shared output format rules (applied to every prompt) ────────────────
     const OUTPUT_RULES = `
 CRITICAL OUTPUT FORMAT RULES — follow these exactly, no exceptions:
-1. No markdown: no ** bold **, no _italic_, no # headers, no ``` code blocks, no > blockquotes.
+1. No markdown: no ** bold **, no _italic_, no # headers, no \`\`\` code blocks, no > blockquotes.
 2. No extra blank lines between a question number and its answer choices.
 3. Answer choices always on separate lines: A) on its own line, B) on its own line, etc.
 4. If a question has a visual marker AND answer choices, place the marker on its own line, then the question line, then choices on separate A) B) C) D) lines.
