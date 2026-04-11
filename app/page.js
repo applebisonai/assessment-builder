@@ -5960,8 +5960,21 @@ export default function AssessmentBuilder() {
             </div>
           </div>
 
-          {/* Generate buttons — two-step flow for file uploads */}
+          {/* Generate buttons — ELA gets a single parallel button; other subjects get two-step flow */}
           {inputMode === 'file' ? (
+            subject === 'ELA' ? (
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleGenerate('ela-parallel')}
+                  disabled={loading || !file}
+                  className="w-full py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-white font-semibold text-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:shadow-sm active:translate-y-px">
+                  {loading && loadingMode === 'ela-parallel' ? 'Creating…' : '✦ Create Parallel ELA Assessment'}
+                </button>
+                <p className="text-xs text-gray-400 text-center leading-relaxed">
+                  Analyzes your PDF and creates a brand-new passage + matching question types
+                </p>
+              </div>
+            ) : (
             <div className="space-y-2">
               <button
                 onClick={() => handleGenerate('extract')}
@@ -5979,6 +5992,7 @@ export default function AssessmentBuilder() {
                 Extract first to review the copy, then generate a parallel version
               </p>
             </div>
+            )
           ) : (
             <button
               onClick={() => handleGenerate('parallel')}
