@@ -1415,15 +1415,16 @@ function parseVisualModel(marker) {
 // e.g. "Which is closest? A) 2 B) 20 C) 200 D) 2,000"
 // Returns { qText, choices } or null if no inline choices detected.
 function tryExtractInlineChoices(text) {
+  if (!text) return null;
   // Must start with "A)" or "A." (case-insensitive) somewhere after the question text
   const choicesStart = text.search(/\s+[Aa][.)]\s/);
   if (choicesStart < 0) return null;
   const qText = text.slice(0, choicesStart).trim();
   const choicesStr = text.slice(choicesStart).trim();
-  // Split at whitespace before each letter-choice marker
-  const parts = choicesStr.split(/\s+(?=[A-Fa-f][.)]\s)/);
+  // Split at whitespace before each letter-choice marker (A-J supported)
+  const parts = choicesStr.split(/\s+(?=[A-Ja-j][.)]\s)/);
   const choices = parts.map(p => {
-    const m = p.trim().match(/^([A-Fa-f])[.)]\s+(.+)$/);
+    const m = p.trim().match(/^([A-Ja-j])[.)]\s+(.+)$/);
     return m ? { letter: m[1].toUpperCase(), text: m[2].trim() } : null;
   }).filter(Boolean);
   return choices.length >= 2 ? { qText, choices } : null;
@@ -1504,6 +1505,12 @@ function parseAssessment(text) {
       flush();
       continue;
     }
+    // Inside a passage block, strip leading margin line-numbers (e.g. "1  The bubble…" → "The bubble…")
+    if (current?.type === 'passage') {
+      const passageLine = trimmed.replace(/^\d+\s{2,}/, '');
+      current.lines.push(passageLine);
+      continue;
+    }
 
     // Version B boundary — must not match numbered questions like "1. Version B..."
     if (/^-*\s*version\s*b\s*-*$/i.test(trimmed)) {
@@ -1554,27 +1561,28 @@ function parseAssessment(text) {
       }
       flush();
       const isMulti = /select all|choose all/i.test(qText);
-      const inlined = qMatch ? tryExtractInlineChoices(qText) : null;
+      // Allow inline choices even on bare-number questions (qText may be empty)
+      const inlined = tryExtractInlineChoices(qText);
       current = {
         id: `q-${i}`, type: 'question', qNum, marker: null,
         text: inlined ? inlined.qText : qText,
         choices: inlined ? inlined.choices : [],
         lines: [], vb: inVersionB,
-        qType: isMulti ? 'multiselect' : 'mc',
+        qType: isMulti ? 'multiselect' : inlined ? 'mc' : 'mc',
       };
       continue;
     }
 
-    // MC / multi-select choice: A) B) C) D) E) F)...
+    // MC / multi-select choice: A) B) C) D) E) F) G) H) I) J)
     // Handles both single "A) text" lines and inline "A) text B) text C) text D) text" lines
-    const choiceMatch = trimmed.match(/^([A-Fa-f])[.)]\s+(.*)$/);
+    const choiceMatch = trimmed.match(/^([A-Ja-j])[.)]\s+(.*)$/);
     if (choiceMatch && current) {
       // Check if multiple choices are squished on this one line
-      const parts = trimmed.split(/\s+(?=[A-Fa-f][.)]\s)/);
+      const parts = trimmed.split(/\s+(?=[A-Ja-j][.)]\s)/);
       if (parts.length >= 2) {
         // Multiple inline choices — split and add each
         for (const part of parts) {
-          const m = part.trim().match(/^([A-Fa-f])[.)]\s+(.+)$/);
+          const m = part.trim().match(/^([A-Ja-j])[.)]\s+(.+)$/);
           if (m) current.choices.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
         }
       } else {
@@ -4863,7 +4871,7 @@ async function exportAsDocx(questions, title, showNameLine, showDateLine, showCl
     } catch {}
   }
 
-  // 2. Annotate questions with pre-rendered PNG data URLs for the server
+  // 2. Annotate questions with pre-rendered PNG data URLs
   const annotated = questions.map(q => {
     if (!q || !q.marker || q.marker.startsWith('[IMAGE:')) return q;
     const png = visualPngs[q.marker];
@@ -5550,7 +5558,9 @@ async function copyToGoogleDocs(questions, twoColChoices = false) {
     }
   });
 
-  html += '</body></html>';  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
+  html += '</body></html>';
+
+  // ── 3. Write to clipboard (execCommand – most reliable for Google Docs) ───
   const plain = gdocPlainText(questions);
   try {
     const ok = execCopy(html);
@@ -5697,13 +5707,20 @@ export default function AssessmentBuilder() {
           }),
         });
       }
+      if (!response.ok && response.status !== 400 && response.status !== 401 && response.status !== 402) {
+        setError(`Server error (${response.status}). Please try again.`); return;
+      }
       const data = await response.json();
       if (data.error) { setError(data.error); return; }
       // Show extracted text for review/edit before parsing into questions
       setPendingRawText(data.result);
       setResultMode('review');
     } catch (e) {
-      setError(e.message || 'Request failed');
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        setError('Network error — check your connection and try again.');
+      } else {
+        setError(e.message || 'Request failed');
+      }
     } finally {
       setLoading(false);
       setLoadingMode('');
@@ -5740,6 +5757,9 @@ export default function AssessmentBuilder() {
           pastedText: rawText,
         }),
       });
+      if (!response.ok && response.status !== 400 && response.status !== 401 && response.status !== 402) {
+        setError(`Server error (${response.status}). Please try again.`); return;
+      }
       const data = await response.json();
       if (data.error) { setError(data.error); return; }
       setRawText(data.result);
@@ -5747,7 +5767,11 @@ export default function AssessmentBuilder() {
       setQuestions(parseAssessment(data.result).map(q => ({ ...q, marker: null, _customImg: null })));
       setResultMode('parallel');
     } catch (e) {
-      setError(e.message || 'Request failed');
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        setError('Network error — check your connection and try again.');
+      } else {
+        setError(e.message || 'Request failed');
+      }
     } finally {
       setLoading(false);
       setLoadingMode('');
@@ -5775,6 +5799,7 @@ export default function AssessmentBuilder() {
 
   const handleRegenQuestion = async idx => {
     if (!apiKey) { showToast('Add your API key first (⚙ API Key)'); return; }
+    if (idx < 0 || idx >= questions.length) { showToast('Invalid question index'); return; }
     setRegenningIdx(idx);
     try {
       const q = questions[idx];
@@ -5784,6 +5809,9 @@ export default function AssessmentBuilder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey, question: q, contextQuestions, gradeLevel, subject, standard }),
       });
+      if (!res.ok && res.status !== 400 && res.status !== 401 && res.status !== 402) {
+        showToast(`Server error (${res.status}) — try again`); return;
+      }
       const data = await res.json();
       if (data.error) { showToast(data.error); return; }
       const parsed = parseAssessment(data.result);
@@ -5792,11 +5820,13 @@ export default function AssessmentBuilder() {
         // qType MUST come from the original so MC stays MC, fill-in stays fill-in.
         // Strip AI-generated marker — user adds visuals manually.
         const newQ = { ...parsed[0], id: q.id, qNum: q.qNum, vb: q.vb, qType: q.qType, marker: null, _customImg: null };
+        // Batch both state updates to avoid a race-condition render with stale visuals
+        const oldId = q.id;
+        setCustomVisuals(prev => { const next = { ...prev }; delete next[oldId]; return next; });
         setQuestions(prev => prev.map((pq, i) => i === idx ? newQ : pq));
-        // Clear stale customVisuals entry for this question so the new question renders cleanly
-        setCustomVisuals(prev => { const next = { ...prev }; delete next[q.id]; return next; });
       }
-    } catch {
+    } catch (err) {
+      console.error('Regen error:', err);
       showToast('Regeneration failed — check your API key');
     } finally {
       setRegenningIdx(null);
