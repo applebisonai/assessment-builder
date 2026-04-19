@@ -2469,7 +2469,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
     id: 'preview', type: 'question', qNum: String(questionCount),
     qType,
     text: qText || '(question text)',
-    choices: hasChoices ? choices.filter(c => c.text) : [],
+    choices: hasChoices ? choices.filter(c => c.text || c.choiceMarker) : [],
     lines: [], marker, standard,
   };
 
@@ -2542,12 +2542,14 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
                   <input value={ch.text} onChange={e => {
                     const nc = [...choices]; nc[ci] = { ...nc[ci], text: e.target.value }; setChoices(nc);
                   }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
-                  {/* Visual toggle button */}
-                  <button type="button" title="Attach a model/visual to this choice"
-                    onClick={() => setOpenChoiceViz(openChoiceViz === ci ? null : ci)}
-                    className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
-                    📊
-                  </button>
+                  {/* Visual toggle button — MC only */}
+                  {qType === 'mc' && (
+                    <button type="button" title="Attach a model/visual to this choice"
+                      onClick={() => setOpenChoiceViz(openChoiceViz === ci ? null : ci)}
+                      className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                      📊
+                    </button>
+                  )}
                   {choices.length > 2 && (
                     <button onClick={() => removeChoice(ci)}
                       className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">✕</button>
