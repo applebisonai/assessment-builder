@@ -4013,6 +4013,23 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
   const [editingIdx, setEditingIdx] = useState(null);
   const [editText, setEditText] = useState('');
   const [activeVersion, setActiveVersion] = useState('A');
+  const [openChoiceVizP, setOpenChoiceVizP] = useState(null); // {qIdx, cIdx} for preview choice visual picker
+  const [choiceVizTypeP, setChoiceVizTypeP] = useState({}); // keyed by "qIdx-cIdx"
+  const [choiceVizParamsP, setChoiceVizParamsP] = useState({});
+
+  const updateChoiceVisualP = (origIdx, q, ci, vtype, vparams) => {
+    const marker = vtype && vtype !== 'none' ? paramsToMarker(vtype, vparams) : null;
+    const nc = q.choices.map((ch, i) => i === ci ? { ...ch, _vtype: vtype, _vparams: vparams, choiceMarker: marker } : ch);
+    onQuestionEdit(origIdx, { ...q, choices: nc });
+    const k = `${origIdx}-${ci}`;
+    setChoiceVizTypeP(prev => ({ ...prev, [k]: vtype }));
+    setChoiceVizParamsP(prev => ({ ...prev, [k]: vparams }));
+  };
+  const clearChoiceVisualP = (origIdx, q, ci) => {
+    const nc = q.choices.map((ch, i) => i === ci ? { ...ch, _vtype: 'none', _vparams: {}, choiceMarker: null } : ch);
+    onQuestionEdit(origIdx, { ...q, choices: nc });
+    setOpenChoiceVizP(null);
+  };
 
   const hasVersionB = questions.some(q => q.vb);
   const hasAnswerKey = questions.some(q => q.type === 'answer-key');
@@ -4024,7 +4041,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
     return !q.vb && q.type !== 'answer-key'; // Version A
   });
 
-  const startEdit = (idx, q) => { setEditingIdx(idx); setEditText([q.text, ...(q.lines || [])].filter(l => l != null).join('\n')); setEditingChoiceIdx(null); };
+  const startEdit = (idx, q) => { setEditingIdx(idx); setEditText([q.text, ...(q.lines || [])].filter(l => l != null).join('\n')); setEditingChoiceIdx(null); setOpenChoiceVizP(null); };
   const saveEdit = (idx, q) => {
     const allLines = editText.split('\n');
     const newText = allLines[0] ?? '';
@@ -4219,7 +4236,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                               <button type="button" onClick={() => setEditingChoiceIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-1.5 py-0.5">✕</button>
                             </span>
                           ) : (
-                            <div className="group/ch">
+                            <div className="group/ch w-full">
                               {ch.text && (
                                 <span>
                                   <span className="font-medium">{ch.letter})</span> {ch.text}
@@ -4234,6 +4251,55 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                               {ch.choiceMarker && (
                                 <div className="mt-0.5 overflow-x-auto">
                                   <ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary>
+                                </div>
+                              )}
+                              {/* 📊 visual attach button — MC only, edit mode */}
+                              {onQuestionEdit && q.qType === 'mc' && (
+                                <div className="no-print mt-0.5">
+                                  {openChoiceVizP?.qIdx === idx && openChoiceVizP?.cIdx === ci ? (
+                                    <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1.5 mt-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs font-semibold text-blue-800">Visual for Choice {ch.letter}</span>
+                                        <button type="button" onClick={() => setOpenChoiceVizP(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                                      </div>
+                                      <select
+                                        value={choiceVizTypeP[`${idx}-${ci}`] || ch._vtype || 'none'}
+                                        onChange={e => {
+                                          const t = e.target.value;
+                                          const k = `${idx}-${ci}`;
+                                          const p = VISUAL_TYPE_DEFAULTS[t] || {};
+                                          setChoiceVizTypeP(prev => ({ ...prev, [k]: t }));
+                                          setChoiceVizParamsP(prev => ({ ...prev, [k]: p }));
+                                          updateChoiceVisualP(idx, q, ci, t, p);
+                                        }}
+                                        className="border rounded p-1 text-xs w-full">
+                                        {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
+                                          <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+                                      </select>
+                                      {(choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) && (choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) !== 'none' && (
+                                        <div className="bg-white rounded p-1.5 border border-blue-100">
+                                          <VisualParamForm
+                                            type={choiceVizTypeP[`${idx}-${ci}`] || ch._vtype}
+                                            params={choiceVizParamsP[`${idx}-${ci}`] || ch._vparams || {}}
+                                            onChange={vp => updateChoiceVisualP(idx, q, ci, choiceVizTypeP[`${idx}-${ci}`] || ch._vtype, vp)} />
+                                        </div>
+                                      )}
+                                      {ch.choiceMarker && (
+                                        <div className="border-t border-blue-200 pt-1.5">
+                                          <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                                          <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary></div>
+                                          <button type="button" onClick={() => clearChoiceVisualP(idx, q, ci)}
+                                            className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <button type="button"
+                                      onClick={() => { setOpenChoiceVizP({ qIdx: idx, cIdx: ci }); setEditingIdx(null); setEditingChoiceIdx(null); }}
+                                      className={`text-xs px-1.5 py-0.5 rounded border opacity-0 group-hover/ch:opacity-100 transition-opacity ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700 !opacity-100' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                                      📊
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
