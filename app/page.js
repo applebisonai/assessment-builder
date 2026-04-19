@@ -547,83 +547,91 @@ function FractionBox({ n = '', d = '' }) {
   );
 }
 
-function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0 }) {
-  const TH = Math.min(parseInt(thousands) || 0, 20);
-  const H  = Math.min(parseInt(hundreds) || 0, 20);
-  const T  = Math.min(parseInt(tens)     || 0, 20);
-  const O  = Math.min(parseInt(ones)     || 0, 20);
+function Base10({ thousands = 0, hundreds = 0, tens = 0, ones = 0,
+                  mode = 'single',
+                  thousands2 = 0, hundreds2 = 0, tens2 = 0, ones2 = 0 }) {
   const gap = 8, pad = 6;
+  const cs = 36, cox = 10, coy = 8;
+  const cubeW = cs + cox;
+  const rowH = pad + cs + coy + pad;   // 56 px per row
 
-  // 3D cube constants (for thousands)
-  const cs = 36,  cox = 10, coy = 8;  // front-face size, depth-x, depth-y
-  // Front face sits at y=(pad+coy); top face peaks at y=pad; right face at x=(bx+cs)
-  const cubeW = cs + cox;  // 46
-  const cubeH = cs + coy;  // 44  – top of top-face (y=pad) to bottom of front-face (y=pad+coy+cs)
+  // Build SVG items for one row of blocks; prefix is used for unique React keys
+  function buildRow(th, h, t, o, yOff, xStart, pfx) {
+    const TH = Math.min(parseInt(th) || 0, 20);
+    const H  = Math.min(parseInt(h)  || 0, 20);
+    const T  = Math.min(parseInt(t)  || 0, 20);
+    const O  = Math.min(parseInt(o)  || 0, 20);
+    const hBy = yOff + pad + coy;
+    let x = xStart;
+    const it = [];
 
-  let x = pad;
-  const items = [];
-
-  // ── Thousands: 3-dimensional cube with 10×10 grid on front face ─────────
-  for (let i = 0; i < TH; i++) {
-    const fx = x, fy = pad + coy;   // top-left of front face
-    // Top face (lighter purple) – parallelogram above front
-    items.push(
-      <polygon key={`th${i}top`}
+    for (let i = 0; i < TH; i++) {
+      const fx = x, fy = yOff + pad + coy;
+      it.push(<polygon key={`${pfx}th${i}tp`}
         points={`${fx},${fy} ${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cox},${fy-coy}`}
-        fill="#c4b5fd" stroke="#5b21b6" strokeWidth={0.7} />
-    );
-    // Right side face (darker purple) – parallelogram right of front
-    items.push(
-      <polygon key={`th${i}rt`}
+        fill="#c4b5fd" stroke="#5b21b6" strokeWidth={0.7} />);
+      it.push(<polygon key={`${pfx}th${i}rt`}
         points={`${fx+cs},${fy} ${fx+cs+cox},${fy-coy} ${fx+cs+cox},${fy+cs-coy} ${fx+cs},${fy+cs}`}
-        fill="#5b21b6" stroke="#4c1d95" strokeWidth={0.7} />
-    );
-    // Front face
-    items.push(
-      <rect key={`th${i}fr`} x={fx} y={fy} width={cs} height={cs}
-        fill="#7c3aed" stroke="#5b21b6" strokeWidth={0.7} />
-    );
-    // 10×10 grid lines on front face
-    const gStep = cs / 10;
-    for (let g = 1; g < 10; g++) {
-      items.push(<line key={`th${i}gv${g}`}
-        x1={fx + g*gStep} y1={fy} x2={fx + g*gStep} y2={fy+cs}
-        stroke="#5b21b6" strokeWidth={0.35} />);
-      items.push(<line key={`th${i}gh${g}`}
-        x1={fx} y1={fy + g*gStep} x2={fx+cs} y2={fy + g*gStep}
-        stroke="#5b21b6" strokeWidth={0.35} />);
+        fill="#5b21b6" stroke="#4c1d95" strokeWidth={0.7} />);
+      it.push(<rect key={`${pfx}th${i}fr`} x={fx} y={fy} width={cs} height={cs}
+        fill="#7c3aed" stroke="#5b21b6" strokeWidth={0.7} />);
+      const gStep = cs / 10;
+      for (let g = 1; g < 10; g++) {
+        it.push(<line key={`${pfx}th${i}gv${g}`}
+          x1={fx+g*gStep} y1={fy} x2={fx+g*gStep} y2={fy+cs} stroke="#5b21b6" strokeWidth={0.35} />);
+        it.push(<line key={`${pfx}th${i}gh${g}`}
+          x1={fx} y1={fy+g*gStep} x2={fx+cs} y2={fy+g*gStep} stroke="#5b21b6" strokeWidth={0.35} />);
+      }
+      x += cubeW + gap;
     }
-    x += cubeW + gap;
+    for (let i = 0; i < H; i++) {
+      const bx = x;
+      for (let r = 0; r < 10; r++)
+        for (let c = 0; c < 10; c++)
+          it.push(<rect key={`${pfx}h${i}${r}${c}`}
+            x={bx+c*3} y={hBy+r*3} width={2.5} height={2.5} fill="#334155" />);
+      x += 32 + gap;
+    }
+    for (let i = 0; i < T; i++) {
+      for (let r = 0; r < 10; r++)
+        it.push(<rect key={`${pfx}t${i}${r}`}
+          x={x} y={hBy+r*3} width={8} height={2.5} fill="#334155" />);
+      x += 12 + gap;
+    }
+    for (let i = 0; i < O; i++) {
+      it.push(<rect key={`${pfx}o${i}`}
+        x={x} y={hBy+12} width={8} height={8} fill="#334155" />);
+      x += 12 + gap;
+    }
+    return { items: it, endX: x };
   }
 
-  // ── Hundreds: flat 10×10 grid square ────────────────────────────────────
-  const hBy = pad + coy;  // align baseline with thousands
-  for (let i = 0; i < H; i++) {
-    const bx = x;
-    for (let r = 0; r < 10; r++)
-      for (let c = 0; c < 10; c++)
-        items.push(<rect key={`h${i}${r}${c}`}
-          x={bx + c * 3} y={hBy + r * 3} width={2.5} height={2.5} fill="#334155" />);
-    x += 32 + gap;
+  if (mode === 'add') {
+    const plusW = 22;   // left margin reserved for "+" symbol
+    const sepH  = 16;   // height of separator area between rows
+    const r1 = buildRow(thousands,  hundreds,  tens,  ones,  0,           pad + plusW, 'a1');
+    const r2 = buildRow(thousands2, hundreds2, tens2, ones2, rowH + sepH, pad + plusW, 'a2');
+    const totalW = Math.max(r1.endX, r2.endX) + pad;
+    const totalH = rowH * 2 + sepH;
+    const lineY  = rowH + sepH / 2;
+    return (
+      <svg width={totalW} height={totalH} style={{ display: 'block' }}>
+        {r1.items}
+        {/* "+" symbol centred in separator band, flush left */}
+        <text x={pad + 2} y={lineY + 5} fontSize={14} fontWeight="bold" fill="#334155"
+          dominantBaseline="middle" textAnchor="start">+</text>
+        {/* Separator line */}
+        <line x1={pad + plusW} y1={lineY} x2={totalW - pad} y2={lineY}
+          stroke="#334155" strokeWidth={1.5} />
+        {r2.items}
+      </svg>
+    );
   }
 
-  // ── Tens: vertical rod ───────────────────────────────────────────────────
-  for (let i = 0; i < T; i++) {
-    for (let r = 0; r < 10; r++)
-      items.push(<rect key={`t${i}${r}`}
-        x={x} y={hBy + r * 3} width={8} height={2.5} fill="#334155" />);
-    x += 12 + gap;
-  }
-
-  // ── Ones: single small square ────────────────────────────────────────────
-  for (let i = 0; i < O; i++) {
-    items.push(<rect key={`o${i}`}
-      x={x} y={hBy + 12} width={8} height={8} fill="#334155" />);
-    x += 12 + gap;
-  }
-
-  const totalW = Math.max(x + pad, 60);
-  const totalH = pad + cubeH + pad;   // always tall enough for thousands cube
+  // ── Single number (original behaviour) ──────────────────────────────────
+  const { items, endX } = buildRow(thousands, hundreds, tens, ones, 0, pad, 's');
+  const totalW = Math.max(endX + pad, 60);
+  const totalH = rowH;
   return (
     <svg width={totalW} height={totalH} style={{ display: 'block' }}>
       {items}
@@ -1335,7 +1343,9 @@ function parseVisualModel(marker) {
     return <WorkSpace height={kv.height || 80} />;
   }
   if (m.startsWith('[BASE10:')) {
-    return <Base10 thousands={kv.thousands} hundreds={kv.hundreds} tens={kv.tens} ones={kv.ones} />;
+    return <Base10 thousands={kv.thousands} hundreds={kv.hundreds} tens={kv.tens} ones={kv.ones}
+      mode={kv.mode || 'single'}
+      thousands2={kv.thousands2} hundreds2={kv.hundreds2} tens2={kv.tens2} ones2={kv.ones2} />;
   }
   if (m.startsWith('[PV_CHART:')) {
     const num = kvPart.trim();
@@ -1878,38 +1888,55 @@ function VisualParamForm({ type, params, onChange }) {
           <p className="text-xs text-slate-400">Multi-digit: cols=20,3 rows=10,4 → 2×2 grid for 23×14</p>
         </div>
       );
-    case 'BASE10':
-      return (
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-gray-500 font-medium">Thousands</span>
-              <input type="number" min={0} max={20} value={params.thousands ?? ''}
-                onChange={e => set('thousands', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-gray-500 font-medium">Hundreds</span>
-              <input type="number" min={0} max={20} value={params.hundreds ?? ''}
-                onChange={e => set('hundreds', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-gray-500 font-medium">Tens</span>
-              <input type="number" min={0} max={20} value={params.tens ?? ''}
-                onChange={e => set('tens', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-gray-500 font-medium">Ones</span>
-              <input type="number" min={0} max={20} value={params.ones ?? ''}
-                onChange={e => set('ones', e.target.value)}
-                className="border rounded p-1 w-full text-sm" placeholder="0–20" />
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">Purple cubes=1000s · dark squares=100s · rods=10s · cubes=1s (max 20 — use above 9 for regrouping)</p>
+    case 'BASE10': {
+      const b10mode = params.mode || 'single';
+      const b10inp = (label, key, isSecond) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-500 font-medium">{label}</span>
+          <input type="number" min={0} max={20} value={params[key] ?? ''}
+            onChange={e => set(key, e.target.value)}
+            className={`border rounded p-1 w-full text-sm ${isSecond ? 'border-green-400' : ''}`} placeholder="0–20" />
         </div>
       );
+      return (
+        <div className="space-y-3">
+          {/* Mode toggle */}
+          <div className="flex gap-3 items-center">
+            <span className="text-xs font-medium text-gray-700">Mode:</span>
+            {[{v:'single',l:'Single Number'},{v:'add',l:'Addition Problem'}].map(({v,l}) => (
+              <label key={v} className="text-xs flex items-center gap-1 cursor-pointer">
+                <input type="radio" checked={b10mode === v}
+                  onChange={() => onChange({ ...params, mode: v })} />
+                {l}
+              </label>
+            ))}
+          </div>
+          {/* Addend 1 (always shown) */}
+          <div>
+            {b10mode === 'add' && <p className="text-xs font-semibold text-blue-700 mb-1">Addend 1 (top row):</p>}
+            <div className="grid grid-cols-4 gap-2">
+              {b10inp('Thousands', 'thousands', false)}
+              {b10inp('Hundreds',  'hundreds',  false)}
+              {b10inp('Tens',      'tens',      false)}
+              {b10inp('Ones',      'ones',      false)}
+            </div>
+          </div>
+          {/* Addend 2 — only in add mode */}
+          {b10mode === 'add' && (
+            <div>
+              <p className="text-xs font-semibold text-green-700 mb-1">Addend 2 (bottom row):</p>
+              <div className="grid grid-cols-4 gap-2">
+                {b10inp('Thousands', 'thousands2', true)}
+                {b10inp('Hundreds',  'hundreds2',  true)}
+                {b10inp('Tens',      'tens2',      true)}
+                {b10inp('Ones',      'ones2',      true)}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-slate-400">Purple cubes=1000s · dark squares=100s · rods=10s · cubes=1s (max 20)</p>
+        </div>
+      );
+    }
     case 'BAR_MODEL':
       return (
         <div className="space-y-1">
@@ -2182,7 +2209,13 @@ function paramsToMarker(type, params) {
     if (params.d) parts.push(`d=${params.d}`);
     return parts.length ? `[FRACTION_BOX: ${parts.join(' ')}]` : '[FRACTION_BOX]';
   }
-  if (type === 'BASE10') return `[BASE10: thousands=${params.thousands || 0} hundreds=${params.hundreds || 0} tens=${params.tens || 0} ones=${params.ones || 0}]`;
+  if (type === 'BASE10') {
+    let m = `[BASE10: thousands=${params.thousands || 0} hundreds=${params.hundreds || 0} tens=${params.tens || 0} ones=${params.ones || 0}`;
+    if (params.mode === 'add') {
+      m += ` mode=add thousands2=${params.thousands2 || 0} hundreds2=${params.hundreds2 || 0} tens2=${params.tens2 || 0} ones2=${params.ones2 || 0}`;
+    }
+    return m + ']';
+  }
   if (type === 'AREA_MODEL') {
     let m = `[AREA_MODEL: cols=${params.cols || '20,7'} rows=${params.rows || '10,4'}`;
     if (params.vals) m += ` vals=${params.vals}`;
@@ -2341,9 +2374,24 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
   const [visualType, setVisualType] = useState(question?._visualType || 'none');
   const [visualParams, setVisualParams] = useState(question?._visualParams || {});
   const [customImg, setCustomImg] = useState(question?._customImg || null);
+  const [openChoiceViz, setOpenChoiceViz] = useState(null); // index of choice with viz picker open
   const fileRef = useRef();
   const qTextRef = useRef();
   const dropZoneRef = useRef();
+
+  // Update a choice's visual marker + stored type/params
+  const updateChoiceVisual = (ci, vtype, vparams) => {
+    const nc = [...choices];
+    const marker = vtype && vtype !== 'none' ? paramsToMarker(vtype, vparams) : null;
+    nc[ci] = { ...nc[ci], _vtype: vtype, _vparams: vparams, choiceMarker: marker };
+    setChoices(nc);
+  };
+  const clearChoiceVisual = ci => {
+    const nc = [...choices];
+    nc[ci] = { ...nc[ci], _vtype: 'none', _vparams: {}, choiceMarker: null };
+    setChoices(nc);
+    setOpenChoiceViz(null);
+  };
 
   const loadBlob = blob => {
     if (!blob) return;
@@ -2432,7 +2480,7 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
       type: 'question', qType,
       qNum: question?.qNum || String(questionCount),
       text: qType === 'multiselect' && !/select all|choose all/i.test(qText) ? qText + ' (Select all that apply.)' : qText,
-      choices: hasChoices ? choices.filter(c => c.text) : [],
+      choices: hasChoices ? choices.filter(c => c.text || c.choiceMarker) : [],
       lines: [], marker, standard, answer,
       points: Math.max(1, parseInt(points) || 1),
       lineCount: lineCount !== null && lineCount !== '' ? Math.max(1, Math.min(20, parseInt(lineCount) || 1)) : undefined,
@@ -2482,19 +2530,67 @@ function QuestionForm({ question, questionCount, onSave, onCancel }) {
               + Add Choice
             </button>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             {choices.map((ch, ci) => (
-              <div key={ci} className="flex items-center gap-2">
-                {qType === 'multiselect'
-                  ? <span className="text-xs shrink-0 w-5 h-4 border border-gray-400 rounded-sm inline-block" title="checkbox" />
-                  : <span className="text-xs shrink-0 w-4 h-4 border border-gray-400 rounded-full inline-block" title="bubble" />}
-                <span className="text-xs font-semibold text-gray-600 w-4 shrink-0">{ch.letter})</span>
-                <input value={ch.text} onChange={e => {
-                  const nc = [...choices]; nc[ci] = { ...nc[ci], text: e.target.value }; setChoices(nc);
-                }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
-                {choices.length > 2 && (
-                  <button onClick={() => removeChoice(ci)}
-                    className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">✕</button>
+              <div key={ci} className="space-y-1">
+                {/* Choice text row */}
+                <div className="flex items-center gap-2">
+                  {qType === 'multiselect'
+                    ? <span className="text-xs shrink-0 w-5 h-4 border border-gray-400 rounded-sm inline-block" title="checkbox" />
+                    : <span className="text-xs shrink-0 w-4 h-4 border border-gray-400 rounded-full inline-block" title="bubble" />}
+                  <span className="text-xs font-semibold text-gray-600 w-4 shrink-0">{ch.letter})</span>
+                  <input value={ch.text} onChange={e => {
+                    const nc = [...choices]; nc[ci] = { ...nc[ci], text: e.target.value }; setChoices(nc);
+                  }} className="flex-1 border rounded p-1 text-sm" placeholder={`Choice ${ch.letter}`} />
+                  {/* Visual toggle button */}
+                  <button type="button" title="Attach a model/visual to this choice"
+                    onClick={() => setOpenChoiceViz(openChoiceViz === ci ? null : ci)}
+                    className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                    📊
+                  </button>
+                  {choices.length > 2 && (
+                    <button onClick={() => removeChoice(ci)}
+                      className="text-gray-300 hover:text-red-400 text-xs shrink-0 px-1">✕</button>
+                  )}
+                </div>
+                {/* Existing visual preview for this choice */}
+                {ch.choiceMarker && openChoiceViz !== ci && (
+                  <div className="ml-10 overflow-x-auto bg-gray-50 rounded p-1.5 border border-blue-100">
+                    <ErrorBoundary><div className="scale-90 origin-left">{parseVisualModel(ch.choiceMarker)}</div></ErrorBoundary>
+                    <button type="button" onClick={() => clearChoiceVisual(ci)}
+                      className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
+                  </div>
+                )}
+                {/* Visual picker panel */}
+                {openChoiceViz === ci && (
+                  <div className="ml-10 bg-blue-50 border border-blue-200 rounded p-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-blue-800">Add Visual to Choice {ch.letter}</span>
+                      <button type="button" onClick={() => setOpenChoiceViz(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                    </div>
+                    <select value={ch._vtype || 'none'}
+                      onChange={e => { const t = e.target.value; updateChoiceVisual(ci, t, VISUAL_TYPE_DEFAULTS[t] || {}); }}
+                      className="border rounded p-1 text-xs w-full">
+                      {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
+                        <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+                    </select>
+                    {ch._vtype && ch._vtype !== 'none' && (
+                      <div className="bg-white rounded p-2 border border-blue-100">
+                        <VisualParamForm type={ch._vtype} params={ch._vparams || {}}
+                          onChange={vp => updateChoiceVisual(ci, ch._vtype, vp)} />
+                      </div>
+                    )}
+                    {ch.choiceMarker && (
+                      <div className="border-t border-blue-200 pt-2">
+                        <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                        <div className="overflow-x-auto">
+                          <ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary>
+                        </div>
+                        <button type="button" onClick={() => clearChoiceVisual(ci)}
+                          className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
@@ -2658,13 +2754,21 @@ function AssessmentPreviewSingle({ q, customImg }) {
           {q.choices.length > 0 && (() => {
             const isMultiselect = q.qType === 'multiselect' || /select all|choose all/i.test(q.text || '');
             return (
-              <div className="mt-1 ml-2 space-y-0.5">
+              <div className="mt-1 ml-2 space-y-1">
                 {q.choices.map((ch, i) => (
                   <div key={i} className="flex items-start gap-1.5">
                     {isMultiselect
                       ? <span className="mt-0.5 shrink-0 w-3 h-3 border border-gray-500 rounded-sm inline-block" />
                       : <span className="mt-0.5 shrink-0 w-3 h-3 border border-gray-500 rounded-full inline-block" />}
-                    <span><span className="font-medium">{ch.letter})</span> {ch.text}</span>
+                    <div>
+                      {ch.text && <span><span className="font-medium">{ch.letter})</span> {ch.text}</span>}
+                      {!ch.text && ch.choiceMarker && <span className="font-medium">{ch.letter})</span>}
+                      {ch.choiceMarker && (
+                        <div className="mt-0.5 overflow-x-auto">
+                          <ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -4113,14 +4217,24 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                               <button type="button" onClick={() => setEditingChoiceIdx(null)} className="text-xs bg-red-100 border border-red-300 text-red-600 rounded px-1.5 py-0.5">✕</button>
                             </span>
                           ) : (
-                            <span className="group/ch">
-                              <span className="font-medium">{ch.letter})</span> {ch.text}
-                              {onQuestionEdit && (
-                                <button type="button"
-                                  onClick={() => startChoiceEdit(idx, ci, ch.text)}
-                                  className="ml-1 opacity-0 group-hover/ch:opacity-60 text-xs text-blue-500 no-print hover:opacity-100">✏</button>
+                            <div className="group/ch">
+                              {ch.text && (
+                                <span>
+                                  <span className="font-medium">{ch.letter})</span> {ch.text}
+                                  {onQuestionEdit && (
+                                    <button type="button"
+                                      onClick={() => startChoiceEdit(idx, ci, ch.text)}
+                                      className="ml-1 opacity-0 group-hover/ch:opacity-60 text-xs text-blue-500 no-print hover:opacity-100">✏</button>
+                                  )}
+                                </span>
                               )}
-                            </span>
+                              {!ch.text && ch.choiceMarker && <span className="font-medium">{ch.letter})</span>}
+                              {ch.choiceMarker && (
+                                <div className="mt-0.5 overflow-x-auto">
+                                  <ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))}
@@ -4562,10 +4676,51 @@ function visualToHtml(marker) {
 
   // ── BASE-10 BLOCKS ──
   if (m.startsWith('BASE10:')) {
+    const mode = gp('mode') || 'single';
     const TH = Math.min(parseInt(gp('thousands') ?? '0'), 9);
     const H = Math.min(parseInt(gp('hundreds') ?? '0'), 9);
     const T = Math.min(parseInt(gp('tens') ?? '0'), 9);
     const O = Math.min(parseInt(gp('ones') ?? '0'), 9);
+    // Helper to build one row of HTML blocks
+    const b10row = (th, h, t2, o) => {
+      let row = `<table style="${tbl}border:none"><tbody><tr>`;
+      if (th) {
+        row += `<td style="border:none;padding:0 10px 0 0;vertical-align:top"><div style="font-size:8pt;color:#666;margin-bottom:2px">Thousands (×${th})</div><table style="border-collapse:collapse;display:inline-table"><tbody>`;
+        for (let i = 0; i < th; i++) {
+          row += `<tr><td style="border:1px solid #7c3aed;padding:1px;margin:1px;vertical-align:top">`;
+          for (let r = 0; r < 4; r++) { for (let c = 0; c < 4; c++) row += `<span style="display:inline-block;width:5px;height:5px;background:#7c3aed;margin:0.5px"></span>`; if (r < 3) row += '<br/>'; }
+          row += '</td>'; if ((i+1)%3===0) row += '</tr><tr>';
+        }
+        row += '</tr></tbody></table></td>';
+      }
+      if (h) {
+        row += `<td style="border:none;padding:0 10px 0 0;vertical-align:top"><div style="font-size:8pt;color:#666;margin-bottom:2px">Hundreds (×${h})</div><table style="border-collapse:collapse;display:inline-table"><tbody>`;
+        for (let i = 0; i < h; i++) {
+          row += `<tr><td style="border:1px solid #334155;padding:1px;vertical-align:top">`;
+          for (let r = 0; r < 4; r++) { for (let c = 0; c < 4; c++) row += `<span style="display:inline-block;width:4px;height:4px;background:#334155;margin:0.5px"></span>`; if (r < 3) row += '<br/>'; }
+          row += '</td>'; if ((i+1)%3===0) row += '</tr><tr>';
+        }
+        row += '</tr></tbody></table></td>';
+      }
+      if (t2) {
+        row += `<td style="border:none;padding:0 10px 0 0;vertical-align:top"><div style="font-size:8pt;color:#666;margin-bottom:2px">Tens (×${t2})</div>`;
+        for (let i = 0; i < t2; i++) { row += `<span style="display:inline-block;border:1px solid #334155;width:8px;padding:1px;margin:1px;vertical-align:top">`; for (let r = 0; r < 5; r++) row += `<span style="display:block;width:6px;height:4px;background:#334155;margin-bottom:1px"></span>`; row += '</span>'; }
+        row += '</td>';
+      }
+      if (o) {
+        row += `<td style="border:none;vertical-align:top"><div style="font-size:8pt;color:#666;margin-bottom:2px">Ones (×${o})</div>`;
+        for (let i = 0; i < o; i++) row += `<span style="display:inline-block;width:12px;height:12px;border:1px solid #334155;background:#334155;margin:1px"></span>`;
+        row += '</td>';
+      }
+      return row + '</tr></tbody></table>';
+    };
+    if (mode === 'add') {
+      const TH2 = Math.min(parseInt(gp('thousands2') ?? '0'), 9);
+      const H2 = Math.min(parseInt(gp('hundreds2') ?? '0'), 9);
+      const T2 = Math.min(parseInt(gp('tens2') ?? '0'), 9);
+      const O2 = Math.min(parseInt(gp('ones2') ?? '0'), 9);
+      return `<div>${b10row(TH,H,T,O)}<div style="font-size:14pt;font-weight:bold;margin:4px 0 2px">+</div><hr style="border:1.5px solid #334155;margin:2px 0 4px">${b10row(TH2,H2,T2,O2)}</div>`;
+    }
     // Render as labeled groups of symbols (works reliably in Google Docs)
     let t = `<table style="${tbl}border:none"><tbody><tr>`;
     if (TH) {
@@ -5528,7 +5683,8 @@ async function copyToGoogleDocs(questions, twoColChoices = false) {
             [i, i + 1].forEach(ci => {
               if (ci < q.choices.length) {
                 const ch = q.choices[ci];
-                html += `<td style="border:none;padding:2px 8px 2px 0;width:50%;vertical-align:top">${bubble} <strong>${ch.letter})</strong> ${ch.text}</td>`;
+                const chViz = ch.choiceMarker ? `<div style="margin-top:2px">${visualToHtml(ch.choiceMarker) || ''}</div>` : '';
+                html += `<td style="border:none;padding:2px 8px 2px 0;width:50%;vertical-align:top">${bubble} <strong>${ch.letter})</strong> ${ch.text || ''}${chViz}</td>`;
               } else {
                 html += `<td style="border:none"></td>`;
               }
@@ -5538,7 +5694,11 @@ async function copyToGoogleDocs(questions, twoColChoices = false) {
           html += `</tbody></table>`;
         } else {
           q.choices.forEach(ch => {
-            html += `<p style="margin:1px 0 1px 28px">${bubble} <strong>${ch.letter})</strong>&nbsp;&nbsp;${ch.text}</p>`;
+            html += `<p style="margin:1px 0 1px 28px">${bubble} <strong>${ch.letter})</strong>&nbsp;&nbsp;${ch.text || ''}</p>`;
+            if (ch.choiceMarker) {
+              const vizH = visualToHtml(ch.choiceMarker);
+              if (vizH) html += `<div style="margin:2px 0 6px 52px">${vizH}</div>`;
+            }
           });
         }
       }
