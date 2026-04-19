@@ -4061,11 +4061,11 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
   // Type editing
   const [editingTypeIdx, setEditingTypeIdx] = useState(null);
   const changeType = (origIdx, q, newType) => {
-    const wasMulti = q.qType === 'mc' || q.qType === 'multiselect';
     const isMulti = newType === 'mc' || newType === 'multiselect';
     const updatedQ = { ...q, qType: newType };
-    if (isMulti && !wasMulti) updatedQ.choices = defaultChoices();
-    else if (!isMulti && wasMulti) updatedQ.choices = [];
+    // Always add default choices when switching to MC/multiselect if none exist
+    if (isMulti && !(q.choices?.length > 0)) updatedQ.choices = defaultChoices();
+    else if (!isMulti) updatedQ.choices = [];
     onQuestionEdit(origIdx, updatedQ);
     setEditingTypeIdx(null);
   };
