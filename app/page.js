@@ -1287,6 +1287,558 @@ function Shape2D({ shape, labels, color }) {
   );
 }
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// NEW VISUAL MODEL COMPONENTS (13 models)
+// ────────────────────────────────────────────────────────────────────────────
+
+function FiveFrame({ filled = 3 }) {
+  const F = Math.min(Math.max(parseInt(filled) || 0, 0), 5);
+  const sz = 36, gap = 4, pad = 8;
+  const w = pad * 2 + 5 * sz + 4 * gap;
+  const h = pad * 2 + sz;
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={3} fill="none" stroke="#334155" strokeWidth={2} />
+      {Array.from({ length: 5 }, (_, i) => {
+        const x = pad + i * (sz + gap);
+        const y = pad;
+        return (
+          <circle key={i} cx={x + sz / 2} cy={y + sz / 2} r={sz / 2 - 2}
+            fill={i < F ? '#3b82f6' : 'white'} stroke="#334155" strokeWidth={1.5} />
+        );
+      })}
+    </svg>
+  );
+}
+
+function HundredsChart({ start = 1, highlight = '', highlightColor = '#fbbf24' }) {
+  const startNum = parseInt(start) || 1;
+  const isZeroBased = startNum === 0;
+  const cellW = 28, cellH = 22, pad = 8;
+  const w = pad * 2 + 10 * cellW;
+  const h = pad * 2 + 10 * cellH;
+  const highlightSet = new Set(highlight ? highlight.split(',').map(s => parseInt(s.trim())) : []);
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={2} fill="none" stroke="#334155" strokeWidth={1} />
+      {Array.from({ length: 100 }, (_, i) => {
+        const num = isZeroBased ? i : i + 1;
+        const row = Math.floor(i / 10);
+        const col = i % 10;
+        const x = pad + col * cellW;
+        const y = pad + row * cellH;
+        const isHighlighted = highlightSet.has(num);
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={cellW} height={cellH}
+              fill={isHighlighted ? highlightColor : 'white'}
+              stroke="#94a3b8" strokeWidth={0.5} />
+            <text x={x + cellW / 2} y={y + cellH / 2 + 4}
+              textAnchor="middle" fontSize={9} fontWeight="500" fill="#334155">{num}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function PlaceValueChart({ cols = 'h,t,o', rows = 2, value = '' }) {
+  const colIds = (cols || 'h,t,o').split(',').map(s => s.trim());
+  const numRows = Math.min(Math.max(parseInt(rows) || 2, 1), 4);
+  const valueParts = value ? value.split(',').map(s => s.trim()) : [];
+  
+  const colLabels = {
+    millions: 'Millions', hth: 'HundredThousands', tth: 'TenThousands',
+    th: 'Thousands', h: 'Hundreds', t: 'Tens', o: 'Ones',
+    tenths: 'Tenths', hundredths: 'Hundredths', thousandths: 'Thousandths'
+  };
+  
+  const cellW = 50, cellH = 40, pad = 4, headerH = 50;
+  const w = pad * 2 + colIds.length * cellW;
+  const h = pad * 2 + headerH + numRows * cellH;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      {colIds.map((colId, ci) => (
+        <g key={`header-${ci}`}>
+          <rect x={pad + ci * cellW} y={pad} width={cellW} height={headerH}
+            fill="#dbeafe" stroke="#334155" strokeWidth={1} />
+          <text x={pad + ci * cellW + cellW / 2} y={pad + headerH / 2 + 6}
+            textAnchor="middle" fontSize={10} fontWeight="600" fill="#334155">
+            {colLabels[colId] || colId}
+          </text>
+        </g>
+      ))}
+      {Array.from({ length: numRows }, (_, ri) => (
+        <g key={`row-${ri}`}>
+          {colIds.map((colId, ci) => {
+            const val = valueParts[ci];
+            return (
+              <g key={`cell-${ri}-${ci}`}>
+                <rect x={pad + ci * cellW} y={pad + headerH + ri * cellH}
+                  width={cellW} height={cellH} fill="white" stroke="#94a3b8" strokeWidth={1} />
+                {val && <text x={pad + ci * cellW + cellW / 2} y={pad + headerH + ri * cellH + cellH / 2 + 5}
+                  textAnchor="middle" fontSize={12} fontWeight="500" fill="#334155">{val}</text>}
+              </g>
+            );
+          })}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function Clock({ hour = 3, minute = 0, showNumbers = true }) {
+  const h = Math.max(1, Math.min(parseInt(hour) || 3, 12));
+  const m = Math.max(0, Math.min(parseInt(minute) || 0, 59));
+  
+  const size = 120, cx = size / 2, cy = size / 2, radius = 45;
+  const hourAngle = (h % 12) * 30 + m * 0.5 - 90;
+  const minAngle = m * 6 - 90;
+  
+  const toRad = deg => deg * Math.PI / 180;
+  const hx2 = cx + Math.cos(toRad(hourAngle)) * 20;
+  const hy2 = cy + Math.sin(toRad(hourAngle)) * 20;
+  const mx2 = cx + Math.cos(toRad(minAngle)) * 30;
+  const my2 = cy + Math.sin(toRad(minAngle)) * 30;
+  
+  return (
+    <svg width={size} height={size} style={{ display: 'block' }}>
+      <circle cx={cx} cy={cy} r={radius} fill="white" stroke="#334155" strokeWidth={2} />
+      
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = i * 30 - 90;
+        const rad = toRad(angle);
+        const x = cx + Math.cos(rad) * (radius - 6);
+        const y = cy + Math.sin(rad) * (radius - 6);
+        if (showNumbers) {
+          const num = i === 0 ? 12 : i;
+          return (
+            <text key={i} x={x} y={y + 3} textAnchor="middle" fontSize={10} fontWeight="600" fill="#334155">
+              {num}
+            </text>
+          );
+        }
+        return <circle key={i} cx={x} cy={y} r={1.5} fill="#334155" />;
+      })}
+      
+      <line x1={cx} y1={cy} x2={hx2} y2={hy2} stroke="#334155" strokeWidth={3} strokeLinecap="round" />
+      <line x1={cx} y1={cy} x2={mx2} y2={my2} stroke="#334155" strokeWidth={2} strokeLinecap="round" />
+      <circle cx={cx} cy={cy} r={3} fill="#334155" />
+    </svg>
+  );
+}
+
+function OpenNumLine({ start = 0, jumps = '10,10,10' }) {
+  const startVal = parseFloat(start) || 0;
+  const jumpList = (jumps || '10,10,10').split(',').map(s => parseFloat(s.trim()) || 0);
+  
+  const labels = [startVal];
+  let cumSum = startVal;
+  jumpList.forEach(j => {
+    cumSum += j;
+    labels.push(cumSum);
+  });
+  
+  const tickW = 40, pad = 20, arcH = 30;
+  const w = pad * 2 + labels.length * tickW;
+  const h = 100;
+  const lineY = 60;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <line x1={pad} y1={lineY} x2={w - pad} y2={lineY} stroke="#334155" strokeWidth={1.5} />
+      
+      {labels.map((lbl, i) => {
+        const x = pad + i * tickW;
+        return (
+          <g key={i}>
+            <line x1={x} y1={lineY - 5} x2={x} y2={lineY + 5} stroke="#334155" strokeWidth={1.5} />
+            <text x={x} y={lineY + 16} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">
+              {lbl}
+            </text>
+          </g>
+        );
+      })}
+      
+      {jumpList.map((j, i) => {
+        const x1 = pad + i * tickW;
+        const x2 = pad + (i + 1) * tickW;
+        const midX = (x1 + x2) / 2;
+        return (
+          <g key={`arc-${i}`}>
+            <path d={`M ${x1} ${lineY} Q ${midX} ${lineY - arcH} ${x2} ${lineY}`}
+              fill="none" stroke="#2563eb" strokeWidth={1.5} />
+            <text x={midX} y={lineY - arcH - 4} textAnchor="middle" fontSize={9} fontWeight="600" fill="#2563eb">
+              +{j}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function DecimalLine({ min = 0, max = 1, parts = 10, mark = '' }) {
+  const minVal = parseFloat(min) || 0;
+  const maxVal = parseFloat(max) || 1;
+  const numParts = Math.max(parseInt(parts) || 10, 2);
+  const markVal = mark ? parseFloat(mark) : null;
+  
+  const ticks = [];
+  for (let i = 0; i <= numParts; i++) {
+    ticks.push(minVal + (i / numParts) * (maxVal - minVal));
+  }
+  
+  const tickW = 30, pad = 20, lineY = 40;
+  const w = pad * 2 + ticks.length * tickW;
+  const h = 80;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <line x1={pad} y1={lineY} x2={w - pad} y2={lineY} stroke="#334155" strokeWidth={1.5} />
+      
+      {ticks.map((val, i) => {
+        const x = pad + i * tickW;
+        const isMarked = markVal !== null && Math.abs(val - markVal) < 0.001;
+        return (
+          <g key={i}>
+            <line x1={x} y1={lineY - 4} x2={x} y2={lineY + 4} stroke="#334155" strokeWidth={1} />
+            {isMarked && <circle cx={x} cy={lineY} r={4} fill="#ef4444" />}
+            <text x={x} y={lineY + 16} textAnchor="middle" fontSize={9} fill="#334155">
+              {val.toFixed(2)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function LinePlot({ min = 1, max = 5, data = '2,2,3,4,4,4,5', unit = 'inches' }) {
+  const minVal = parseInt(min) || 1;
+  const maxVal = parseInt(max) || 5;
+  const dataList = (data || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  
+  const counts = {};
+  dataList.forEach(v => {
+    if (v >= minVal && v <= maxVal) counts[v] = (counts[v] || 0) + 1;
+  });
+  
+  const tickW = 40, pad = 30, lineY = 180;
+  const w = pad * 2 + (maxVal - minVal + 1) * tickW;
+  const h = 220;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <text x={w / 2} y={h - 5} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">
+        {unit}
+      </text>
+      
+      <line x1={pad} y1={lineY} x2={w - pad} y2={lineY} stroke="#334155" strokeWidth={2} />
+      
+      {Array.from({ length: maxVal - minVal + 1 }, (_, i) => {
+        const val = minVal + i;
+        const x = pad + i * tickW;
+        const cnt = counts[val] || 0;
+        
+        return (
+          <g key={val}>
+            <line x1={x} y1={lineY - 4} x2={x} y2={lineY + 4} stroke="#334155" strokeWidth={1.5} />
+            <text x={x} y={lineY + 14} textAnchor="middle" fontSize={10} fontWeight="600" fill="#334155">
+              {val}
+            </text>
+            
+            {Array.from({ length: cnt }, (_, xi) => (
+              <text key={xi} x={x} y={lineY - 18 - xi * 14}
+                textAnchor="middle" fontSize={16} fontWeight="600" fill="#2563eb">
+                ×
+              </text>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, title = '', yLabel = 'Count' }) {
+  const labelList = (labels || '').split(',').map(s => s.trim()).filter(Boolean);
+  const valueList = (values || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  
+  const maxVal = ymax ? Math.max(parseInt(ymax) || 10, Math.max(...valueList)) : Math.max(...valueList, 1);
+  const barW = 28, gap = 16, pad = 40, barStart = pad + 20;
+  const w = barStart + labelList.length * (barW + gap) + 20;
+  const h = 280;
+  const baselineY = h - pad;
+  const graphH = baselineY - pad;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      {title && <text x={w / 2} y={20} textAnchor="middle" fontSize={12} fontWeight="bold" fill="#334155">
+        {title}
+      </text>}
+      
+      <text x={10} y={h / 2} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155"
+        transform={`rotate(-90 10 ${h / 2})`}>
+        {yLabel}
+      </text>
+      
+      <line x1={pad} y1={pad} x2={pad} y2={baselineY} stroke="#334155" strokeWidth={2} />
+      <line x1={pad} y1={baselineY} x2={w - 10} y2={baselineY} stroke="#334155" strokeWidth={2} />
+      
+      {Array.from({ length: 5 }, (_, i) => {
+        const val = Math.round(maxVal * i / 4);
+        const y = baselineY - (i / 4) * graphH;
+        return (
+          <g key={`y-${i}`}>
+            <line x1={pad - 4} y1={y} x2={pad} y2={y} stroke="#334155" strokeWidth={1} />
+            <text x={pad - 6} y={y + 3} textAnchor="end" fontSize={8} fill="#334155">{val}</text>
+          </g>
+        );
+      })}
+      
+      {labelList.map((lbl, i) => {
+        const val = valueList[i] || 0;
+        const barH = (val / maxVal) * graphH;
+        const x = barStart + i * (barW + gap);
+        const y = baselineY - barH;
+        
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={barW} height={barH}
+              fill="#3b82f6" stroke="#334155" strokeWidth={1} />
+            <text x={x + barW / 2} y={baselineY + 14} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">
+              {lbl}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FactTriangle({ top = 12, left = 3, right = 4, op = '*' }) {
+  const w = 140, h = 120;
+  const topX = w / 2, topY = 20;
+  const leftX = 30, leftY = 100;
+  const rightX = w - 30, rightY = 100;
+  const r = 16;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <line x1={topX} y1={topY} x2={leftX} y2={leftY} stroke="#334155" strokeWidth={2} />
+      <line x1={topX} y1={topY} x2={rightX} y2={rightY} stroke="#334155" strokeWidth={2} />
+      <line x1={leftX} y1={leftY} x2={rightX} y2={rightY} stroke="#334155" strokeWidth={2} />
+      
+      {[{ x: topX, y: topY, v: top }, { x: leftX, y: leftY, v: left }, { x: rightX, y: rightY, v: right }].map(({ x, y, v }, i) => (
+        <g key={i}>
+          <circle cx={x} cy={y} r={r} fill="white" stroke="#334155" strokeWidth={1.5} />
+          <text x={x} y={y + 5} textAnchor="middle" fontSize={14} fontWeight="600" fill="#334155">{v}</text>
+        </g>
+      ))}
+      
+      <text x={w / 2} y={h / 2 + 5} textAnchor="middle" fontSize={18} fontWeight="700" fill="#334155">
+        {op}
+      </text>
+    </svg>
+  );
+}
+
+function FactorTree({ number = 12 }) {
+  const num = Math.max(2, Math.min(parseInt(number) || 12, 100));
+  const factorize = n => {
+    const factors = [];
+    let d = 2;
+    while (d * d <= n) {
+      while (n % d === 0) {
+        factors.push(d);
+        n /= d;
+      }
+      d++;
+    }
+    if (n > 1) factors.push(n);
+    return factors;
+  };
+  
+  const primes = factorize(num);
+  const w = 200, h = 150;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <text x={w / 2} y={20} textAnchor="middle" fontSize={14} fontWeight="bold" fill="#334155">
+        {num}
+      </text>
+      <text x={w / 2} y={50} textAnchor="middle" fontSize={11} fill="#666">
+        Factors: {primes.join(', ')}
+      </text>
+      <text x={w / 2} y={70} textAnchor="middle" fontSize={10} fill="#999">
+        {primes.length === 1 ? 'Prime' : `${primes.length} prime factors`}
+      </text>
+    </svg>
+  );
+}
+
+function PatternTable({ header1 = 'Input', header2 = 'Output', rows = '1|3,2|6,3|9', rule = '* 3' }) {
+  const h1 = header1 || 'Input';
+  const h2 = header2 || 'Output';
+  const rowPairs = (rows || '').split(',').map(s => {
+    const [a, b] = s.split('|');
+    return [a?.trim(), b?.trim()];
+  }).filter(([a, b]) => a || b);
+  
+  const cellW = 70, cellH = 30, pad = 8, headerH = 35;
+  const w = pad * 2 + 2 * cellW;
+  const h = pad * 2 + headerH + rowPairs.length * cellH;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      {[{ label: h1, col: 0 }, { label: h2, col: 1 }].map(({ label, col }) => (
+        <g key={col}>
+          <rect x={pad + col * cellW} y={pad} width={cellW} height={headerH}
+            fill="#e0e7ff" stroke="#334155" strokeWidth={1} />
+          <text x={pad + col * cellW + cellW / 2} y={pad + headerH / 2 + 5}
+            textAnchor="middle" fontSize={11} fontWeight="600" fill="#334155">
+            {label}
+          </text>
+        </g>
+      ))}
+      
+      {rowPairs.map((pair, ri) => (
+        <g key={ri}>
+          {pair.map((val, ci) => (
+            <g key={ci}>
+              <rect x={pad + ci * cellW} y={pad + headerH + ri * cellH}
+                width={cellW} height={cellH} fill="white" stroke="#94a3b8" strokeWidth={1} />
+              {val && <text x={pad + ci * cellW + cellW / 2} y={pad + headerH + ri * cellH + cellH / 2 + 4}
+                textAnchor="middle" fontSize={12} fontWeight="500" fill="#334155">
+                {val}
+              </text>}
+            </g>
+          ))}
+        </g>
+      ))}
+      
+      {rule && <text x={w / 2} y={h - 4} textAnchor="middle" fontSize={9} fontWeight="500" fill="#666">
+        Rule: {rule}
+      </text>}
+    </svg>
+  );
+}
+
+function CoordPlane({ xmax = 6, ymax = 6, quadrants = 1, points = '', xLabel = 'x', yLabel = 'y' }) {
+  const xm = Math.max(1, Math.min(parseInt(xmax) || 6, 10));
+  const ym = Math.max(1, Math.min(parseInt(ymax) || 6, 10));
+  
+  const pointList = points ? points.split(';').map(p => {
+    const [x, y] = p.split(',').map(s => parseFloat(s.trim()));
+    return [x, y];
+  }).filter(([x, y]) => !isNaN(x) && !isNaN(y)) : [];
+  
+  const cellW = 25, pad = 30;
+  const w = pad * 2 + xm * cellW;
+  const h = pad * 2 + ym * cellW;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      {Array.from({ length: xm + 1 }, (_, i) => {
+        const x = pad + i * cellW;
+        return <line key={`vgrid-${i}`} x1={x} y1={pad} x2={x} y2={h - pad} stroke="#e5e7eb" strokeWidth={0.5} />;
+      })}
+      {Array.from({ length: ym + 1 }, (_, i) => {
+        const y = h - pad - i * cellW;
+        return <line key={`hgrid-${i}`} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#e5e7eb" strokeWidth={0.5} />;
+      })}
+      
+      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="#334155" strokeWidth={2} />
+      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="#334155" strokeWidth={2} />
+      
+      {Array.from({ length: xm + 1 }, (_, i) => {
+        const x = pad + i * cellW;
+        return (
+          <g key={`xtick-${i}`}>
+            <line x1={x} y1={h - pad - 3} x2={x} y2={h - pad + 3} stroke="#334155" strokeWidth={1} />
+            <text x={x} y={h - pad + 14} textAnchor="middle" fontSize={9} fill="#334155">{i}</text>
+          </g>
+        );
+      })}
+      {Array.from({ length: ym + 1 }, (_, i) => {
+        const y = h - pad - i * cellW;
+        return (
+          <g key={`ytick-${i}`}>
+            <line x1={pad - 3} y1={y} x2={pad + 3} y2={y} stroke="#334155" strokeWidth={1} />
+            <text x={pad - 8} y={y + 3} textAnchor="end" fontSize={9} fill="#334155">{i}</text>
+          </g>
+        );
+      })}
+      
+      {pointList.map((pt, i) => {
+        const [px, py] = pt;
+        const x = pad + px * cellW;
+        const y = h - pad - py * cellW;
+        if (x >= pad && x <= w - pad && y >= pad && y <= h - pad) {
+          return <circle key={i} cx={x} cy={y} r={4} fill="#ef4444" stroke="#333" strokeWidth={1.5} />;
+        }
+        return null;
+      })}
+      
+      <text x={w - 10} y={h - pad + 20} textAnchor="end" fontSize={10} fontWeight="600" fill="#334155">{xLabel}</text>
+      <text x={pad - 10} y={15} textAnchor="end" fontSize={10} fontWeight="600" fill="#334155">{yLabel}</text>
+    </svg>
+  );
+}
+
+function Ruler({ inches = 6, unit = 'in', measureFrom = 0, measureTo = 0, labelUnit = true }) {
+  const len = Math.min(Math.max(parseInt(inches) || 6, 1), 12);
+  const u = (unit || 'in') === 'cm' ? 'cm' : 'in';
+  const mFrom = Math.max(0, parseFloat(measureFrom) || 0);
+  const mTo = Math.max(0, parseFloat(measureTo) || 0);
+  
+  const scale = u === 'cm' ? 12 : 15;
+  const w = len * scale + 20;
+  const h = 80;
+  const lineY = 30;
+  
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      <line x1={10} y1={lineY} x2={w - 10} y2={lineY} stroke="#334155" strokeWidth={2} />
+      
+      {Array.from({ length: len * (u === 'cm' ? 10 : 2) + 1 }, (_, i) => {
+        const pos = i / (u === 'cm' ? 10 : 2);
+        const x = 10 + pos * scale;
+        const isWhole = i % (u === 'cm' ? 10 : 2) === 0;
+        const tickH = isWhole ? 8 : 4;
+        return (
+          <line key={i} x1={x} y1={lineY - tickH} x2={x} y2={lineY} stroke="#334155" strokeWidth={isWhole ? 2 : 1} />
+        );
+      })}
+      
+      {Array.from({ length: len + 1 }, (_, i) => {
+        const x = 10 + i * scale;
+        return (
+          <text key={i} x={x} y={lineY + 18} textAnchor="middle" fontSize={10} fontWeight="600" fill="#334155">
+            {i}
+          </text>
+        );
+      })}
+      
+      {mTo > mFrom && (
+        <g>
+          <line x1={10 + mFrom * scale} y1={60} x2={10 + mTo * scale} y2={60}
+            stroke="#ef4444" strokeWidth={2} />
+          <text x={(10 + mFrom * scale + 10 + mTo * scale) / 2} y={70}
+            textAnchor="middle" fontSize={10} fontWeight="600" fill="#ef4444">
+            {mTo - mFrom}{labelUnit ? u : ''}
+          </text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+
 // ─── Parse visual marker string → React component ─────────────────────────────
 function parseVisualModel(marker) {
   const m = marker.trim();
@@ -1414,6 +1966,19 @@ function parseVisualModel(marker) {
     const labelsM = m.match(/\blabels=(\S+)/);
     return <Shape2D shape={kv.shape} labels={labelsM ? labelsM[1] : ''} color={kv.color} />;
   }
+  if (m.startsWith('[FIVE_FRAME:')) return <FiveFrame filled={kv.filled} />;
+  if (m.startsWith('[HUNDREDS_CHART:')) return <HundredsChart start={kv.start} highlight={kv.highlight} highlightColor={kv.highlightcolor} />;
+  if (m.startsWith('[PLACE_VAL_CHART:')) return <PlaceValueChart cols={kv.cols} rows={kv.rows} value={kv.value} />;
+  if (m.startsWith('[CLOCK:')) return <Clock hour={kv.hour} minute={kv.minute} showNumbers={kv.shownumbers !== 'false'} />;
+  if (m.startsWith('[OPEN_NUM_LINE:')) return <OpenNumLine start={kv.start} jumps={kv.jumps} />;
+  if (m.startsWith('[DECIMAL_LINE:')) return <DecimalLine min={kv.min} max={kv.max} parts={kv.parts} mark={kv.mark} />;
+  if (m.startsWith('[LINE_PLOT:')) return <LinePlot min={kv.min} max={kv.max} data={kv.data} unit={kv.unit} />;
+  if (m.startsWith('[BAR_GRAPH:')) return <BarGraph labels={kv.labels} values={kv.values} ymax={kv.ymax} title={kv.title} yLabel={kv.ylabel} />;
+  if (m.startsWith('[FACT_TRIANGLE:')) return <FactTriangle top={kv.top} left={kv.left} right={kv.right} op={kv.op} />;
+  if (m.startsWith('[FACTOR_TREE:')) return <FactorTree number={kv.number} />;
+  if (m.startsWith('[PATTERN_TABLE:')) return <PatternTable header1={kv.header1} header2={kv.header2} rows={kv.rows} rule={kv.rule} />;
+  if (m.startsWith('[COORD_PLANE:')) return <CoordPlane xmax={kv.xmax} ymax={kv.ymax} quadrants={kv.quadrants} points={kv.points} xLabel={kv.xlabel} yLabel={kv.ylabel} />;
+  if (m.startsWith('[RULER:')) return <Ruler inches={kv.inches} unit={kv.unit} measureFrom={kv.measurefrom} measureTo={kv.measureto} labelUnit={kv.labelunit !== 'false'} />;
   if (m.startsWith('[IMAGE:')) {
     return null; // handled separately as paste zone
   }
@@ -1670,6 +2235,19 @@ const VISUAL_TYPES_LIST = [
   { id: 'TENS_FRAME',  label: 'Tens Frame' },
   { id: 'VOL_3D',      label: 'Volume (3D Prism / Cube)' },
   { id: 'WORK_SPACE',  label: 'Work Space (blank box)' },
+  { id: 'FIVE_FRAME',  label: 'Five Frame' },
+  { id: 'HUNDREDS_CHART', label: 'Hundreds Chart' },
+  { id: 'PLACE_VAL_CHART', label: 'Place Value Chart' },
+  { id: 'CLOCK',       label: 'Clock Diagram' },
+  { id: 'OPEN_NUM_LINE', label: 'Open Number Line' },
+  { id: 'DECIMAL_LINE', label: 'Decimal Number Line' },
+  { id: 'LINE_PLOT',   label: 'Line Plot' },
+  { id: 'BAR_GRAPH',   label: 'Bar Graph' },
+  { id: 'FACT_TRIANGLE', label: 'Fact Family Triangle' },
+  { id: 'FACTOR_TREE', label: 'Factor Tree' },
+  { id: 'PATTERN_TABLE', label: 'Pattern Table' },
+  { id: 'COORD_PLANE', label: 'Coordinate Plane' },
+  { id: 'RULER',       label: 'Ruler' },
 ];
 
 // Default params for visual types that need values to render a visible preview
@@ -1685,6 +2263,19 @@ const VISUAL_TYPE_DEFAULTS = {
   BAR_MODEL:   { vals: '4,4,4,4', label: '?' },
   VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', cubelines: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
   SHAPE_2D:    { shape: 'rectangle', labels: '', color: '#dbeafe' },
+  FIVE_FRAME:  { filled: 3 },
+  HUNDREDS_CHART: { start: 1, highlight: '', highlightColor: '#fbbf24' },
+  PLACE_VAL_CHART: { cols: 'h,t,o', rows: 2, value: '' },
+  CLOCK:       { hour: 3, minute: 0, showNumbers: true },
+  OPEN_NUM_LINE: { start: 0, jumps: '10,10,10' },
+  DECIMAL_LINE: { min: 0, max: 1, parts: 10, mark: '' },
+  LINE_PLOT:   { min: 1, max: 5, data: '2,2,3,4,4,4,5', unit: 'inches' },
+  BAR_GRAPH:   { labels: 'Mon,Tue,Wed,Thu', values: '4,7,3,5', ymax: 0, title: '', yLabel: 'Count' },
+  FACT_TRIANGLE: { top: 12, left: 3, right: 4, op: '*' },
+  FACTOR_TREE: { number: 12 },
+  PATTERN_TABLE: { header1: 'Input', header2: 'Output', rows: '1|3,2|6,3|9', rule: '* 3' },
+  COORD_PLANE: { xmax: 6, ymax: 6, quadrants: 1, points: '', xLabel: 'x', yLabel: 'y' },
+  RULER:       { inches: 6, unit: 'in', measureFrom: 0, measureTo: 0, labelUnit: true },
 };
 
 function VisualParamForm({ type, params, onChange }) {
@@ -2092,6 +2683,121 @@ function VisualParamForm({ type, params, onChange }) {
           </label>
         </div>
       );
+    case 'FIVE_FRAME':
+      return <div className="flex gap-2">{inp('Filled', 'filled', { type: 'number', min: 0, max: 5 })}</div>;
+    case 'HUNDREDS_CHART':
+      return (
+        <div className="space-y-1">
+          {inp('Start (0 or 1)', 'start', { type: 'number', min: 0, max: 1 })}
+          <label className="text-xs block">Highlight (comma-sep numbers) <input value={params.highlight || ''} onChange={e => set('highlight', e.target.value)} placeholder="e.g. 10,20,30" className="border rounded p-1 w-full ml-1" /></label>
+          <label className="text-xs flex items-center gap-1">Color <input type="color" value={params.highlightColor || '#fbbf24'} onChange={e => set('highlightColor', e.target.value)} className="ml-1 w-12 h-6 border rounded cursor-pointer" /></label>
+        </div>
+      );
+    case 'PLACE_VAL_CHART':
+      return (
+        <div className="space-y-1">
+          <label className="text-xs block">Columns (e.g. h,t,o) <input value={params.cols || 'h,t,o'} onChange={e => set('cols', e.target.value)} className="border rounded p-1 w-full ml-1" /></label>
+          {inp('Rows', 'rows', { type: 'number', min: 1, max: 4 })}
+          <label className="text-xs block">Values (comma-sep) <input value={params.value || ''} onChange={e => set('value', e.target.value)} placeholder="e.g. 3,4,5" className="border rounded p-1 w-full ml-1" /></label>
+        </div>
+      );
+    case 'CLOCK':
+      return (
+        <div className="space-y-1 flex flex-wrap gap-2">
+          {inp('Hour', 'hour', { type: 'number', min: 1, max: 12 })}
+          {inp('Minute', 'minute', { type: 'number', min: 0, max: 59 })}
+          <label className="text-xs flex items-center gap-1">
+            <input type="checkbox" checked={params.showNumbers !== 'false'} onChange={e => set('showNumbers', e.target.checked ? 'true' : 'false')} />
+            Show numbers
+          </label>
+        </div>
+      );
+    case 'OPEN_NUM_LINE':
+      return (
+        <div className="space-y-1">
+          {inp('Start', 'start', { type: 'number', step: 'any' })}
+          <label className="text-xs block">Jumps (comma-sep) <input value={params.jumps || '10,10,10'} onChange={e => set('jumps', e.target.value)} placeholder="e.g. 10,10,10" className="border rounded p-1 w-full ml-1" /></label>
+        </div>
+      );
+    case 'DECIMAL_LINE':
+      return (
+        <div className="space-y-1 flex flex-wrap gap-2">
+          {inp('Min', 'min', { type: 'number', step: 'any' })}
+          {inp('Max', 'max', { type: 'number', step: 'any' })}
+          {inp('Parts', 'parts', { type: 'number', min: 2, max: 20 })}
+          {inp('Mark (opt)', 'mark', { type: 'number', step: 'any' })}
+        </div>
+      );
+    case 'LINE_PLOT':
+      return (
+        <div className="space-y-1">
+          <div className="flex gap-2">{inp('Min', 'min', { type: 'number' })}{inp('Max', 'max', { type: 'number' })}</div>
+          <label className="text-xs block">Data (comma-sep) <input value={params.data || ''} onChange={e => set('data', e.target.value)} placeholder="e.g. 2,2,3,4,4,4,5" className="border rounded p-1 w-full ml-1" /></label>
+          {inp('Unit label', 'unit', { placeholder: 'inches' })}
+        </div>
+      );
+    case 'BAR_GRAPH':
+      return (
+        <div className="space-y-1">
+          <label className="text-xs block">Labels (comma-sep) <input value={params.labels || ''} onChange={e => set('labels', e.target.value)} placeholder="Mon,Tue,Wed,Thu" className="border rounded p-1 w-full ml-1" /></label>
+          <label className="text-xs block">Values (comma-sep) <input value={params.values || ''} onChange={e => set('values', e.target.value)} placeholder="4,7,3,5" className="border rounded p-1 w-full ml-1" /></label>
+          {inp('Max Y (auto if 0)', 'ymax', { type: 'number', min: 0 })}
+          {inp('Title (opt)', 'title')}
+          {inp('Y-axis label', 'yLabel', { placeholder: 'Count' })}
+        </div>
+      );
+    case 'FACT_TRIANGLE':
+      return (
+        <div className="space-y-1 flex flex-wrap gap-2">
+          {inp('Top', 'top', { type: 'number' })}
+          {inp('Left', 'left', { type: 'number' })}
+          {inp('Right', 'right', { type: 'number' })}
+          <label className="text-xs flex items-center gap-1">
+            Op <select value={params.op || '*'} onChange={e => set('op', e.target.value)} className="border rounded p-1 ml-1">
+              <option value="*">* (multiply)</option>
+              <option value="+">+ (add)</option>
+            </select>
+          </label>
+        </div>
+      );
+    case 'FACTOR_TREE':
+      return <div className="flex gap-2">{inp('Number', 'number', { type: 'number', min: 2, max: 100 })}</div>;
+    case 'PATTERN_TABLE':
+      return (
+        <div className="space-y-1">
+          {inp('Header 1', 'header1', { placeholder: 'Input' })}
+          {inp('Header 2', 'header2', { placeholder: 'Output' })}
+          <label className="text-xs block">Rows (1|3,2|6,3|9) <input value={params.rows || ''} onChange={e => set('rows', e.target.value)} className="border rounded p-1 w-full ml-1 font-mono text-xs" /></label>
+          {inp('Rule label', 'rule', { placeholder: '* 3' })}
+        </div>
+      );
+    case 'COORD_PLANE':
+      return (
+        <div className="space-y-1">
+          <div className="flex gap-2">{inp('X max', 'xmax', { type: 'number', min: 1, max: 10 })}{inp('Y max', 'ymax', { type: 'number', min: 1, max: 10 })}</div>
+          <label className="text-xs flex items-center gap-1">Quadrants <select value={params.quadrants || 1} onChange={e => set('quadrants', e.target.value)} className="border rounded p-1 ml-1">
+            <option value="1">1st only</option>
+            <option value="4">All 4</option>
+          </select></label>
+          <label className="text-xs block">Points (x,y;x,y) <input value={params.points || ''} onChange={e => set('points', e.target.value)} placeholder="1,2;3,4" className="border rounded p-1 w-full ml-1 font-mono text-xs" /></label>
+          <div className="flex gap-2">{inp('X label', 'xLabel', { placeholder: 'x' })}{inp('Y label', 'yLabel', { placeholder: 'y' })}</div>
+        </div>
+      );
+    case 'RULER':
+      return (
+        <div className="space-y-1">
+          {inp('Length (inches)', 'inches', { type: 'number', min: 1, max: 12 })}
+          <label className="text-xs flex items-center gap-1">Unit <select value={params.unit || 'in'} onChange={e => set('unit', e.target.value)} className="border rounded p-1 ml-1">
+            <option value="in">inches</option>
+            <option value="cm">centimeters</option>
+          </select></label>
+          <label className="text-xs flex items-center gap-1">
+            <input type="checkbox" checked={params.labelUnit !== 'false'} onChange={e => set('labelUnit', e.target.checked ? 'true' : 'false')} />
+            Show unit label
+          </label>
+        </div>
+      );
+
     case 'SHAPE_2D': {
       const SHAPE_OPTS = [
         { v: 'equilateral', l: 'Equilateral Triangle', n: 3 },
@@ -2264,6 +2970,20 @@ function paramsToMarker(type, params) {
     if (params.labels) m += ` labels=${enc(params.labels)}`;
     if (params.color && params.color !== '#dbeafe') m += ` color=${params.color}`;
     return m + ']';
+    if (type === 'FIVE_FRAME') return `[FIVE_FRAME: filled=${params.filled || 3}]`;
+  if (type === 'HUNDREDS_CHART') return `[HUNDREDS_CHART: start=${params.start || 1} highlight=${params.highlight || ''} highlightcolor=${params.highlightColor || '#fbbf24'}]`;
+  if (type === 'PLACE_VAL_CHART') return `[PLACE_VAL_CHART: cols=${params.cols || 'h,t,o'} rows=${params.rows || 2} value=${params.value || ''}]`;
+  if (type === 'CLOCK') return `[CLOCK: hour=${params.hour || 3} minute=${params.minute || 0} shownumbers=${params.showNumbers !== 'false' ? 'true' : 'false'}]`;
+  if (type === 'OPEN_NUM_LINE') return `[OPEN_NUM_LINE: start=${params.start ?? 0} jumps=${params.jumps || '10,10,10'}]`;
+  if (type === 'DECIMAL_LINE') return `[DECIMAL_LINE: min=${params.min ?? 0} max=${params.max ?? 1} parts=${params.parts || 10} mark=${params.mark || ''}]`;
+  if (type === 'LINE_PLOT') return `[LINE_PLOT: min=${params.min || 1} max=${params.max || 5} data=${params.data || ''} unit=${params.unit || 'inches'}]`;
+  if (type === 'BAR_GRAPH') return `[BAR_GRAPH: labels=${params.labels || ''} values=${params.values || ''} ymax=${params.ymax || 0} title=${params.title || ''} ylabel=${params.yLabel || 'Count'}]`;
+  if (type === 'FACT_TRIANGLE') return `[FACT_TRIANGLE: top=${params.top || 12} left=${params.left || 3} right=${params.right || 4} op=${params.op || '*'}]`;
+  if (type === 'FACTOR_TREE') return `[FACTOR_TREE: number=${params.number || 12}]`;
+  if (type === 'PATTERN_TABLE') return `[PATTERN_TABLE: header1=${params.header1 || 'Input'} header2=${params.header2 || 'Output'} rows=${params.rows || ''} rule=${params.rule || ''}]`;
+  if (type === 'COORD_PLANE') return `[COORD_PLANE: xmax=${params.xmax || 6} ymax=${params.ymax || 6} quadrants=${params.quadrants || 1} points=${params.points || ''} xlabel=${params.xLabel || 'x'} ylabel=${params.yLabel || 'y'}]`;
+  if (type === 'RULER') return `[RULER: inches=${params.inches || 6} unit=${params.unit || 'in'} measurefrom=${params.measureFrom || 0} measureto=${params.measureTo || 0} labelunit=${params.labelUnit !== 'false' ? 'true' : 'false'}]`;
+  
   }
   return null;
 }
@@ -5036,6 +5756,192 @@ function visualToHtml(marker) {
         </tbody>
       </table>
     </td></tr></tbody></table>`;
+  }
+
+  // ── FIVE FRAME ──
+  if (m.startsWith('FIVE_FRAME:')) {
+    const filled = Math.min(parseInt(gp('filled')) || 0, 5);
+    const sz = 24;
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    for (let i = 0; i < 5; i++) {
+      t += `<td style="border:1px solid #333;width:${sz}px;height:${sz}px;text-align:center;font-size:14pt;padding:0">${i < filled ? '●' : ''}</td>`;
+    }
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── HUNDREDS CHART ──
+  if (m.startsWith('HUNDREDS_CHART:')) {
+    const start = Math.max(0, Math.min(parseInt(gp('start')) || 1, 1));
+    const highlightStr = gp('highlight') || '';
+    const highlightSet = new Set(highlightStr ? highlightStr.split(',').map(s => parseInt(s.trim())) : []);
+    const color = gp('highlightcolor') || '#fbbf24';
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody>`;
+    for (let i = 0; i < 10; i++) {
+      t += '<tr>';
+      for (let j = 0; j < 10; j++) {
+        const num = start + i * 10 + j;
+        const bg = highlightSet.has(num) ? color : '#fff';
+        t += `<td style="border:1px solid #999;width:18px;height:18px;text-align:center;font-size:8pt;padding:0;background:${bg}">${num}</td>`;
+      }
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── PLACE VALUE CHART ──
+  if (m.startsWith('PLACE_VAL_CHART:')) {
+    const cols = (gp('cols') || 'h,t,o').split(',').map(s => s.trim());
+    const rows = Math.min(Math.max(parseInt(gp('rows')) || 2, 1), 4);
+    const values = (gp('value') || '').split(',').map(s => s.trim());
+    const labels = { h: 'Hundreds', t: 'Tens', o: 'Ones', th: 'Thousands', tth: 'TenThousands' };
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    cols.forEach(col => {
+      t += `<td style="border:2px solid #333;padding:4px 8px;text-align:center;background:#dbeafe;font-weight:bold;font-size:9pt">${labels[col] || col}</td>`;
+    });
+    t += '</tr>';
+    for (let r = 0; r < rows; r++) {
+      t += '<tr>';
+      cols.forEach((col, ci) => {
+        const val = values[ci] || '';
+        t += `<td style="border:1px solid #999;padding:4px 8px;text-align:center;width:40px;height:28px;font-size:11pt">${val}</td>`;
+      });
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── CLOCK ──
+  if (m.startsWith('CLOCK:')) {
+    const hour = Math.max(1, Math.min(parseInt(gp('hour')) || 3, 12));
+    const minute = Math.max(0, Math.min(parseInt(gp('minute')) || 0, 59));
+    return `<div style="text-align:center;margin:8px 0;font-size:14pt;font-family:monospace">Clock ${String(hour).padStart(2, ' ')}:${String(minute).padStart(2, '0')}</div>`;
+  }
+
+  // ── OPEN NUMBER LINE ──
+  if (m.startsWith('OPEN_NUM_LINE:')) {
+    const start = parseFloat(gp('start')) || 0;
+    const jumps = (gp('jumps') || '10,10,10').split(',').map(s => parseFloat(s.trim()) || 0);
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    let pos = start;
+    t += `<td style="border:none;text-align:center;font-size:9pt;padding:4px 4px;width:30px">${pos}</td>`;
+    jumps.forEach(j => {
+      pos += j;
+      t += `<td style="border:none;text-align:center;font-size:9pt;padding:4px 4px;width:30px">${pos}</td>`;
+    });
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── DECIMAL LINE ──
+  if (m.startsWith('DECIMAL_LINE:')) {
+    const min = parseFloat(gp('min')) || 0;
+    const max = parseFloat(gp('max')) || 1;
+    const parts = Math.max(parseInt(gp('parts')) || 10, 2);
+    let t = `<div style="margin:8px 0;font-family:monospace;font-size:10pt">`;
+    for (let i = 0; i <= parts; i++) {
+      const val = min + (i / parts) * (max - min);
+      t += val.toFixed(2) + '  ';
+    }
+    return t + '</div>';
+  }
+
+  // ── LINE PLOT ──
+  if (m.startsWith('LINE_PLOT:')) {
+    const min = parseInt(gp('min')) || 1;
+    const max = parseInt(gp('max')) || 5;
+    const data = (gp('data') || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const counts = {};
+    data.forEach(v => { if (v >= min && v <= max) counts[v] = (counts[v] || 0) + 1; });
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    for (let v = min; v <= max; v++) {
+      const cnt = counts[v] || 0;
+      t += `<td style="border:none;text-align:center;padding:2px 4px;font-size:9pt">${v}</td>`;
+    }
+    t += '</tr><tr>';
+    for (let v = min; v <= max; v++) {
+      const cnt = counts[v] || 0;
+      t += `<td style="border:none;text-align:center;padding:2px 4px;font-size:14pt">${Array(cnt).fill('×').join('')}</td>`;
+    }
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── BAR GRAPH ──
+  if (m.startsWith('BAR_GRAPH:')) {
+    const labels = (gp('labels') || '').split(',').map(s => s.trim()).filter(Boolean);
+    const values = (gp('values') || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const maxVal = Math.max(...values, 1);
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    labels.forEach((lbl, i) => {
+      const val = values[i] || 0;
+      const pct = Math.round((val / maxVal) * 100);
+      t += `<td style="border:none;padding:4px 2px;text-align:center;font-size:9pt;vertical-align:bottom"><div style="background:#2563eb;width:20px;height:${pct}px;margin:0 auto"></div>${lbl}</td>`;
+    });
+    return t + '</tr></tbody></table>';
+  }
+
+  // ── FACT TRIANGLE ──
+  if (m.startsWith('FACT_TRIANGLE:')) {
+    const top = gp('top') || '12';
+    const left = gp('left') || '3';
+    const right = gp('right') || '4';
+    const op = gp('op') || '*';
+    return `<div style="text-align:center;margin:8px 0;font-family:monospace;font-size:12pt">  ${top}<br>${left} △ ${right}<br>${op}</div>`;
+  }
+
+  // ── FACTOR TREE ──
+  if (m.startsWith('FACTOR_TREE:')) {
+    const num = parseInt(gp('number')) || 12;
+    const factorize = n => {
+      const factors = [];
+      let d = 2;
+      while (d * d <= n) { while (n % d === 0) { factors.push(d); n /= d; } d++; }
+      if (n > 1) factors.push(n);
+      return factors;
+    };
+    const primes = factorize(num);
+    return `<div style="margin:8px 0;font-family:monospace;font-size:10pt">${num} = ${primes.join(' × ')}</div>`;
+  }
+
+  // ── PATTERN TABLE ──
+  if (m.startsWith('PATTERN_TABLE:')) {
+    const h1 = gp('header1') || 'Input';
+    const h2 = gp('header2') || 'Output';
+    const rowsStr = gp('rows') || '';
+    const rows = rowsStr.split(',').map(s => {
+      const [a, b] = s.split('|');
+      return [a?.trim(), b?.trim()];
+    });
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody><tr>`;
+    t += `<td style="border:2px solid #333;padding:4px 8px;text-align:center;background:#e0e7ff;font-weight:bold;font-size:9pt">${h1}</td>`;
+    t += `<td style="border:2px solid #333;padding:4px 8px;text-align:center;background:#e0e7ff;font-weight:bold;font-size:9pt">${h2}</td></tr>`;
+    rows.forEach(([a, b]) => {
+      t += `<tr><td style="border:1px solid #999;padding:4px 8px;text-align:center;font-size:10pt">${a || ''}</td><td style="border:1px solid #999;padding:4px 8px;text-align:center;font-size:10pt">${b || ''}</td></tr>`;
+    });
+    return t + '</tbody></table>';
+  }
+
+  // ── COORDINATE PLANE ──
+  if (m.startsWith('COORD_PLANE:')) {
+    const xmax = parseInt(gp('xmax')) || 6;
+    const ymax = parseInt(gp('ymax')) || 6;
+    let t = `<table style="border-collapse:collapse;margin:8px 0;"><tbody>`;
+    for (let y = ymax; y >= 0; y--) {
+      t += '<tr>';
+      for (let x = 0; x <= xmax; x++) {
+        const isBorder = x === 0 || y === 0;
+        const bg = isBorder ? '#f0f0f0' : '#fff';
+        t += `<td style="border:1px solid #ccc;width:20px;height:20px;text-align:center;font-size:8pt;background:${bg}"></td>`;
+      }
+      t += '</tr>';
+    }
+    return t + '</tbody></table>';
+  }
+
+  // ── RULER ──
+  if (m.startsWith('RULER:')) {
+    const inches = Math.min(Math.max(parseInt(gp('inches')) || 6, 1), 12);
+    let t = '<div style="margin:8px 0;font-family:monospace;font-size:10pt">0';
+    for (let i = 1; i <= inches; i++) t += Array(15).fill(' ').join('') + i;
+    return t + '</div>';
   }
 
   // ── IMAGE placeholder ──
