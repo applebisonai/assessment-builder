@@ -5063,7 +5063,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                     })()}
                     {(() => {
                       const curType = qVizTypeP[idx] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
-                      return curType && curType !== 'none' ? (
+                      return (
                         <button type="button"
                           onClick={() => {
                             const t = qVizTypeP[idx];
@@ -5074,7 +5074,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                           className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
                           Save Visual
                         </button>
-                      ) : null;
+                      );
                     })()}
                     {q.marker && (
                       <div className="border-t border-blue-200 pt-1.5">
@@ -5169,18 +5169,16 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                             onChange={vp => setChoiceVizParamsP(prev => ({ ...prev, [`${idx}-${ci}`]: vp }))} />
                                         </div>
                                       )}
-                                      {(choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) && (choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) !== 'none' && (
-                                        <button type="button"
-                                          onClick={() => {
-                                            const t = choiceVizTypeP[`${idx}-${ci}`] || ch._vtype;
-                                            const p = choiceVizParamsP[`${idx}-${ci}`] || {};
-                                            updateChoiceVisualP(idx, q, ci, t, p);
-                                            setOpenChoiceVizP(null);
-                                          }}
-                                          className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
-                                          Save Visual
-                                        </button>
-                                      )}
+                                      <button type="button"
+                                        onClick={() => {
+                                          const t = choiceVizTypeP[`${idx}-${ci}`] || ch._vtype;
+                                          const p = choiceVizParamsP[`${idx}-${ci}`] || {};
+                                          updateChoiceVisualP(idx, q, ci, t, p);
+                                          setOpenChoiceVizP(null);
+                                        }}
+                                        className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
+                                        Save Visual
+                                      </button>
                                       {ch.choiceMarker && (
                                         <div className="border-t border-blue-200 pt-1.5">
                                           <p className="text-xs text-gray-400 mb-1">Preview:</p>
