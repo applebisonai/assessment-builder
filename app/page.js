@@ -75,7 +75,7 @@ function ArrayViz({ rows, cols }) {
 
 function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = false,
   hopSize = null, hopStart = null, hops = null, hopOp = '+',
-  labelFmt = 'decimal', labelAt = null }) {
+  labelFmt = 'decimal', labelAt = null, points = '' }) {
   const mn = parseFloat(min) || 0, mx = parseFloat(max) || 10;
   // step = number of equal divisions across the number line (e.g. 4 → ticks at min, 25%, 50%, 75%, max)
   const numDivs = Math.max(1, Math.min(Math.round(parseFloat(step) || 4), 60));
@@ -91,6 +91,18 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
   const customLabelVals = labelAt
     ? String(labelAt).split(',').map(s => parseFracStr(s)).filter(v => !isNaN(v))
     : null;
+
+  // Parse labeled points: "A:3,B:7" — letter label shown above, number hidden
+  const pointMap = {}; // value → letter
+  if (points && String(points).trim()) {
+    String(points).split(',').forEach(p => {
+      const [ltr, val] = p.split(':');
+      if (ltr && val !== undefined) pointMap[parseFloat(val.trim())] = ltr.trim().toUpperCase();
+    });
+  }
+  const pointVals = Object.keys(pointMap).map(Number);
+  const isPointTick = v => pointVals.some(pv => Math.abs(pv - v) < 0.001);
+  const pointLetter = v => { const pv = pointVals.find(pv => Math.abs(pv - v) < 0.001); return pv !== undefined ? pointMap[pv] : null; };
 
   // Format a tick value as a label string
   const fmtLabel = v => labelFmt === 'fraction' ? toFrac(v) : String(parseFloat(v.toFixed(4)));
@@ -181,17 +193,25 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
       {/* Ticks and labels */}
       {ticks.map((v, i) => {
         const x = toX(v);
+        const isWhole = Math.abs(v - Math.round(v)) < 0.001;
+        const tickH = isWhole ? 10 : 5;
         const isEnd = Math.abs(v - mn) < st * 0.01 || Math.abs(v - mx) < st * 0.01;
-        const showLabel = customLabelVals
+        const ptLetter = pointLetter(v);
+        const showLabel = !ptLetter && (customLabelVals
           ? customLabelVals.some(cv => Math.abs(cv - v) < st * 0.01)
-          : (showAll || isEnd);
+          : (showAll || isEnd));
         const label = fmtLabel(v);
-        // Fraction labels may contain a space (mixed number): render on two lines
         const isMixed = label.includes(' ') && labelFmt === 'fraction';
         const [fracWhole, fracPart] = isMixed ? label.split(' ') : [null, null];
         return (
           <g key={i}>
-            <line x1={x} y1={lineY - 7} x2={x} y2={lineY + 7} stroke="#334155" strokeWidth={1.5} />
+            <line x1={x} y1={lineY - tickH} x2={x} y2={lineY + tickH} stroke="#334155" strokeWidth={isWhole ? 2 : 1} />
+            {ptLetter && (
+              <>
+                <circle cx={x} cy={lineY} r={7} fill="#2563eb" />
+                <text x={x} y={lineY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">{ptLetter}</text>
+              </>
+            )}
             {showLabel && (
               isMixed ? (
                 <text x={x} textAnchor="middle" fill="#334155">
@@ -804,32 +824,6 @@ function PartialQuotients({ dividend, divisor, steps }) {
   );
 }
 
-function PlaceValueChart({ number }) {
-  const n = String(number || '0');
-  const digits = n.split('').reverse();
-  const places = ['ones', 'tens', 'hundreds', 'thousands', 'ten-thousands'].slice(0, Math.max(digits.length, 3));
-  const cols = places.length;
-  const cellW = 52, cellH = 40, labelH = 22;
-  const W = cols * cellW + 2;
-  return (
-    <svg width={W} height={labelH + cellH + 2} style={{ display: 'block' }}>
-      {places.slice().reverse().map((p, i) => {
-        const x = i * cellW + 1;
-        return (
-          <g key={i}>
-            <rect x={x} y={1} width={cellW} height={labelH} fill="#e2e8f0" stroke="#334155" strokeWidth={1} />
-            <text x={x + cellW / 2} y={labelH - 6} textAnchor="middle" fontSize={9} fill="#334155">{p}</text>
-            <rect x={x} y={labelH + 1} width={cellW} height={cellH} fill="white" stroke="#334155" strokeWidth={1} />
-            <text x={x + cellW / 2} y={labelH + cellH / 2 + 6} textAnchor="middle" fontSize={16} fontWeight="600" fill="#334155">
-              {digits[cols - 1 - i] || ''}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 function BarModel({ segments, label }) {
   const segs = (segments || '5,3').split(',').map(s => s.trim());
   const nums = segs.map(s => parseFloat(s) || 1);
@@ -1431,7 +1425,7 @@ function Clock({ hour = 3, minute = 0, showNumbers = true }) {
   );
 }
 
-function OpenNumLine({ start = 0, jumps = '10,10,10' }) {
+function OpenNumLine({ start = 0, jumps = '10,10,10', points = '' }) {
   const startVal = parseFloat(start) || 0;
   const jumpList = (jumps || '10,10,10').split(',').map(s => parseFloat(s.trim()) || 0);
   
@@ -1441,7 +1435,16 @@ function OpenNumLine({ start = 0, jumps = '10,10,10' }) {
     cumSum += j;
     labels.push(cumSum);
   });
-  
+
+  const pointMap2 = {};
+  if (points && String(points).trim()) {
+    String(points).split(',').forEach(p => {
+      const [ltr, val] = p.split(':');
+      if (ltr && val !== undefined) pointMap2[parseFloat(val.trim())] = ltr.trim().toUpperCase();
+    });
+  }
+  const ptLetter2 = v => { const k = Object.keys(pointMap2).map(Number).find(pv => Math.abs(pv - v) < 0.001); return k !== undefined ? pointMap2[k] : null; };
+
   const tickW = 40, pad = 20, arcH = 30;
   const w = pad * 2 + labels.length * tickW;
   const h = 100;
@@ -1453,12 +1456,20 @@ function OpenNumLine({ start = 0, jumps = '10,10,10' }) {
       
       {labels.map((lbl, i) => {
         const x = pad + i * tickW;
+        const isWhole = Math.abs(lbl - Math.round(lbl)) < 0.001;
+        const tickH = isWhole ? 8 : 4;
+        const ptLtr = ptLetter2(lbl);
         return (
           <g key={i}>
-            <line x1={x} y1={lineY - 5} x2={x} y2={lineY + 5} stroke="#334155" strokeWidth={1.5} />
-            <text x={x} y={lineY + 16} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">
-              {lbl}
-            </text>
+            <line x1={x} y1={lineY - tickH} x2={x} y2={lineY + tickH} stroke="#334155" strokeWidth={isWhole ? 2 : 1} />
+            {ptLtr ? (
+              <>
+                <circle cx={x} cy={lineY} r={7} fill="#2563eb" />
+                <text x={x} y={lineY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">{ptLtr}</text>
+              </>
+            ) : (
+              <text x={x} y={lineY + 16} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">{lbl}</text>
+            )}
           </g>
         );
       })}
@@ -1481,7 +1492,7 @@ function OpenNumLine({ start = 0, jumps = '10,10,10' }) {
   );
 }
 
-function DecimalLine({ min = 0, max = 1, parts = 10, mark = '' }) {
+function DecimalLine({ min = 0, max = 1, parts = 10, mark = '', points = '' }) {
   const minVal = parseFloat(min) || 0;
   const maxVal = parseFloat(max) || 1;
   const numParts = Math.max(parseInt(parts) || 10, 2);
@@ -1491,7 +1502,16 @@ function DecimalLine({ min = 0, max = 1, parts = 10, mark = '' }) {
   for (let i = 0; i <= numParts; i++) {
     ticks.push(minVal + (i / numParts) * (maxVal - minVal));
   }
-  
+
+  const pointMap3 = {};
+  if (points && String(points).trim()) {
+    String(points).split(',').forEach(p => {
+      const [ltr, val] = p.split(':');
+      if (ltr && val !== undefined) pointMap3[parseFloat(val.trim())] = ltr.trim().toUpperCase();
+    });
+  }
+  const ptLetter3 = v => { const k = Object.keys(pointMap3).map(Number).find(pv => Math.abs(pv - v) < 0.0001); return k !== undefined ? pointMap3[k] : null; };
+
   const tickW = 30, pad = 20, lineY = 40;
   const w = pad * 2 + ticks.length * tickW;
   const h = 80;
@@ -1502,14 +1522,24 @@ function DecimalLine({ min = 0, max = 1, parts = 10, mark = '' }) {
       
       {ticks.map((val, i) => {
         const x = pad + i * tickW;
+        const isWhole = Math.abs(val - Math.round(val)) < 0.001;
+        const tickH = isWhole ? 10 : 4;
         const isMarked = markVal !== null && Math.abs(val - markVal) < 0.001;
+        const ptLtr = ptLetter3(val);
         return (
           <g key={i}>
-            <line x1={x} y1={lineY - 4} x2={x} y2={lineY + 4} stroke="#334155" strokeWidth={1} />
-            {isMarked && <circle cx={x} cy={lineY} r={4} fill="#ef4444" />}
-            <text x={x} y={lineY + 16} textAnchor="middle" fontSize={9} fill="#334155">
-              {val.toFixed(2)}
-            </text>
+            <line x1={x} y1={lineY - tickH} x2={x} y2={lineY + tickH} stroke="#334155" strokeWidth={isWhole ? 2 : 1} />
+            {isMarked && !ptLtr && <circle cx={x} cy={lineY} r={4} fill="#ef4444" />}
+            {ptLtr ? (
+              <>
+                <circle cx={x} cy={lineY} r={7} fill="#2563eb" />
+                <text x={x} y={lineY + 4} textAnchor="middle" fontSize={10} fontWeight="bold" fill="white">{ptLtr}</text>
+              </>
+            ) : (
+              <text x={x} y={lineY + 16} textAnchor="middle" fontSize={9} fill="#334155">
+                {val.toFixed(2)}
+              </text>
+            )}
           </g>
         );
       })}
@@ -1861,7 +1891,7 @@ function parseVisualModel(marker) {
       hopSize={kv.hop_size} hopStart={kv.hop_start} hops={hops}
       hopOp={kv.hop_op || '+'}
       labelFmt={kv.labelfmt || 'decimal'}
-      labelAt={kv.show === 'custom' ? labelAt : null} />;
+      labelAt={kv.show === 'custom' ? labelAt : null} points={kv.points} />;
   }
   if (m.startsWith('[GROUPS:')) return <Groups groups={kv.groups} items={kv.items} />;
   if (m.startsWith('[TENS_FRAME:')) return <TensFrame filled={kv.filled} total={kv.total} />;
@@ -1970,8 +2000,8 @@ function parseVisualModel(marker) {
   if (m.startsWith('[HUNDREDS_CHART:')) return <HundredsChart start={kv.start} highlight={kv.highlight} highlightColor={kv.highlightcolor} />;
   if (m.startsWith('[PLACE_VAL_CHART:')) return <PlaceValueChart cols={kv.cols} rows={kv.rows} value={kv.value} />;
   if (m.startsWith('[CLOCK:')) return <Clock hour={kv.hour} minute={kv.minute} showNumbers={kv.shownumbers !== 'false'} />;
-  if (m.startsWith('[OPEN_NUM_LINE:')) return <OpenNumLine start={kv.start} jumps={kv.jumps} />;
-  if (m.startsWith('[DECIMAL_LINE:')) return <DecimalLine min={kv.min} max={kv.max} parts={kv.parts} mark={kv.mark} />;
+  if (m.startsWith('[OPEN_NUM_LINE:')) return <OpenNumLine start={kv.start} jumps={kv.jumps} points={kv.points} />;
+  if (m.startsWith('[DECIMAL_LINE:')) return <DecimalLine min={kv.min} max={kv.max} parts={kv.parts} mark={kv.mark} points={kv.points} />;
   if (m.startsWith('[LINE_PLOT:')) return <LinePlot min={kv.min} max={kv.max} data={kv.data} unit={kv.unit} />;
   if (m.startsWith('[BAR_GRAPH:')) return <BarGraph labels={kv.labels} values={kv.values} ymax={kv.ymax} title={kv.title} yLabel={kv.ylabel} />;
   if (m.startsWith('[FACT_TRIANGLE:')) return <FactTriangle top={kv.top} left={kv.left} right={kv.right} op={kv.op} />;
@@ -2254,7 +2284,7 @@ const VISUAL_TYPES_LIST = [
 const VISUAL_TYPE_DEFAULTS = {
   FRAC_STRIPS: { aw: '0', an: '3', d: '4', op: '+', bw: '0', bn: '3', d2: '', cross: '0', crossWh: '0' },
   ARRAY:       { rows: '3', cols: '4' },
-  NUM_LINE:    { min: '0', max: '10', step: '4' },
+  NUM_LINE:    { min: '0', max: '10', step: '4', points: '' },
   GROUPS:      { groups: '3', each: '4' },
   TENS_FRAME:  { filled: '7' },
   FRACTION:    { n: '3', d: '4' },
@@ -2267,8 +2297,8 @@ const VISUAL_TYPE_DEFAULTS = {
   HUNDREDS_CHART: { start: 1, highlight: '', highlightColor: '#fbbf24' },
   PLACE_VAL_CHART: { cols: 'h,t,o', rows: 2, value: '' },
   CLOCK:       { hour: 3, minute: 0, showNumbers: true },
-  OPEN_NUM_LINE: { start: 0, jumps: '10,10,10' },
-  DECIMAL_LINE: { min: 0, max: 1, parts: 10, mark: '' },
+  OPEN_NUM_LINE: { start: 0, jumps: '10,10,10', points: '' },
+  DECIMAL_LINE: { min: 0, max: 1, parts: 10, mark: '', points: '' },
   LINE_PLOT:   { min: 1, max: 5, data: '2,2,3,4,4,4,5', unit: 'inches' },
   BAR_GRAPH:   { labels: 'Mon,Tue,Wed,Thu', values: '4,7,3,5', ymax: 0, title: '', yLabel: 'Count' },
   FACT_TRIANGLE: { top: 12, left: 3, right: 4, op: '*' },
@@ -2372,6 +2402,12 @@ function VisualParamForm({ type, params, onChange }) {
               + − go left/right · × ÷ use start value · custom hops override all
             </p>
           )}
+          <div>
+            <label className="text-xs text-gray-500">Labeled Points (e.g. A:3,B:7)</label>
+            <input type="text" value={params.points || ''} onChange={e => onChange({ ...params, points: e.target.value })}
+              placeholder="A:3,B:7" className="border rounded p-1 text-xs w-full" />
+            <p className="text-xs text-gray-400">Letter:value pairs — point shown as labeled circle, number hidden</p>
+          </div>
         </div>
       );
     case 'GROUPS':
@@ -2717,6 +2753,12 @@ function VisualParamForm({ type, params, onChange }) {
         <div className="space-y-1">
           {inp('Start', 'start', { type: 'number', step: 'any' })}
           <label className="text-xs block">Jumps (comma-sep) <input value={params.jumps || '10,10,10'} onChange={e => set('jumps', e.target.value)} placeholder="e.g. 10,10,10" className="border rounded p-1 w-full ml-1" /></label>
+          <div>
+            <label className="text-xs text-gray-500">Labeled Points (e.g. A:3,B:7)</label>
+            <input type="text" value={params.points || ''} onChange={e => set('points', e.target.value)}
+              placeholder="A:3,B:7" className="border rounded p-1 text-xs w-full" />
+            <p className="text-xs text-gray-400">Letter:value pairs — point shown as labeled circle, number hidden</p>
+          </div>
         </div>
       );
     case 'DECIMAL_LINE':
@@ -2726,6 +2768,12 @@ function VisualParamForm({ type, params, onChange }) {
           {inp('Max', 'max', { type: 'number', step: 'any' })}
           {inp('Parts', 'parts', { type: 'number', min: 2, max: 20 })}
           {inp('Mark (opt)', 'mark', { type: 'number', step: 'any' })}
+          <div className="w-full">
+            <label className="text-xs text-gray-500">Labeled Points (e.g. A:0.3,B:0.7)</label>
+            <input type="text" value={params.points || ''} onChange={e => set('points', e.target.value)}
+              placeholder="A:0.3,B:0.7" className="border rounded p-1 text-xs w-full" />
+            <p className="text-xs text-gray-400">Letter:value pairs — point shown as labeled circle, number hidden</p>
+          </div>
         </div>
       );
     case 'LINE_PLOT':
@@ -2893,6 +2941,7 @@ function paramsToMarker(type, params) {
       m += ` show=custom labelat=${params.labelAt.replace(/\s+/g, '')}`;
     }
     if (params.labelFmt === 'fraction') m += ' labelfmt=fraction';
+    if (params.points) m += ` points=${params.points}`;
     return m + ']';
   }
   if (type === 'GROUPS') return `[GROUPS: groups=${params.groups || 3} items=${params.items || 4}]`;
@@ -2974,8 +3023,8 @@ function paramsToMarker(type, params) {
   if (type === 'HUNDREDS_CHART') return `[HUNDREDS_CHART: start=${params.start || 1} highlight=${params.highlight || ''} highlightcolor=${params.highlightColor || '#fbbf24'}]`;
   if (type === 'PLACE_VAL_CHART') return `[PLACE_VAL_CHART: cols=${params.cols || 'h,t,o'} rows=${params.rows || 2} value=${params.value || ''}]`;
   if (type === 'CLOCK') return `[CLOCK: hour=${params.hour || 3} minute=${params.minute || 0} shownumbers=${params.showNumbers !== 'false' ? 'true' : 'false'}]`;
-  if (type === 'OPEN_NUM_LINE') return `[OPEN_NUM_LINE: start=${params.start ?? 0} jumps=${params.jumps || '10,10,10'}]`;
-  if (type === 'DECIMAL_LINE') return `[DECIMAL_LINE: min=${params.min ?? 0} max=${params.max ?? 1} parts=${params.parts || 10} mark=${params.mark || ''}]`;
+  if (type === 'OPEN_NUM_LINE') return `[OPEN_NUM_LINE: start=${params.start ?? 0} jumps=${params.jumps || '10,10,10'} points=${params.points || ''}]`;
+  if (type === 'DECIMAL_LINE') return `[DECIMAL_LINE: min=${params.min ?? 0} max=${params.max ?? 1} parts=${params.parts || 10} mark=${params.mark || ''} points=${params.points || ''}]`;
   if (type === 'LINE_PLOT') return `[LINE_PLOT: min=${params.min || 1} max=${params.max || 5} data=${params.data || ''} unit=${params.unit || 'inches'}]`;
   if (type === 'BAR_GRAPH') return `[BAR_GRAPH: labels=${params.labels || ''} values=${params.values || ''} ymax=${params.ymax || 0} title=${params.title || ''} ylabel=${params.yLabel || 'Count'}]`;
   if (type === 'FACT_TRIANGLE') return `[FACT_TRIANGLE: top=${params.top || 12} left=${params.left || 3} right=${params.right || 4} op=${params.op || '*'}]`;
