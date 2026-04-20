@@ -5045,7 +5045,6 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         const p = VISUAL_TYPE_DEFAULTS[t] || {};
                         setQVizTypeP(prev => ({ ...prev, [idx]: t }));
                         setQVizParamsP(prev => ({ ...prev, [idx]: p }));
-                        updateQuestionVisualP(idx, q, t, p);
                       }}
                       className="border rounded p-1 text-xs w-full">
                       {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
@@ -5058,8 +5057,23 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                           <VisualParamForm
                             type={curType}
                             params={qVizParamsP[idx] || {}}
-                            onChange={vp => updateQuestionVisualP(idx, q, curType, vp)} />
+                            onChange={vp => setQVizParamsP(prev => ({ ...prev, [idx]: vp }))} />
                         </div>
+                      ) : null;
+                    })()}
+                    {(() => {
+                      const curType = qVizTypeP[idx] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
+                      return curType && curType !== 'none' ? (
+                        <button type="button"
+                          onClick={() => {
+                            const t = qVizTypeP[idx];
+                            const p = qVizParamsP[idx] || {};
+                            updateQuestionVisualP(idx, q, t, p);
+                            setOpenQVizP(null);
+                          }}
+                          className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
+                          Save Visual
+                        </button>
                       ) : null;
                     })()}
                     {q.marker && (
@@ -5142,7 +5156,6 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                           const p = VISUAL_TYPE_DEFAULTS[t] || {};
                                           setChoiceVizTypeP(prev => ({ ...prev, [k]: t }));
                                           setChoiceVizParamsP(prev => ({ ...prev, [k]: p }));
-                                          updateChoiceVisualP(idx, q, ci, t, p);
                                         }}
                                         className="border rounded p-1 text-xs w-full">
                                         {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
@@ -5153,8 +5166,20 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                           <VisualParamForm
                                             type={choiceVizTypeP[`${idx}-${ci}`] || ch._vtype}
                                             params={choiceVizParamsP[`${idx}-${ci}`] || ch._vparams || {}}
-                                            onChange={vp => updateChoiceVisualP(idx, q, ci, choiceVizTypeP[`${idx}-${ci}`] || ch._vtype, vp)} />
+                                            onChange={vp => setChoiceVizParamsP(prev => ({ ...prev, [`${idx}-${ci}`]: vp }))} />
                                         </div>
+                                      )}
+                                      {(choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) && (choiceVizTypeP[`${idx}-${ci}`] || ch._vtype) !== 'none' && (
+                                        <button type="button"
+                                          onClick={() => {
+                                            const t = choiceVizTypeP[`${idx}-${ci}`] || ch._vtype;
+                                            const p = choiceVizParamsP[`${idx}-${ci}`] || {};
+                                            updateChoiceVisualP(idx, q, ci, t, p);
+                                            setOpenChoiceVizP(null);
+                                          }}
+                                          className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
+                                          Save Visual
+                                        </button>
                                       )}
                                       {ch.choiceMarker && (
                                         <div className="border-t border-blue-200 pt-1.5">
