@@ -4930,7 +4930,8 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
           const hasCvOverride = cv !== undefined;
           const customImgSrc = hasCvOverride ? (cv.customImg || null) : (q._customImg || null);
           const imgScale = hasCvOverride ? (cv.imgScale ?? 1) : (q._imgScale ?? 1);
-          const markerToUse = hasCvOverride ? cv.marker : q.marker;
+          // Prefer q.marker if explicitly set by the new picker; fall back to customVisuals override
+          const markerToUse = (q.marker && q.marker.length > 0) ? q.marker : (hasCvOverride ? cv.marker : null);
           const visualComponent = customImgSrc
             ? <img src={customImgSrc} alt="custom"
                 style={{ maxWidth: `${Math.round(imgScale * 100)}%` }}
@@ -5076,16 +5077,23 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         </button>
                       );
                     })()}
+                    {(() => {
+                      const previewType = qVizTypeP[idx] || 'none';
+                      const previewParams = qVizParamsP[idx] || {};
+                      const previewMarker = previewType && previewType !== 'none' ? paramsToMarker(previewType, previewParams) : null;
+                      return previewMarker ? (
+                        <div className="border-t border-blue-200 pt-1.5">
+                          <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                          <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(previewMarker)}</ErrorBoundary></div>
+                        </div>
+                      ) : null;
+                    })()}
                     {q.marker && (
-                      <div className="border-t border-blue-200 pt-1.5">
-                        <p className="text-xs text-gray-400 mb-1">Preview:</p>
-                        <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(q.marker)}</ErrorBoundary></div>
-                        <button type="button" onClick={() => {
-                          onQuestionEdit(idx, { ...q, marker: null });
-                          setOpenQVizP(null);
-                        }}
-                          className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
-                      </div>
+                      <button type="button" onClick={() => {
+                        onQuestionEdit(idx, { ...q, marker: null });
+                        setOpenQVizP(null);
+                      }}
+                        className="text-xs text-red-400 hover:text-red-600">Remove visual</button>
                     )}
                   </div>
                 )}
@@ -5179,19 +5187,27 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                         className="w-full bg-blue-600 text-white text-xs rounded px-2 py-1 hover:bg-blue-700">
                                         Save Visual
                                       </button>
+                                      {(() => {
+                                        const k = `${idx}-${ci}`;
+                                        const pvType = choiceVizTypeP[k] || ch._vtype || 'none';
+                                        const pvParams = choiceVizParamsP[k] || ch._vparams || {};
+                                        const pvMarker = pvType && pvType !== 'none' ? paramsToMarker(pvType, pvParams) : null;
+                                        return pvMarker ? (
+                                          <div className="border-t border-blue-200 pt-1.5">
+                                            <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                                            <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(pvMarker)}</ErrorBoundary></div>
+                                          </div>
+                                        ) : null;
+                                      })()}
                                       {ch.choiceMarker && (
-                                        <div className="border-t border-blue-200 pt-1.5">
-                                          <p className="text-xs text-gray-400 mb-1">Preview:</p>
-                                          <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(ch.choiceMarker)}</ErrorBoundary></div>
-                                          <button type="button" onClick={() => clearChoiceVisualP(idx, q, ci)}
-                                            className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
-                                        </div>
+                                        <button type="button" onClick={() => clearChoiceVisualP(idx, q, ci)}
+                                          className="text-xs text-red-400 hover:text-red-600">Remove visual</button>
                                       )}
                                     </div>
                                   ) : (
                                     <button type="button"
                                       onClick={() => { setOpenChoiceVizP({ qIdx: idx, cIdx: ci }); setEditingIdx(null); setEditingChoiceIdx(null); }}
-                                      className={`text-xs px-1.5 py-0.5 rounded border opacity-0 group-hover/ch:opacity-100 transition-opacity ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700 !opacity-100' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                                      className={`text-xs px-1.5 py-0.5 rounded border opacity-50 hover:opacity-100 transition-opacity ${ch.choiceMarker ? 'bg-blue-100 border-blue-400 text-blue-700 !opacity-100' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
                                       📊
                                     </button>
                                   )}
