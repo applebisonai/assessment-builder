@@ -1986,14 +1986,14 @@ function parseVisualModel(marker) {
       steps={stepsM ? stepsM[1] : ''} />;
   }
   if (m.startsWith('[VOL_3D:')) {
-    const lblLM = m.match(/\blbl_l=(\S+)/);
-    const lblWM = m.match(/\blbl_w=(\S+)/);
-    const lblHM = m.match(/\blbl_h=(\S+)/);
+    const lblLM = m.match(/\blbl_l=([^\s\]]+)/);
+    const lblWM = m.match(/\blbl_w=([^\s\]]+)/);
+    const lblHM = m.match(/\blbl_h=([^\s\]]+)/);
     return <Volume3D l={kv.l} w={kv.w} h={kv.h} formula={kv.formula} cubelines={kv.cubelines}
       lbl_l={lblLM ? lblLM[1] : ''} lbl_w={lblWM ? lblWM[1] : ''} lbl_h={lblHM ? lblHM[1] : ''} />;
   }
   if (m.startsWith('[SHAPE_2D:')) {
-    const labelsM = m.match(/\blabels=(\S+)/);
+    const labelsM = m.match(/\blabels=([^\s\]]+)/);
     return <Shape2D shape={kv.shape} labels={labelsM ? labelsM[1] : ''} color={kv.color} />;
   }
   if (m.startsWith('[FIVE_FRAME:')) return <FiveFrame filled={kv.filled} />;
@@ -4019,9 +4019,9 @@ function markerToTypeParams(marker) {
       d2: kv('bd',''), cross: kv('cross','0'), crossWh: kv('crossWh','0') };
   }
   else if (type === 'VOL_3D') {
-    const lblLM = inner.match(/\blbl_l=(\S+)/);
-    const lblWM = inner.match(/\blbl_w=(\S+)/);
-    const lblHM = inner.match(/\blbl_h=(\S+)/);
+    const lblLM = inner.match(/\blbl_l=([^\s\]]+)/);
+    const lblWM = inner.match(/\blbl_w=([^\s\]]+)/);
+    const lblHM = inner.match(/\blbl_h=([^\s\]]+)/);
     params = { l: kv('l','3'), w: kv('w','2'), h: kv('h','2'), formula: kv('formula','yes'),
       cubelines: kv('cubelines','yes'),
       lbl_l: lblLM ? lblLM[1].replace(/_/g,' ') : '',
@@ -4029,7 +4029,7 @@ function markerToTypeParams(marker) {
       lbl_h: lblHM ? lblHM[1].replace(/_/g,' ') : '' };
   }
   else if (type === 'SHAPE_2D') {
-    const labelsM = inner.match(/\blabels=(\S+)/);
+    const labelsM = inner.match(/\blabels=([^\s\]]+)/);
     params = { shape: kv('shape','rectangle'),
       labels: labelsM ? labelsM[1].replace(/_/g,' ') : '',
       color: kv('color','#dbeafe') };
