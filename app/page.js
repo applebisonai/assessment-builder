@@ -3019,7 +3019,8 @@ function paramsToMarker(type, params) {
     if (params.labels) m += ` labels=${enc(params.labels)}`;
     if (params.color && params.color !== '#dbeafe') m += ` color=${params.color}`;
     return m + ']';
-    if (type === 'FIVE_FRAME') return `[FIVE_FRAME: filled=${params.filled || 3}]`;
+  }
+  if (type === 'FIVE_FRAME') return `[FIVE_FRAME: filled=${params.filled || 3}]`;
   if (type === 'HUNDREDS_CHART') return `[HUNDREDS_CHART: start=${params.start || 1} highlight=${params.highlight || ''} highlightcolor=${params.highlightColor || '#fbbf24'}]`;
   if (type === 'PLACE_VAL_CHART') return `[PLACE_VAL_CHART: cols=${params.cols || 'h,t,o'} rows=${params.rows || 2} value=${params.value || ''}]`;
   if (type === 'CLOCK') return `[CLOCK: hour=${params.hour || 3} minute=${params.minute || 0} shownumbers=${params.showNumbers !== 'false' ? 'true' : 'false'}]`;
@@ -3032,8 +3033,6 @@ function paramsToMarker(type, params) {
   if (type === 'PATTERN_TABLE') return `[PATTERN_TABLE: header1=${params.header1 || 'Input'} header2=${params.header2 || 'Output'} rows=${params.rows || ''} rule=${params.rule || ''}]`;
   if (type === 'COORD_PLANE') return `[COORD_PLANE: xmax=${params.xmax || 6} ymax=${params.ymax || 6} quadrants=${params.quadrants || 1} points=${params.points || ''} xlabel=${params.xLabel || 'x'} ylabel=${params.yLabel || 'y'}]`;
   if (type === 'RULER') return `[RULER: inches=${params.inches || 6} unit=${params.unit || 'in'} measurefrom=${params.measureFrom || 0} measureto=${params.measureTo || 0} labelunit=${params.labelUnit !== 'false' ? 'true' : 'false'}]`;
-  
-  }
   return null;
 }
 
