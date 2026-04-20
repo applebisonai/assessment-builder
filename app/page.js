@@ -5039,7 +5039,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                     </div>
                     <p className="text-xs text-blue-700 font-medium">Visual / Model:</p>
                     <select
-                      value={qVizTypeP[idx] || q.marker ? q.marker.split(':')[0].replace('[','') : 'none'}
+                      value={qVizTypeP[idx] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none')}
                       onChange={e => {
                         const t = e.target.value;
                         const p = VISUAL_TYPE_DEFAULTS[t] || {};
@@ -5051,14 +5051,17 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                       {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
                         <option key={vt.id} value={vt.id}>{vt.label}</option>)}
                     </select>
-                    {(qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')) && (qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')) !== 'none' && (
-                      <div className="bg-white rounded p-1.5 border border-blue-100">
-                        <VisualParamForm
-                          type={qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')}
-                          params={qVizParamsP[idx] || {}}
-                          onChange={vp => updateQuestionVisualP(idx, q, qVizTypeP[idx] || q.marker?.split(':')[0].replace('[',''), vp)} />
-                      </div>
-                    )}
+                    {(() => {
+                      const curType = qVizTypeP[idx] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
+                      return curType && curType !== 'none' ? (
+                        <div className="bg-white rounded p-1.5 border border-blue-100">
+                          <VisualParamForm
+                            type={curType}
+                            params={qVizParamsP[idx] || {}}
+                            onChange={vp => updateQuestionVisualP(idx, q, curType, vp)} />
+                        </div>
+                      ) : null;
+                    })()}
                     {q.marker && (
                       <div className="border-t border-blue-200 pt-1.5">
                         <p className="text-xs text-gray-400 mb-1">Preview:</p>
