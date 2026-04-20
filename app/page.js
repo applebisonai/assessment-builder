@@ -4785,6 +4785,9 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
   const [openChoiceVizP, setOpenChoiceVizP] = useState(null); // {qIdx, cIdx} for preview choice visual picker
   const [choiceVizTypeP, setChoiceVizTypeP] = useState({}); // keyed by "qIdx-cIdx"
   const [choiceVizParamsP, setChoiceVizParamsP] = useState({});
+  const [openQVizP, setOpenQVizP] = useState(null); // question origIdx or null
+  const [qVizTypeP, setQVizTypeP] = useState({});   // {origIdx: vtype}
+  const [qVizParamsP, setQVizParamsP] = useState({}); // {origIdx: vparams}
 
   const updateChoiceVisualP = (origIdx, q, ci, vtype, vparams) => {
     const marker = vtype && vtype !== 'none' ? paramsToMarker(vtype, vparams) : null;
@@ -4798,6 +4801,13 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
     const nc = q.choices.map((ch, i) => i === ci ? { ...ch, _vtype: 'none', _vparams: {}, choiceMarker: null } : ch);
     onQuestionEdit(origIdx, { ...q, choices: nc });
     setOpenChoiceVizP(null);
+  };
+
+  const updateQuestionVisualP = (origIdx, q, vtype, vparams) => {
+    const marker = vtype && vtype !== 'none' ? paramsToMarker(vtype, vparams) : null;
+    onQuestionEdit(origIdx, { ...q, marker });
+    setQVizTypeP(prev => ({ ...prev, [origIdx]: vtype }));
+    setQVizParamsP(prev => ({ ...prev, [origIdx]: vparams }));
   };
 
   const hasVersionB = questions.some(q => q.vb);
@@ -4981,7 +4991,86 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
 
                 {/* Visual model — shown below question number/text */}
                 {visualComponent && (
-                  <div className="my-2">{visualComponent}</div>
+                  <div className="my-2 flex items-start gap-2 group/qviz">
+                    <div className="flex-1">{visualComponent}</div>
+                    {onQuestionEdit && (
+                      <button type="button"
+                        title="Attach a visual/model to this question"
+                        onClick={() => {
+                          const key = idx;
+                          if (openQVizP === key) { setOpenQVizP(null); return; }
+                          const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
+                          const curVparams = qVizParamsP[key] || {};
+                          setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
+                          setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
+                          setOpenQVizP(key);
+                        }}
+                        className={`text-xs px-2 py-1 rounded border shrink-0 ${q.marker ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                        📊 {q.marker ? 'Edit Visual' : 'Add Visual'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!visualComponent && onQuestionEdit && (
+                  <div className="my-2">
+                    <button type="button"
+                      title="Attach a visual/model to this question"
+                      onClick={() => {
+                        const key = idx;
+                        if (openQVizP === key) { setOpenQVizP(null); return; }
+                        const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
+                        const curVparams = qVizParamsP[key] || {};
+                        setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
+                        setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
+                        setOpenQVizP(key);
+                      }}
+                      className={`text-xs px-2 py-1 rounded border ${q.marker ? 'bg-blue-100 border-blue-400 text-blue-700' : 'border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-300'}`}>
+                      📊 {q.marker ? 'Edit Visual' : 'Add Visual'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Question visual picker panel */}
+                {onQuestionEdit && openQVizP === idx && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1.5 mt-2 no-print">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-blue-800">Edit Question Visual</span>
+                      <button type="button" onClick={() => setOpenQVizP(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                    </div>
+                    <p className="text-xs text-blue-700 font-medium">Visual / Model:</p>
+                    <select
+                      value={qVizTypeP[idx] || q.marker ? q.marker.split(':')[0].replace('[','') : 'none'}
+                      onChange={e => {
+                        const t = e.target.value;
+                        const p = VISUAL_TYPE_DEFAULTS[t] || {};
+                        setQVizTypeP(prev => ({ ...prev, [idx]: t }));
+                        setQVizParamsP(prev => ({ ...prev, [idx]: p }));
+                        updateQuestionVisualP(idx, q, t, p);
+                      }}
+                      className="border rounded p-1 text-xs w-full">
+                      {VISUAL_TYPES_LIST.filter(vt => vt.id !== 'custom' && vt.id !== 'DRAW').map(vt =>
+                        <option key={vt.id} value={vt.id}>{vt.label}</option>)}
+                    </select>
+                    {(qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')) && (qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')) !== 'none' && (
+                      <div className="bg-white rounded p-1.5 border border-blue-100">
+                        <VisualParamForm
+                          type={qVizTypeP[idx] || q.marker?.split(':')[0].replace('[','')}
+                          params={qVizParamsP[idx] || {}}
+                          onChange={vp => updateQuestionVisualP(idx, q, qVizTypeP[idx] || q.marker?.split(':')[0].replace('[',''), vp)} />
+                      </div>
+                    )}
+                    {q.marker && (
+                      <div className="border-t border-blue-200 pt-1.5">
+                        <p className="text-xs text-gray-400 mb-1">Preview:</p>
+                        <div className="overflow-x-auto"><ErrorBoundary>{parseVisualModel(q.marker)}</ErrorBoundary></div>
+                        <button type="button" onClick={() => {
+                          onQuestionEdit(idx, { ...q, marker: null });
+                          setOpenQVizP(null);
+                        }}
+                          className="text-xs text-red-400 hover:text-red-600 mt-1">Remove visual</button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Choices */}
