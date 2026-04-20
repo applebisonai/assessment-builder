@@ -4259,9 +4259,20 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                   {openChoiceVizP?.qIdx === idx && openChoiceVizP?.cIdx === ci ? (
                                     <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-1.5 mt-1">
                                       <div className="flex items-center justify-between">
-                                        <span className="text-xs font-semibold text-blue-800">Visual for Choice {ch.letter}</span>
+                                        <span className="text-xs font-semibold text-blue-800">Edit Choice {ch.letter}</span>
                                         <button type="button" onClick={() => setOpenChoiceVizP(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
                                       </div>
+                                      {/* Choice text input */}
+                                      <input
+                                        type="text"
+                                        value={ch.text || ''}
+                                        onChange={e => {
+                                          const nc = q.choices.map((c, i) => i === ci ? { ...c, text: e.target.value } : c);
+                                          onQuestionEdit(idx, { ...q, choices: nc });
+                                        }}
+                                        placeholder={`Choice ${ch.letter} text (optional)`}
+                                        className="w-full border border-blue-200 rounded p-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                                      <p className="text-xs text-blue-700 font-medium">Visual / Model:</p>
                                       <select
                                         value={choiceVizTypeP[`${idx}-${ci}`] || ch._vtype || 'none'}
                                         onChange={e => {
