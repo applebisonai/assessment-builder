@@ -185,7 +185,7 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
   }
 
   return (
-    <svg width={W} height={totalH} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${W} ${totalH}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
       {/* Main line */}
       <line x1={pad} y1={lineY} x2={W - pad} y2={lineY} stroke="#334155" strokeWidth={2} />
       <polygon points={`${W - pad},${lineY} ${W - pad - 7},${lineY - 4} ${W - pad - 7},${lineY + 4}`} fill="#334155" />
@@ -1068,7 +1068,7 @@ function GridResponse({ cols = 4 }) {
   const cellW = 28, cellH = 28;
   const W = C * cellW + 2, H = 10 * cellH + 2;
   return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
       {Array.from({ length: C }, (_, ci) =>
         digits.map((d, ri) => (
           <g key={`${ci}-${ri}`}>
@@ -1092,7 +1092,7 @@ function NumberChart({ start = 1, end = 100, cols = 10, shaded = '' }) {
   const rows = Math.ceil(nums.length / C);
   const W = C * cellW + 2, H = rows * cellH + 2;
   return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
       {nums.map((n, i) => {
         const r = Math.floor(i / C), c = i % C;
         return (
@@ -1226,7 +1226,7 @@ function Shape2D({ shape, labels, color }) {
     const r = 64;
     const lbls = String(labels || '').split(',').map(s => decLbl(s.trim()));
     return (
-      <svg width={W} height={H} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
         <circle cx={cx} cy={cy} r={r} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
         {lbls[0] && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[0]}</text>}
         {lbls[1] && <text x={cx + r + 10} y={cy} textAnchor="start" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[1]}</text>}
@@ -1237,7 +1237,7 @@ function Shape2D({ shape, labels, color }) {
     const rx = 80, ry = 50;
     const lbls = String(labels || '').split(',').map(s => decLbl(s.trim()));
     return (
-      <svg width={W} height={H} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
         <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
         {lbls[0] && <text x={cx} y={cy - ry - 10} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[0]}</text>}
         {lbls[1] && <text x={cx + rx + 10} y={cy} textAnchor="start" dominantBaseline="middle" fontSize={11} fill="#1e40af" fontWeight="600">{lbls[1]}</text>}
@@ -1274,7 +1274,7 @@ function Shape2D({ shape, labels, color }) {
   });
 
   return (
-    <svg width={W} height={H} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', maxWidth: W }}>
       <polygon points={polyPts} fill={fillColor} stroke="#1e40af" strokeWidth={1.5} />
       {lblEls}
     </svg>
@@ -1451,9 +1451,9 @@ function OpenNumLine({ start = 0, jumps = '10,10,10', points = '' }) {
   const lineY = 60;
   
   return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', width: '100%', maxWidth: w }}>
       <line x1={pad} y1={lineY} x2={w - pad} y2={lineY} stroke="#334155" strokeWidth={1.5} />
-      
+
       {labels.map((lbl, i) => {
         const x = pad + i * tickW;
         const isWhole = Math.abs(lbl - Math.round(lbl)) < 0.001;
@@ -1517,9 +1517,9 @@ function DecimalLine({ min = 0, max = 1, parts = 10, mark = '', points = '' }) {
   const h = 80;
   
   return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', width: '100%', maxWidth: w }}>
       <line x1={pad} y1={lineY} x2={w - pad} y2={lineY} stroke="#334155" strokeWidth={1.5} />
-      
+
       {ticks.map((val, i) => {
         const x = pad + i * tickW;
         const isWhole = Math.abs(val - Math.round(val)) < 0.001;
@@ -1606,7 +1606,7 @@ function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, ti
   const graphH = baselineY - pad;
   
   return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', width: '100%', maxWidth: w }}>
       {title && <text x={w / 2} y={20} textAnchor="middle" fontSize={12} fontWeight="bold" fill="#334155">
         {title}
       </text>}
@@ -4992,7 +4992,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                 {/* Visual model — shown below question number/text */}
                 {visualComponent && (
                   <div className="my-2 flex items-start gap-2 group/qviz">
-                    <div className="flex-1">{visualComponent}</div>
+                    <div className="flex-1 min-w-0 overflow-x-auto">{visualComponent}</div>
                     {onQuestionEdit && (
                       <button type="button"
                         title="Attach a visual/model to this question"
