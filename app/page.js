@@ -109,7 +109,8 @@ function NumberLine({ min = 0, max = 10, step = 1, showAll = false, jumps = fals
 
   const hasArcs = jumps === true || jumps === 'true' || jumps === 'yes';
   const W = 340, pad = 28, lineY = hasArcs ? 58 : 38;
-  const totalH = hasArcs ? 84 : 56;
+  // totalH must fit labels drawn at lineY+20 (regular) or lineY+14+11 (mixed fractions)
+  const totalH = hasArcs ? 100 : 72;
   const toX = v => pad + ((v - mn) / (mx - mn)) * (W - 2 * pad);
 
   const op = String(hopOp || '+').trim();
