@@ -1599,7 +1599,9 @@ function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, ti
   const labelList = (labels || '').split(',').map(s => s.trim()).filter(Boolean);
   const valueList = (values || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
   
-  const maxVal = ymax ? Math.max(parseInt(ymax) || 10, Math.max(...valueList)) : Math.max(...valueList, 1);
+  // ymax may be a string '0' from the marker parser (truthy!) — always parse to int first
+  const ymaxNum = parseInt(ymax) || 0;
+  const maxVal = ymaxNum > 0 ? Math.max(ymaxNum, Math.max(...valueList, 1)) : Math.max(...valueList, 1);
   const barW = 28, gap = 16, pad = 40, barStart = pad + 20;
   const w = barStart + labelList.length * (barW + gap) + 20;
   const h = 280;
@@ -1641,6 +1643,7 @@ function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, ti
           <g key={i}>
             <rect x={x} y={y} width={barW} height={barH}
               fill="#3b82f6" stroke="#334155" strokeWidth={1} />
+            {val > 0 && <text x={x + barW / 2} y={y - 3} textAnchor="middle" fontSize={9} fill="#334155">{val}</text>}
             <text x={x + barW / 2} y={baselineY + 14} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155">
               {lbl}
             </text>
@@ -2004,7 +2007,15 @@ function parseVisualModel(marker) {
   if (m.startsWith('[OPEN_NUM_LINE:')) return <OpenNumLine start={kv.start} jumps={kv.jumps} points={kv.points} />;
   if (m.startsWith('[DECIMAL_LINE:')) return <DecimalLine min={kv.min} max={kv.max} parts={kv.parts} mark={kv.mark} points={kv.points} />;
   if (m.startsWith('[LINE_PLOT:')) return <LinePlot min={kv.min} max={kv.max} data={kv.data} unit={kv.unit} />;
-  if (m.startsWith('[BAR_GRAPH:')) return <BarGraph labels={kv.labels} values={kv.values} ymax={kv.ymax} title={kv.title} yLabel={kv.ylabel} />;
+  if (m.startsWith('[BAR_GRAPH:')) {
+    // Use regex extraction: labels/values contain commas; title may contain spaces
+    const bgLabels = (m.match(/\blabels=([^\s\]]+)/) || [])[1] || '';
+    const bgValues = (m.match(/\bvalues=([^\s\]]+)/) || [])[1] || '';
+    const bgYmax  = (m.match(/\bymax=(\d+)/) || [])[1] || '0';
+    const bgTitle = (m.match(/\btitle=([^\s\]]+)/) || [])[1] || '';
+    const bgYLabel= (m.match(/\bylabel=([^\s\]]+)/) || [])[1] || 'Count';
+    return <BarGraph labels={bgLabels} values={bgValues} ymax={bgYmax} title={bgTitle.replace(/_/g,' ')} yLabel={bgYLabel} />;
+  }
   if (m.startsWith('[FACT_TRIANGLE:')) return <FactTriangle top={kv.top} left={kv.left} right={kv.right} op={kv.op} />;
   if (m.startsWith('[FACTOR_TREE:')) return <FactorTree number={kv.number} />;
   if (m.startsWith('[PATTERN_TABLE:')) return <PatternTable header1={kv.header1} header2={kv.header2} rows={kv.rows} rule={kv.rule} />;
@@ -3028,7 +3039,7 @@ function paramsToMarker(type, params) {
   if (type === 'OPEN_NUM_LINE') return `[OPEN_NUM_LINE: start=${params.start ?? 0} jumps=${params.jumps || '10,10,10'} points=${params.points || ''}]`;
   if (type === 'DECIMAL_LINE') return `[DECIMAL_LINE: min=${params.min ?? 0} max=${params.max ?? 1} parts=${params.parts || 10} mark=${params.mark || ''} points=${params.points || ''}]`;
   if (type === 'LINE_PLOT') return `[LINE_PLOT: min=${params.min || 1} max=${params.max || 5} data=${params.data || ''} unit=${params.unit || 'inches'}]`;
-  if (type === 'BAR_GRAPH') return `[BAR_GRAPH: labels=${params.labels || ''} values=${params.values || ''} ymax=${params.ymax || 0} title=${params.title || ''} ylabel=${params.yLabel || 'Count'}]`;
+  if (type === 'BAR_GRAPH') return `[BAR_GRAPH: labels=${params.labels || ''} values=${params.values || ''} ymax=${parseInt(params.ymax) || 0} title=${(params.title || '').replace(/\s+/g,'_')} ylabel=${params.yLabel || 'Count'}]`;
   if (type === 'FACT_TRIANGLE') return `[FACT_TRIANGLE: top=${params.top || 12} left=${params.left || 3} right=${params.right || 4} op=${params.op || '*'}]`;
   if (type === 'FACTOR_TREE') return `[FACTOR_TREE: number=${params.number || 12}]`;
   if (type === 'PATTERN_TABLE') return `[PATTERN_TABLE: header1=${params.header1 || 'Input'} header2=${params.header2 || 'Output'} rows=${params.rows || ''} rule=${params.rule || ''}]`;
