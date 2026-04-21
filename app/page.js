@@ -3039,7 +3039,7 @@ function paramsToMarker(type, params) {
   if (type === 'OPEN_NUM_LINE') return `[OPEN_NUM_LINE: start=${params.start ?? 0} jumps=${params.jumps || '10,10,10'} points=${params.points || ''}]`;
   if (type === 'DECIMAL_LINE') return `[DECIMAL_LINE: min=${params.min ?? 0} max=${params.max ?? 1} parts=${params.parts || 10} mark=${params.mark || ''} points=${params.points || ''}]`;
   if (type === 'LINE_PLOT') return `[LINE_PLOT: min=${params.min || 1} max=${params.max || 5} data=${params.data || ''} unit=${params.unit || 'inches'}]`;
-  if (type === 'BAR_GRAPH') return `[BAR_GRAPH: labels=${params.labels || ''} values=${params.values || ''} ymax=${parseInt(params.ymax) || 0} title=${(params.title || '').replace(/\s+/g,'_')} ylabel=${params.yLabel || 'Count'}]`;
+  if (type === 'BAR_GRAPH') { const bgD = VISUAL_TYPE_DEFAULTS.BAR_GRAPH; return `[BAR_GRAPH: labels=${params.labels || bgD.labels} values=${params.values || bgD.values} ymax=${parseInt(params.ymax) || 0} title=${(params.title || '').replace(/\s+/g,'_')} ylabel=${params.yLabel || bgD.yLabel}]`; }
   if (type === 'FACT_TRIANGLE') return `[FACT_TRIANGLE: top=${params.top || 12} left=${params.left || 3} right=${params.right || 4} op=${params.op || '*'}]`;
   if (type === 'FACTOR_TREE') return `[FACTOR_TREE: number=${params.number || 12}]`;
   if (type === 'PATTERN_TABLE') return `[PATTERN_TABLE: header1=${params.header1 || 'Input'} header2=${params.header2 || 'Output'} rows=${params.rows || ''} rule=${params.rule || ''}]`;
@@ -5012,7 +5012,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                           const key = idx;
                           if (openQVizP === key) { setOpenQVizP(null); return; }
                           const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
-                          const curVparams = qVizParamsP[key] || {};
+                          const curVparams = qVizParamsP[key] || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
                           setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
                           setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
                           setOpenQVizP(key);
@@ -5031,7 +5031,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         const key = idx;
                         if (openQVizP === key) { setOpenQVizP(null); return; }
                         const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
-                        const curVparams = qVizParamsP[key] || {};
+                        const curVparams = qVizParamsP[key] || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
                         setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
                         setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
                         setOpenQVizP(key);
@@ -5191,7 +5191,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                                       <button type="button"
                                         onClick={() => {
                                           const t = choiceVizTypeP[`${idx}-${ci}`] || ch._vtype;
-                                          const p = choiceVizParamsP[`${idx}-${ci}`] || {};
+                                          const p = choiceVizParamsP[`${idx}-${ci}`] || ch._vparams || {};
                                           updateChoiceVisualP(idx, q, ci, t, p);
                                           setOpenChoiceVizP(null);
                                         }}
