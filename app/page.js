@@ -832,19 +832,28 @@ function BarModel({ segments, label }) {
   const H = 40, pad = 12;
   const colors = ['#93c5fd', '#86efac', '#fcd34d', '#f9a8d4', '#a5b4fc'];
 
-  // Compute proportional widths at base scale, then expand if any segment
-  // is too narrow to comfortably show its text label.
-  const BASE_W = 280;
-  const CHAR_PX = 8;   // approx px per character at fontSize 12
-  const MIN_SEG = 36;  // minimum segment width in pixels
-  const idealW = nums.map(v => (v / total) * BASE_W);
-  // Scale factor = max ratio of (required min width / ideal width) across all segs
-  let scale = 1;
-  segs.forEach((s, i) => {
-    const needed = Math.max(MIN_SEG, s.length * CHAR_PX + 14);
-    if (idealW[i] < needed) scale = Math.max(scale, needed / idealW[i]);
-  });
-  const W = Math.ceil(BASE_W * scale);
+  // Each segment gets at least MIN_SEG px, or enough for its text, whichever
+  // is larger — then proportional remainder fills any extra space.
+  // This is ADDITIVE not multiplicative, so extreme ratios (100 vs 1) don't
+  // create a 3500px SVG.
+  const CHAR_PX = 8;  // approx px per char at fontSize 12
+  const MIN_SEG = 40; // minimum segment width
+  const segMin = segs.map(s => Math.max(MIN_SEG, s.length * CHAR_PX + 14));
+  const minTotal = segMin.reduce((a, b) => a + b, 0);
+  // Total bar width: the larger of the min-sum or 280 (so short models still look full-width)
+  const W = Math.max(minTotal, 280);
+  // Within W, give each segment its proportional share but clamped to its minimum
+  const segW = (() => {
+    // First pass: assign minimums
+    const ws = [...segMin];
+    let remaining = W - minTotal;
+    if (remaining > 0) {
+      // Distribute remaining proportionally among segments
+      const propW = nums.map(v => (v / total) * remaining);
+      propW.forEach((pw, i) => { ws[i] += pw; });
+    }
+    return ws;
+  })();
 
   const svgW = W + pad;
   const svgH = H + (label ? 24 : 4);
@@ -852,12 +861,12 @@ function BarModel({ segments, label }) {
 
   return (
     <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block', width: '100%', maxWidth: svgW }}>
-      {nums.map((v, i) => {
-        const w = (v / total) * W;
+      {segs.map((seg, i) => {
+        const w = segW[i];
         const rect = (
           <g key={i}>
             <rect x={x} y={4} width={w} height={H} fill={colors[i % colors.length]} stroke="#334155" strokeWidth={1.5} />
-            <text x={x + w / 2} y={4 + H / 2 + 5} textAnchor="middle" fontSize={12} fontWeight="600" fill="#334155">{segs[i]}</text>
+            <text x={x + w / 2} y={4 + H / 2 + 5} textAnchor="middle" fontSize={12} fontWeight="600" fill="#334155">{seg}</text>
           </g>
         );
         x += w;
@@ -1622,25 +1631,27 @@ function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, ti
   const ymaxNum = parseInt(ymax) || 0;
   const maxVal = ymaxNum > 0 ? Math.max(ymaxNum, Math.max(...valueList, 1)) : Math.max(...valueList, 1);
   const barW = 28, gap = 16, pad = 40, barStart = pad + 20;
-  const w = barStart + labelList.length * (barW + gap) + 20;
+  // Drive everything off max(labels, values) so bars render even if label count < value count
+  const barCount = Math.max(labelList.length, valueList.length, 1);
+  const w = barStart + barCount * (barW + gap) + 20;
   const h = 280;
   const baselineY = h - pad;
   const graphH = baselineY - pad;
-  
+
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', width: '100%', maxWidth: w }}>
       {title && <text x={w / 2} y={20} textAnchor="middle" fontSize={12} fontWeight="bold" fill="#334155">
         {title}
       </text>}
-      
+
       <text x={10} y={h / 2} textAnchor="middle" fontSize={10} fontWeight="500" fill="#334155"
         transform={`rotate(-90 10 ${h / 2})`}>
         {yLabel}
       </text>
-      
+
       <line x1={pad} y1={pad} x2={pad} y2={baselineY} stroke="#334155" strokeWidth={2} />
       <line x1={pad} y1={baselineY} x2={w - 10} y2={baselineY} stroke="#334155" strokeWidth={2} />
-      
+
       {Array.from({ length: 5 }, (_, i) => {
         const val = Math.round(maxVal * i / 4);
         const y = baselineY - (i / 4) * graphH;
@@ -1651,13 +1662,14 @@ function BarGraph({ labels = 'Mon,Tue,Wed,Thu', values = '4,7,3,5', ymax = 0, ti
           </g>
         );
       })}
-      
-      {labelList.map((lbl, i) => {
+
+      {Array.from({ length: barCount }, (_, i) => {
+        const lbl = labelList[i] || '';
         const val = valueList[i] || 0;
         const barH = (val / maxVal) * graphH;
         const x = barStart + i * (barW + gap);
         const y = baselineY - barH;
-        
+
         return (
           <g key={i}>
             <rect x={x} y={y} width={barW} height={barH}
@@ -1891,6 +1903,79 @@ function Ruler({ inches = 6, unit = 'in', measureFrom = 0, measureTo = 0, labelU
   );
 }
 
+
+// ─── Parse visual marker string → param object (for restoring picker state) ───
+function markerToParams(marker) {
+  if (!marker) return null;
+  const m = marker.trim();
+  // Generic kv extraction (covers most types)
+  const kv = {};
+  const kvPart = m.replace(/^\[[\w_]+:/, '').replace(/\]$/, '');
+  kvPart.split(/\s+/).forEach(part => {
+    const eq = part.indexOf('=');
+    if (eq > 0) kv[part.slice(0, eq).toLowerCase()] = part.slice(eq + 1);
+  });
+
+  if (m.startsWith('[BAR_MODEL:')) {
+    const inner = m.replace(/^\[BAR_MODEL:\s*/, '').replace(/\]$/, '');
+    const pipeIdx = inner.indexOf('|');
+    const vals = (pipeIdx >= 0 ? inner.slice(0, pipeIdx) : inner).trim();
+    const labelMatch = inner.match(/label=(.+)/);
+    return { vals, label: labelMatch ? labelMatch[1] : '' };
+  }
+  if (m.startsWith('[BAR_GRAPH:')) {
+    return {
+      labels: (m.match(/\blabels=([^\s\]]+)/) || [])[1] || '',
+      values: (m.match(/\bvalues=([^\s\]]+)/) || [])[1] || '',
+      ymax:   parseInt((m.match(/\bymax=(\d+)/) || [])[1] || '0') || 0,
+      title:  ((m.match(/\btitle=([^\s\]]+)/) || [])[1] || '').replace(/_/g, ' '),
+      yLabel: (m.match(/\bylabel=([^\s\]]+)/) || [])[1] || 'Count',
+    };
+  }
+  if (m.startsWith('[VOL_3D:')) {
+    const lblL = (m.match(/\blbl_l=([^\s\]]+)/) || [])[1] || '';
+    const lblW = (m.match(/\blbl_w=([^\s\]]+)/) || [])[1] || '';
+    const lblH = (m.match(/\blbl_h=([^\s\]]+)/) || [])[1] || '';
+    return { l: kv.l || '3', w: kv.w || '2', h: kv.h || '2',
+      formula: kv.formula || 'yes', cubelines: kv.cubelines || 'yes',
+      showlabels: kv.showlabels || 'yes',
+      lbl_l: lblL.replace(/_/g,' '), lbl_w: lblW.replace(/_/g,' '), lbl_h: lblH.replace(/_/g,' ') };
+  }
+  if (m.startsWith('[NUM_LINE:')) {
+    return { min: kv.min||'0', max: kv.max||'10', step: kv.step||'1',
+      show: kv.show||'', jumps: kv.jumps||'', hop_size: kv.hop_size||'', hop_start: kv.hop_start||'', hops: kv.hops||'' };
+  }
+  if (m.startsWith('[ARRAY:'))       return { rows: kv.rows||'3', cols: kv.cols||'4' };
+  if (m.startsWith('[GROUPS:'))      return { groups: kv.groups||'3', items: kv.items||'4' };
+  if (m.startsWith('[TENS_FRAME:'))  return { filled: kv.filled||'5', total: kv.total||'10' };
+  if (m.startsWith('[NUM_BOND:'))    return { whole: kv.whole||'10', part1: kv.part1||'6', part2: kv.part2||'4' };
+  if (m.startsWith('[FRACTION:')) {
+    const nd = m.match(/\[FRACTION:\s*(\d+)\/(\d+)/);
+    return nd ? { n: nd[1], d: nd[2] } : {};
+  }
+  if (m.startsWith('[FRAC_CIRCLE:')) {
+    const nd = m.match(/\[FRAC_CIRCLE:\s*(\d+)\/(\d+)/);
+    return nd ? { n: nd[1], d: nd[2] } : {};
+  }
+  if (m.startsWith('[MIXED_NUM:'))   return { whole: kv.whole||'1', n: kv.n||'1', d: kv.d||'3' };
+  if (m.startsWith('[MIXED_CIRCLE:'))return { whole: kv.whole||'1', n: kv.n||'1', d: kv.d||'3' };
+  if (m.startsWith('[AREA_MODEL:'))  { const vM=(m.match(/\bvals=([^\s\]]+)/)||[])[1]||''; return { cols: kv.cols||'20,3', rows: kv.rows||'10,4', vals: vM }; }
+  if (m.startsWith('[BASE10:'))      return { hundreds: kv.hundreds||'0', tens: kv.tens||'2', ones: kv.ones||'3' };
+  if (m.startsWith('[SHAPE_2D:'))    { const lblM=(m.match(/\blabels=([^\s\]]+)/)||[])[1]||''; return { shape: kv.shape||'rectangle', labels: lblM.replace(/_/g,' '), color: kv.color||'#dbeafe' }; }
+  if (m.startsWith('[CLOCK:'))       return { hour: kv.hour||'3', minute: kv.minute||'0', showNumbers: kv.shownumbers||'true' };
+  if (m.startsWith('[FIVE_FRAME:'))  return { filled: kv.filled||'3' };
+  if (m.startsWith('[HUNDREDS_CHART:')) return { start: kv.start||'1', highlight: kv.highlight||'', highlightColor: kv.highlightcolor||'#fbbf24' };
+  if (m.startsWith('[PLACE_VAL_CHART:')) return { cols: kv.cols||'h,t,o', rows: kv.rows||'2', value: kv.value||'' };
+  if (m.startsWith('[OPEN_NUM_LINE:')) return { start: kv.start||'0', jumps: kv.jumps||'10,10,10', points: kv.points||'' };
+  if (m.startsWith('[DECIMAL_LINE:')) return { min: kv.min||'0', max: kv.max||'1', parts: kv.parts||'10', mark: kv.mark||'', points: kv.points||'' };
+  if (m.startsWith('[LINE_PLOT:'))   return { min: kv.min||'1', max: kv.max||'5', data: kv.data||'', unit: kv.unit||'inches' };
+  if (m.startsWith('[FACT_TRIANGLE:')) return { top: kv.top||'12', left: kv.left||'3', right: kv.right||'4', op: kv.op||'*' };
+  if (m.startsWith('[FACTOR_TREE:')) return { number: kv.number||'12' };
+  if (m.startsWith('[COORD_PLANE:')) return { xmax: kv.xmax||'5', ymax: kv.ymax||'5', quadrants: kv.quadrants||'1', points: kv.points||'' };
+  if (m.startsWith('[RULER:'))       return { inches: kv.inches||'6', unit: kv.unit||'in', measureFrom: kv.measurefrom||'', measureTo: kv.measureto||'', labelUnit: kv.labelunit||'true' };
+  // fallback: return kv directly
+  return Object.keys(kv).length > 0 ? kv : null;
+}
 
 // ─── Parse visual marker string → React component ─────────────────────────────
 function parseVisualModel(marker) {
@@ -5038,7 +5123,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                           const key = idx;
                           if (openQVizP === key) { setOpenQVizP(null); return; }
                           const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
-                          const curVparams = qVizParamsP[key] || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
+                          const curVparams = qVizParamsP[key] || (q.marker ? markerToParams(q.marker) : null) || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
                           setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
                           setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
                           setOpenQVizP(key);
@@ -5057,7 +5142,7 @@ function AssessmentPreview({ questions, onEdit, customVisuals, onQuestionEdit, o
                         const key = idx;
                         if (openQVizP === key) { setOpenQVizP(null); return; }
                         const curVtype = qVizTypeP[key] || (q.marker ? q.marker.split(':')[0].replace('[','') : 'none');
-                        const curVparams = qVizParamsP[key] || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
+                        const curVparams = qVizParamsP[key] || (q.marker ? markerToParams(q.marker) : null) || (curVtype && curVtype !== 'none' ? VISUAL_TYPE_DEFAULTS[curVtype] || {} : {});
                         setQVizTypeP(prev => ({ ...prev, [key]: curVtype }));
                         setQVizParamsP(prev => ({ ...prev, [key]: curVparams }));
                         setOpenQVizP(key);
