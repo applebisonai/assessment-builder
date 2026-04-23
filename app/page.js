@@ -829,11 +829,29 @@ function BarModel({ segments, label }) {
   const segs = (segments || '5,3').split(',').map(s => s.trim());
   const nums = segs.map(s => parseFloat(s) || 1);
   const total = nums.reduce((a, b) => a + b, 0);
-  const W = 280, H = 40, pad = 12;
-  let x = pad;
+  const H = 40, pad = 12;
   const colors = ['#93c5fd', '#86efac', '#fcd34d', '#f9a8d4', '#a5b4fc'];
+
+  // Compute proportional widths at base scale, then expand if any segment
+  // is too narrow to comfortably show its text label.
+  const BASE_W = 280;
+  const CHAR_PX = 8;   // approx px per character at fontSize 12
+  const MIN_SEG = 36;  // minimum segment width in pixels
+  const idealW = nums.map(v => (v / total) * BASE_W);
+  // Scale factor = max ratio of (required min width / ideal width) across all segs
+  let scale = 1;
+  segs.forEach((s, i) => {
+    const needed = Math.max(MIN_SEG, s.length * CHAR_PX + 14);
+    if (idealW[i] < needed) scale = Math.max(scale, needed / idealW[i]);
+  });
+  const W = Math.ceil(BASE_W * scale);
+
+  const svgW = W + pad;
+  const svgH = H + (label ? 24 : 4);
+  let x = pad;
+
   return (
-    <svg width={W + pad} height={H + (label ? 24 : 4)} style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block', width: '100%', maxWidth: svgW }}>
       {nums.map((v, i) => {
         const w = (v / total) * W;
         const rect = (
@@ -1110,12 +1128,13 @@ function NumberChart({ start = 1, end = 100, cols = 10, shaded = '' }) {
 }
 
 // ─── Volume 3D (Rectangular Prism) ────────────────────────────────────────────
-function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
+function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines, showlabels }) {
   const L = Math.min(Math.max(parseInt(l) || 3, 1), 8);
   const W = Math.min(Math.max(parseInt(w) || 2, 1), 8);
   const H = Math.min(Math.max(parseInt(h) || 2, 1), 8);
   const showFormula = formula !== 'no';
   const showCubeLines = cubelines !== 'no';
+  const showDimLabels = showlabels !== 'no';
   const s = 22;
   const c = Math.sqrt(3) / 2; // cos30° ≈ 0.866 for true isometric
 
@@ -1183,9 +1202,9 @@ function Volume3D({ l, w, h, formula, lbl_l, lbl_w, lbl_h, cubelines }) {
       <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(L,W).toFixed(1)} y2={Y(L,W,0).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
       <line x1={X(0,W).toFixed(1)} y1={Y(0,W,0).toFixed(1)} x2={X(0,W).toFixed(1)} y2={Y(0,W,H).toFixed(1)} stroke="#93c5fd" strokeWidth={1} strokeDasharray="4,3"/>
       {/* Dimension labels */}
-      <text x={lx.toFixed(1)} y={ly.toFixed(1)} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{decLbl(lbl_l) || `l = ${L}`}</text>
-      <text x={wx.toFixed(1)} y={wy.toFixed(1)} textAnchor="start" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_w) || `w = ${W}`}</text>
-      <text x={hx.toFixed(1)} y={hy.toFixed(1)} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>
+      {showDimLabels && <text x={lx.toFixed(1)} y={ly.toFixed(1)} textAnchor="middle" fontSize={11} fill="#1e40af" fontWeight="600">{decLbl(lbl_l) || `l = ${L}`}</text>}
+      {showDimLabels && <text x={wx.toFixed(1)} y={wy.toFixed(1)} textAnchor="start" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_w) || `w = ${W}`}</text>}
+      {showDimLabels && <text x={hx.toFixed(1)} y={hy.toFixed(1)} textAnchor="end" fontSize={11} fill="#1e40af" fontWeight="600" dominantBaseline="middle">{decLbl(lbl_h) || `h = ${H}`}</text>}
       {showFormula && (
         <text x={svgW / 2} y={svgH - 6} textAnchor="middle" fontSize={11} fill="#1e3a8a">
           {`V = ${L} × ${W} × ${H} = ${vol} cubic units`}
@@ -1994,6 +2013,7 @@ function parseVisualModel(marker) {
     const lblWM = m.match(/\blbl_w=([^\s\]]+)/);
     const lblHM = m.match(/\blbl_h=([^\s\]]+)/);
     return <Volume3D l={kv.l} w={kv.w} h={kv.h} formula={kv.formula} cubelines={kv.cubelines}
+      showlabels={kv.showlabels}
       lbl_l={lblLM ? lblLM[1] : ''} lbl_w={lblWM ? lblWM[1] : ''} lbl_h={lblHM ? lblHM[1] : ''} />;
   }
   if (m.startsWith('[SHAPE_2D:')) {
@@ -2303,7 +2323,7 @@ const VISUAL_TYPE_DEFAULTS = {
   FRAC_CIRCLE: { n: '3', d: '4' },
   BASE10:      { hundreds: '1', tens: '2', ones: '3' },
   BAR_MODEL:   { vals: '4,4,4,4', label: '?' },
-  VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', cubelines: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
+  VOL_3D:      { l: '3', w: '2', h: '2', formula: 'yes', cubelines: 'yes', showlabels: 'yes', lbl_l: '', lbl_w: '', lbl_h: '' },
   SHAPE_2D:    { shape: 'rectangle', labels: '', color: '#dbeafe' },
   FIVE_FRAME:  { filled: 3 },
   HUNDREDS_CHART: { start: 1, highlight: '', highlightColor: '#fbbf24' },
@@ -2720,6 +2740,11 @@ function VisualParamForm({ type, params, onChange }) {
             {inp('Label H', 'lbl_h', { placeholder: 'e.g. 2 cm' })}
           </div>
           <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={params.showlabels !== 'no'}
+              onChange={e => set('showlabels', e.target.checked ? 'yes' : 'no')} />
+            Show dimension labels
+          </label>
+          <label className="text-xs flex items-center gap-2">
             <input type="checkbox" checked={params.formula !== 'no'}
               onChange={e => set('formula', e.target.checked ? 'yes' : 'no')} />
             Show volume formula
@@ -3020,6 +3045,7 @@ function paramsToMarker(type, params) {
     const enc = s => String(s || '').replace(/\s+/g, '_');
     let m = `[VOL_3D: l=${params.l || 3} w=${params.w || 2} h=${params.h || 2} formula=${params.formula || 'yes'}`;
     if (params.cubelines === 'no') m += ` cubelines=no`;
+    if (params.showlabels === 'no') m += ` showlabels=no`;
     if (params.lbl_l) m += ` lbl_l=${enc(params.lbl_l)}`;
     if (params.lbl_w) m += ` lbl_w=${enc(params.lbl_w)}`;
     if (params.lbl_h) m += ` lbl_h=${enc(params.lbl_h)}`;
