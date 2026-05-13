@@ -882,22 +882,30 @@ function BarModel({ segments, label }) {
 // ─── Fraction Strips ──────────────────────────────────────────────────────────
 // Shows stacked fraction strips for addition (two colored groups) or
 // subtraction (one group with ✕ marks on crossed-out sections).
+// regroup='yes': in subtraction, the last whole of Group A is converted into
+// a full row of dA/dA fraction sections (shown in orange) stacked above the
+// original fraction row — models borrowing/regrouping for mixed-number subtraction.
 function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
-                      op = '+', cross = 0, crossWh = 0 }) {
+                      op = '+', cross = 0, crossWh = 0, regroup = 'no' }) {
   const dA   = Math.max(2, Math.min(parseInt(d)      || 4,  24));
   const dB   = d2 ? Math.max(2, Math.min(parseInt(d2) || dA, 24)) : dA;
   const aWh  = Math.max(0, Math.min(parseInt(aw)     || 0,  10));
   const aFr  = Math.max(0, Math.min(parseInt(an)     || 0,  dA));
   const bWh  = Math.max(0, Math.min(parseInt(bw)     || 0,  10));
   const bFr  = Math.max(0, Math.min(parseInt(bn)     || 0,  dB));
-  const xN   = Math.max(0, Math.min(parseInt(cross)  || 0,  dA));
+  const xN   = Math.max(0, Math.min(parseInt(cross)  || 0,  dA * 2));
   const xWh  = Math.max(0, Math.min(parseInt(crossWh)|| 0,  aWh));
-  const isAdd  = String(op).trim() === '+';
+  const isAdd     = String(op).trim() === '+';
+  // Regroup: only meaningful for subtraction when there is at least one whole to borrow from
+  const doRegroup = String(regroup) === 'yes' && !isAdd && aWh > 0;
   const showB  = bWh > 0 || bFr > 0;
   const hasRHS = isAdd || showB;
 
   const SW = 220, SH = 26, GY = 3, PAD = 10, OPW = hasRHS ? 34 : 0;
 
+  // Row counts are the same with or without regroup:
+  //   Normal:   aWh whole rows + 1 fraction row = aWh + 1
+  //   Regroup:  (aWh-1) whole rows + 1 orange regrouped-whole row + 1 blue fraction row = aWh + 1
   const aRows  = aWh + 1;
   const bRows  = hasRHS ? bWh + 1 : 0;
   const maxRows = Math.max(aRows, bRows, 1);
@@ -905,23 +913,50 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
   const svgH = PAD + maxRows * (SH + GY) - GY + PAD;
 
   // Color palettes
-  const CA = { fill: '#bfdbfe', stroke: '#3b82f6', text: '#1e40af' }; // blue
-  const CB = { fill: '#fde68a', stroke: '#d97706', text: '#92400e' }; // amber
-  const CX = { fill: '#fecaca', stroke: '#dc2626', text: '#991b1b' }; // red (crossed)
-  const CE = { fill: '#f1f5f9', stroke: '#cbd5e1', text: '#94a3b8' }; // empty
+  const CA = { fill: '#bfdbfe', stroke: '#3b82f6', text: '#1e40af' }; // blue (Group A)
+  const CB = { fill: '#fde68a', stroke: '#d97706', text: '#92400e' }; // amber (Group B)
+  const CX = { fill: '#fecaca', stroke: '#dc2626', text: '#991b1b' }; // red (crossed out)
+  const CE = { fill: '#f1f5f9', stroke: '#cbd5e1', text: '#94a3b8' }; // empty/white
+  const CG = { fill: '#fed7aa', stroke: '#f97316', text: '#9a3412' }; // orange (regrouped whole)
 
-  // Adaptive fraction label size based on section width
   const secFS = (den) => {
     const w = SW / den;
     return w >= 28 ? 9 : w >= 20 ? 8 : w >= 14 ? 7 : 6;
   };
 
-  // Render one group: wholes + fraction strip
-  // xStart: fraction section index from which filled sections become crossed (−1 = none)
-  // xWhStart: whole strip index from which strips become crossed (−1 = none)
+  // ── Shared fraction-row renderer ─────────────────────────────────────────
+  const renderFracRow = (ox, fy, num, den, col, xStart) => {
+    const secW = SW / den;
+    const fSize = secFS(den);
+    return Array.from({ length: den }, (_, i) => {
+      const sx      = ox + i * secW;
+      const filled  = i < num;
+      const crossed = xStart >= 0 && i >= xStart && i < num;
+      const bg  = crossed ? CX.fill   : filled ? col.fill   : CE.fill;
+      const bdr = crossed ? CX.stroke : filled ? col.stroke : CE.stroke;
+      return (
+        <g key={`f${i}`}>
+          <rect x={sx} y={fy} width={secW} height={SH} fill={bg} stroke={bdr} strokeWidth={1} />
+          {filled && (
+            <text x={sx + secW / 2} y={fy + SH / 2 + 3} textAnchor="middle"
+              fontSize={fSize} fill={crossed ? CX.text : col.text}>
+              {`1/${den}`}
+            </text>
+          )}
+          {crossed && (
+            <>
+              <line x1={sx+3} y1={fy+3} x2={sx+secW-3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+              <line x1={sx+secW-3} y1={fy+3} x2={sx+3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+            </>
+          )}
+        </g>
+      );
+    });
+  };
+
+  // ── Standard group renderer (Group B, Group A without regroup) ────────────
   const renderGroup = (ox, oy, wholes, num, den, col, xStart, xWhStart = -1) => {
     const els = [];
-    // Whole strips
     for (let i = 0; i < wholes; i++) {
       const y = oy + i * (SH + GY);
       const wholeCrossed = xWhStart >= 0 && i >= xWhStart;
@@ -941,53 +976,90 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
         </g>
       );
     }
-    // Fraction row (always shown — empty sections are white)
-    const fy  = oy + wholes * (SH + GY);
-    const secW = SW / den;
-    const fSize = secFS(den);
-    for (let i = 0; i < den; i++) {
-      const sx      = ox + i * secW;
-      const filled  = i < num;
-      const crossed = xStart >= 0 && i >= xStart && i < num;
-      const bg  = crossed ? CX.fill : filled ? col.fill : CE.fill;
-      const bdr = crossed ? CX.stroke : filled ? col.stroke : CE.stroke;
+    els.push(...renderFracRow(ox, oy + wholes * (SH + GY), num, den, col, xStart));
+    return els;
+  };
+
+  // ── Group A renderer — handles both normal and regrouped layouts ──────────
+  const renderGroupA = (ox, oy) => {
+    if (!doRegroup) {
+      const crossStart   = !isAdd && xN  > 0 ? aFr - xN  : -1;
+      const crossWhStart = !isAdd && xWh > 0 ? aWh - xWh : -1;
+      return renderGroup(ox, oy, aWh, aFr, dA, CA, crossStart, crossWhStart);
+    }
+
+    // ── Regrouped layout ──────────────────────────────────────────────────
+    // Row layout (same total rows as normal):
+    //   rows 0 .. aWh-2  : remaining whole strips (blue)
+    //   row  aWh-1       : regrouped whole as dA/dA fraction sections (orange)
+    //   row  aWh         : original fraction sections (blue)
+    //
+    // Cross-out: xN sections from the RIGHTMOST of the combined total.
+    //   The blue row contributes aFr sections (at the "bottom").
+    //   The orange row contributes dA sections (just above).
+    //   Cross from blue first, then spill into orange if xN > aFr.
+    const xFromBlue   = Math.min(xN, aFr);
+    const xFromOrange = Math.max(0, xN - aFr);
+    const normalWholes = aWh - 1;
+    const els = [];
+
+    // Normal whole strips
+    for (let i = 0; i < normalWholes; i++) {
+      const y = oy + i * (SH + GY);
       els.push(
-        <g key={`f${i}`}>
-          <rect x={sx} y={fy} width={secW} height={SH} fill={bg} stroke={bdr} strokeWidth={1} />
-          {filled && (
-            <text x={sx + secW / 2} y={fy + SH / 2 + 3} textAnchor="middle"
-              fontSize={fSize} fill={crossed ? CX.text : col.text}>
-              {`1/${den}`}
-            </text>
-          )}
-          {crossed && (
+        <g key={`w${i}`}>
+          <rect x={ox} y={y} width={SW} height={SH} fill={CA.fill} stroke={CA.stroke} strokeWidth={1.5} rx={2} />
+          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={CA.text}>1</text>
+        </g>
+      );
+    }
+
+    // Orange row: the regrouped whole = dA/dA fraction sections
+    const ry = oy + normalWholes * (SH + GY);
+    const secW = SW / dA;
+    const fSize = secFS(dA);
+    // Small "1=" label left of the orange row (fits in the PAD)
+    els.push(
+      <text key="rg-lbl" x={ox - 4} y={ry + SH / 2 + 3} textAnchor="end"
+        fontSize={7} fontWeight="700" fill={CG.text}>1=</text>
+    );
+    for (let i = 0; i < dA; i++) {
+      const sx = ox + i * secW;
+      const isCrossed = xFromOrange > 0 && i >= (dA - xFromOrange);
+      const bg  = isCrossed ? CX.fill   : CG.fill;
+      const bdr = isCrossed ? CX.stroke : CG.stroke;
+      els.push(
+        <g key={`rg${i}`}>
+          <rect x={sx} y={ry} width={secW} height={SH} fill={bg} stroke={bdr} strokeWidth={1} />
+          <text x={sx + secW / 2} y={ry + SH / 2 + 3} textAnchor="middle"
+            fontSize={fSize} fill={isCrossed ? CX.text : CG.text}>{`1/${dA}`}</text>
+          {isCrossed && (
             <>
-              <line x1={sx+3} y1={fy+3} x2={sx+secW-3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
-              <line x1={sx+secW-3} y1={fy+3} x2={sx+3} y2={fy+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+              <line x1={sx+3} y1={ry+3} x2={sx+secW-3} y2={ry+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
+              <line x1={sx+secW-3} y1={ry+3} x2={sx+3} y2={ry+SH-3} stroke="#dc2626" strokeWidth={1.5}/>
             </>
           )}
         </g>
       );
     }
+
+    // Blue row: original aFr fraction sections (may have cross-out from blue portion)
+    const fy = ry + SH + GY;
+    const blueXStart = xFromBlue > 0 ? aFr - xFromBlue : -1;
+    els.push(...renderFracRow(ox, fy, aFr, dA, CA, blueXStart));
+
     return els;
   };
 
-  // For subtraction: cross out the last xN filled fraction sections + last xWh whole strips
-  const crossStart  = !isAdd && xN  > 0 ? aFr - xN  : -1;
-  const crossWhStart = !isAdd && xWh > 0 ? aWh - xWh : -1;
-
   return (
     <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block', maxWidth: '100%' }}>
-      {/* Group A */}
-      {renderGroup(PAD, PAD, aWh, aFr, dA, CA, crossStart, crossWhStart)}
-      {/* Operator */}
+      {renderGroupA(PAD, PAD)}
       {hasRHS && (
         <text x={PAD + SW + OPW / 2} y={svgH / 2 + 7}
           textAnchor="middle" fontSize={24} fontWeight="800" fill="#475569">
           {isAdd ? '+' : '−'}
         </text>
       )}
-      {/* Group B (addition, or subtraction showing subtrahend) */}
       {hasRHS && renderGroup(PAD + SW + OPW, PAD, bWh, bFr, dB, CB, -1)}
     </svg>
   );
@@ -1973,6 +2045,9 @@ function markerToParams(marker) {
   if (m.startsWith('[FACTOR_TREE:')) return { number: kv.number||'12' };
   if (m.startsWith('[COORD_PLANE:')) return { xmax: kv.xmax||'5', ymax: kv.ymax||'5', quadrants: kv.quadrants||'1', points: kv.points||'' };
   if (m.startsWith('[RULER:'))       return { inches: kv.inches||'6', unit: kv.unit||'in', measureFrom: kv.measurefrom||'', measureTo: kv.measureto||'', labelUnit: kv.labelunit||'true' };
+  if (m.startsWith('[FRAC_STRIPS:')) return { aw: kv.aw||'0', an: kv.an||'0', d: kv.d||'4', op: kv.op||'+',
+    bw: kv.bw||'0', bn: kv.bn||'0', d2: kv.bd||'',
+    cross: kv.cross||'0', crossWh: kv.crosswh||'0', regroup: kv.regroup||'no' };
   // fallback: return kv directly
   return Object.keys(kv).length > 0 ? kv : null;
 }
@@ -2049,7 +2124,7 @@ function parseVisualModel(marker) {
   }
   if (m.startsWith('[FRAC_STRIPS:')) {
     return <FracStrips aw={kv.aw} an={kv.an} d={kv.d} bw={kv.bw} bn={kv.bn} d2={kv.bd}
-      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crosswh} />;
+      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crosswh} regroup={kv.regroup} />;
   }
   if (m.startsWith('[TAPE:')) {
     const pipeIdx = kvPart.indexOf('|');
@@ -2726,15 +2801,34 @@ function VisualParamForm({ type, params, onChange }) {
             </div>
             {!isAddOp && <p className="text-xs text-slate-400">Leave at 0 to hide Group B; set values to show the subtrahend separately.</p>}
           </div>
+          {/* Regroup option (subtraction only) */}
+          {!isAddOp && (
+            <div className="bg-orange-50 border border-orange-200 rounded p-2 space-y-1">
+              <label className="text-xs flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={params.regroup === 'yes'}
+                  onChange={e => set('regroup', e.target.checked ? 'yes' : 'no')} />
+                <span className="font-semibold text-orange-800">Regroup one whole</span>
+              </label>
+              <p className="text-xs text-orange-700">
+                Converts the last whole strip into a full row of 1/{params.d || 4} fraction sections (orange).
+                Stacked above the original fraction row — models borrowing for mixed-number subtraction.
+              </p>
+            </div>
+          )}
           {/* Cross out (subtraction only) */}
           {!isAddOp && (
             <div className="space-y-2 bg-red-50 rounded p-2">
               <p className="text-xs font-semibold text-red-700">Cross out (subtraction):</p>
               <div className="flex gap-2 flex-wrap">
-                {inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })}
+                {!params.regroup || params.regroup !== 'yes'
+                  ? inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })
+                  : null}
                 {inp('Fraction sections to ✕', 'cross', { type:'number', min:0, placeholder:'0' })}
               </div>
-              <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red ✕ marks.</p>
+              {params.regroup === 'yes'
+                ? <p className="text-xs text-slate-500">With regroup on, crosses out the last N fraction sections starting from the blue row upward into the orange row.</p>
+                : <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red ✕ marks.</p>
+              }
             </div>
           )}
         </div>
@@ -3112,6 +3206,7 @@ function paramsToMarker(type, params) {
       m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
       if (params.d2 && params.d2 !== params.d) m += ` bd=${params.d2}`;
     } else {
+      if (params.regroup === 'yes') m += ` regroup=yes`;
       if (params.crossWh && parseInt(params.crossWh) > 0) m += ` crossWh=${params.crossWh}`;
       if (params.cross && parseInt(params.cross) > 0) m += ` cross=${params.cross}`;
       if (params.bw || params.bn) m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
