@@ -882,11 +882,12 @@ function BarModel({ segments, label }) {
 // ─── Fraction Strips ──────────────────────────────────────────────────────────
 // Shows stacked fraction strips for addition (two colored groups) or
 // subtraction (one group with ✕ marks on crossed-out sections).
-// regroup='yes': in subtraction, the last whole of Group A is converted into
-// a full row of dA/dA fraction sections (shown in orange) stacked above the
-// original fraction row — models borrowing/regrouping for mixed-number subtraction.
+// regroup='yes':  last whole → orange dA/dA row + original blue fraction row.
+// regroupX='yes': also show the borrowed whole strip with a red ✕ BEFORE the
+//                 orange row, making the two-step borrow explicit:
+//                   [crossed-out whole] → [orange dA/dA] stacked above [blue fraction]
 function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
-                      op = '+', cross = 0, crossWh = 0, regroup = 'no' }) {
+                      op = '+', cross = 0, crossWh = 0, regroup = 'no', regroupX = 'no' }) {
   const dA   = Math.max(2, Math.min(parseInt(d)      || 4,  24));
   const dB   = d2 ? Math.max(2, Math.min(parseInt(d2) || dA, 24)) : dA;
   const aWh  = Math.max(0, Math.min(parseInt(aw)     || 0,  10));
@@ -895,18 +896,20 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
   const bFr  = Math.max(0, Math.min(parseInt(bn)     || 0,  dB));
   const xN   = Math.max(0, Math.min(parseInt(cross)  || 0,  dA * 2));
   const xWh  = Math.max(0, Math.min(parseInt(crossWh)|| 0,  aWh));
-  const isAdd     = String(op).trim() === '+';
-  // Regroup: only meaningful for subtraction when there is at least one whole to borrow from
-  const doRegroup = String(regroup) === 'yes' && !isAdd && aWh > 0;
+  const isAdd       = String(op).trim() === '+';
+  const doRegroup   = String(regroup)  === 'yes' && !isAdd && aWh > 0;
+  // showCrossedWhole: show the borrowed whole strip with red X before the orange row
+  const showCrossedWhole = doRegroup && String(regroupX) === 'yes';
   const showB  = bWh > 0 || bFr > 0;
   const hasRHS = isAdd || showB;
 
   const SW = 220, SH = 26, GY = 3, PAD = 10, OPW = hasRHS ? 34 : 0;
 
-  // Row counts are the same with or without regroup:
-  //   Normal:   aWh whole rows + 1 fraction row = aWh + 1
-  //   Regroup:  (aWh-1) whole rows + 1 orange regrouped-whole row + 1 blue fraction row = aWh + 1
-  const aRows  = aWh + 1;
+  // Row counts:
+  //   Normal:      aWh + 1
+  //   Regroup:     (aWh-1) + [orange] + [blue] = aWh + 1        (same)
+  //   Regroup+X:   (aWh-1) + [crossed whole] + [orange] + [blue] = aWh + 2  (+1 extra)
+  const aRows  = aWh + 1 + (showCrossedWhole ? 1 : 0);
   const bRows  = hasRHS ? bWh + 1 : 0;
   const maxRows = Math.max(aRows, bRows, 1);
   const svgW = PAD + SW + (hasRHS ? OPW + SW : 0) + PAD;
@@ -1014,8 +1017,23 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
       );
     }
 
+    // Optional: crossed-out whole strip showing the borrowed whole BEFORE the orange row
+    let rowOffset = 0;
+    if (showCrossedWhole) {
+      const cy = oy + normalWholes * (SH + GY);
+      els.push(
+        <g key="crossed-whole">
+          <rect x={ox} y={cy} width={SW} height={SH} fill={CX.fill} stroke={CX.stroke} strokeWidth={1.5} rx={2} />
+          <text x={ox + SW / 2} y={cy + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={CX.text}>1</text>
+          <line x1={ox+4}    y1={cy+4}    x2={ox+SW-4} y2={cy+SH-4} stroke="#dc2626" strokeWidth={2}/>
+          <line x1={ox+SW-4} y1={cy+4}    x2={ox+4}    y2={cy+SH-4} stroke="#dc2626" strokeWidth={2}/>
+        </g>
+      );
+      rowOffset = 1; // orange row shifts down by 1 extra row
+    }
+
     // Orange row: the regrouped whole = dA/dA fraction sections
-    const ry = oy + normalWholes * (SH + GY);
+    const ry = oy + (normalWholes + rowOffset) * (SH + GY);
     const secW = SW / dA;
     const fSize = secFS(dA);
     // Small "1=" label left of the orange row (fits in the PAD)
@@ -2047,7 +2065,8 @@ function markerToParams(marker) {
   if (m.startsWith('[RULER:'))       return { inches: kv.inches||'6', unit: kv.unit||'in', measureFrom: kv.measurefrom||'', measureTo: kv.measureto||'', labelUnit: kv.labelunit||'true' };
   if (m.startsWith('[FRAC_STRIPS:')) return { aw: kv.aw||'0', an: kv.an||'0', d: kv.d||'4', op: kv.op||'+',
     bw: kv.bw||'0', bn: kv.bn||'0', d2: kv.bd||'',
-    cross: kv.cross||'0', crossWh: kv.crosswh||'0', regroup: kv.regroup||'no' };
+    cross: kv.cross||'0', crossWh: kv.crosswh||'0',
+    regroup: kv.regroup||'no', regroupX: kv.regroupx||'no' };
   // fallback: return kv directly
   return Object.keys(kv).length > 0 ? kv : null;
 }
@@ -2124,7 +2143,8 @@ function parseVisualModel(marker) {
   }
   if (m.startsWith('[FRAC_STRIPS:')) {
     return <FracStrips aw={kv.aw} an={kv.an} d={kv.d} bw={kv.bw} bn={kv.bn} d2={kv.bd}
-      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crosswh} regroup={kv.regroup} />;
+      op={kv.op || '+'} cross={kv.cross} crossWh={kv.crosswh}
+      regroup={kv.regroup} regroupX={kv.regroupx} />;
   }
   if (m.startsWith('[TAPE:')) {
     const pipeIdx = kvPart.indexOf('|');
@@ -2803,16 +2823,29 @@ function VisualParamForm({ type, params, onChange }) {
           </div>
           {/* Regroup option (subtraction only) */}
           {!isAddOp && (
-            <div className="bg-orange-50 border border-orange-200 rounded p-2 space-y-1">
+            <div className="bg-orange-50 border border-orange-200 rounded p-2 space-y-1.5">
               <label className="text-xs flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={params.regroup === 'yes'}
-                  onChange={e => set('regroup', e.target.checked ? 'yes' : 'no')} />
+                  onChange={e => {
+                    const v = e.target.checked ? 'yes' : 'no';
+                    set('regroup', v);
+                    if (v === 'no') set('regroupX', 'no');
+                  }} />
                 <span className="font-semibold text-orange-800">Regroup one whole</span>
               </label>
               <p className="text-xs text-orange-700">
-                Converts the last whole strip into a full row of 1/{params.d || 4} fraction sections (orange).
-                Stacked above the original fraction row — models borrowing for mixed-number subtraction.
+                Converts the last whole strip into a full row of 1/{params.d || 4} sections (orange)
+                stacked above the original fraction row — models borrowing for mixed-number subtraction.
               </p>
+              {params.regroup === 'yes' && (
+                <label className="text-xs flex items-center gap-2 ml-3 cursor-pointer">
+                  <input type="checkbox" checked={params.regroupX === 'yes'}
+                    onChange={e => set('regroupX', e.target.checked ? 'yes' : 'no')} />
+                  <span className="text-orange-900">
+                    Show the borrowed whole with ✕ cross-out (above the orange row)
+                  </span>
+                </label>
+              )}
             </div>
           )}
           {/* Cross out (subtraction only) */}
@@ -3207,6 +3240,7 @@ function paramsToMarker(type, params) {
       if (params.d2 && params.d2 !== params.d) m += ` bd=${params.d2}`;
     } else {
       if (params.regroup === 'yes') m += ` regroup=yes`;
+      if (params.regroup === 'yes' && params.regroupX === 'yes') m += ` regroupX=yes`;
       if (params.crossWh && parseInt(params.crossWh) > 0) m += ` crossWh=${params.crossWh}`;
       if (params.cross && parseInt(params.cross) > 0) m += ` cross=${params.cross}`;
       if (params.bw || params.bn) m += ` bw=${params.bw || 0} bn=${params.bn || 0}`;
