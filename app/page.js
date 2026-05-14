@@ -1004,15 +1004,28 @@ function FracStrips({ aw = 1, an = 3, d = 4, bw = 1, bn = 3, d2 = null,
     const xFromBlue   = Math.min(xN, aFr);
     const xFromOrange = Math.max(0, xN - aFr);
     const normalWholes = aWh - 1;
+    // crossWh can also cross the normal whole strips in regroup mode
+    // (models subtracting the whole-number part of the subtrahend separately)
+    const normalCrossStart = xWh > 0 ? Math.max(0, normalWholes - xWh) : -1;
     const els = [];
 
-    // Normal whole strips
+    // Normal whole strips (with optional cross-out for subtrahend's whole part)
     for (let i = 0; i < normalWholes; i++) {
       const y = oy + i * (SH + GY);
+      const wholeCrossed = normalCrossStart >= 0 && i >= normalCrossStart;
+      const wFill   = wholeCrossed ? CX.fill   : CA.fill;
+      const wStroke = wholeCrossed ? CX.stroke : CA.stroke;
+      const wText   = wholeCrossed ? CX.text   : CA.text;
       els.push(
         <g key={`w${i}`}>
-          <rect x={ox} y={y} width={SW} height={SH} fill={CA.fill} stroke={CA.stroke} strokeWidth={1.5} rx={2} />
-          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={CA.text}>1</text>
+          <rect x={ox} y={y} width={SW} height={SH} fill={wFill} stroke={wStroke} strokeWidth={1.5} rx={2} />
+          <text x={ox + SW / 2} y={y + SH / 2 + 4} textAnchor="middle" fontSize={13} fontWeight="700" fill={wText}>1</text>
+          {wholeCrossed && (
+            <>
+              <line x1={ox+4}    y1={y+4}    x2={ox+SW-4} y2={y+SH-4} stroke="#dc2626" strokeWidth={2}/>
+              <line x1={ox+SW-4} y1={y+4}    x2={ox+4}    y2={y+SH-4} stroke="#dc2626" strokeWidth={2}/>
+            </>
+          )}
         </g>
       );
     }
@@ -2853,13 +2866,11 @@ function VisualParamForm({ type, params, onChange }) {
             <div className="space-y-2 bg-red-50 rounded p-2">
               <p className="text-xs font-semibold text-red-700">Cross out (subtraction):</p>
               <div className="flex gap-2 flex-wrap">
-                {!params.regroup || params.regroup !== 'yes'
-                  ? inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })
-                  : null}
+                {inp('Whole #s to ✕', 'crossWh', { type:'number', min:0, placeholder:'0' })}
                 {inp('Fraction sections to ✕', 'cross', { type:'number', min:0, placeholder:'0' })}
               </div>
               {params.regroup === 'yes'
-                ? <p className="text-xs text-slate-500">With regroup on, crosses out the last N fraction sections starting from the blue row upward into the orange row.</p>
+                ? <p className="text-xs text-slate-500">Whole ✕: crosses last N remaining whole strips. Fraction ✕: crosses last N fraction sections from the blue row up into the orange row.</p>
                 : <p className="text-xs text-slate-500">Crosses out the last N whole strips and/or fraction sections of Group A with red ✕ marks.</p>
               }
             </div>
